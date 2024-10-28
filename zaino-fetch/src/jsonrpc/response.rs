@@ -76,35 +76,31 @@ impl Default for GetBlockHash {
 ///
 /// Stores bytes that are guaranteed to be deserializable into a [`Block`].
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct SerializedBlock {
-    inner: zebra_chain::block::SerializedBlock,
-}
+pub struct SerializedBlock(zebra_chain::block::SerializedBlock);
 
 impl std::ops::Deref for SerializedBlock {
     type Target = zebra_chain::block::SerializedBlock;
 
     fn deref(&self) -> &Self::Target {
-        &self.inner
+        &self.0
     }
 }
 
 impl AsRef<[u8]> for SerializedBlock {
     fn as_ref(&self) -> &[u8] {
-        self.inner.as_ref()
+        self.0.as_ref()
     }
 }
 
 impl From<Vec<u8>> for SerializedBlock {
     fn from(bytes: Vec<u8>) -> Self {
-        Self {
-            inner: zebra_chain::block::SerializedBlock::from(bytes),
-        }
+        Self(zebra_chain::block::SerializedBlock::from(bytes))
     }
 }
 
 impl From<zebra_chain::block::SerializedBlock> for SerializedBlock {
     fn from(inner: zebra_chain::block::SerializedBlock) -> Self {
-        SerializedBlock { inner }
+        SerializedBlock(inner)
     }
 }
 
@@ -278,36 +274,31 @@ impl<'de> serde::Deserialize<'de> for GetTreestateResponse {
 ///
 /// Sorts in lexicographic order of the transaction's serialized data.
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct SerializedTransaction {
-    /// Transaction bytes.
-    pub inner: zebra_chain::transaction::SerializedTransaction,
-}
+pub struct SerializedTransaction(zebra_chain::transaction::SerializedTransaction);
 
 impl std::ops::Deref for SerializedTransaction {
     type Target = zebra_chain::transaction::SerializedTransaction;
 
     fn deref(&self) -> &Self::Target {
-        &self.inner
+        &self.0
     }
 }
 
 impl AsRef<[u8]> for SerializedTransaction {
     fn as_ref(&self) -> &[u8] {
-        self.inner.as_ref()
+        self.0.as_ref()
     }
 }
 
 impl From<Vec<u8>> for SerializedTransaction {
     fn from(bytes: Vec<u8>) -> Self {
-        Self {
-            inner: zebra_chain::transaction::SerializedTransaction::from(bytes),
-        }
+        Self(zebra_chain::transaction::SerializedTransaction::from(bytes))
     }
 }
 
 impl From<zebra_chain::transaction::SerializedTransaction> for SerializedTransaction {
     fn from(inner: zebra_chain::transaction::SerializedTransaction) -> Self {
-        SerializedTransaction { inner }
+        SerializedTransaction(inner)
     }
 }
 
@@ -329,9 +320,9 @@ impl<'de> serde::Deserialize<'de> for SerializedTransaction {
         let v = serde_json::Value::deserialize(deserializer)?;
         if let Some(hex_str) = v.as_str() {
             let bytes = hex::decode(hex_str).map_err(serde::de::Error::custom)?;
-            Ok(SerializedTransaction {
-                inner: zebra_chain::transaction::SerializedTransaction::from(bytes),
-            })
+            Ok(SerializedTransaction(
+                zebra_chain::transaction::SerializedTransaction::from(bytes),
+            ))
         } else {
             Err(serde::de::Error::custom("expected a hex string"))
         }
@@ -405,22 +396,19 @@ impl<'de> serde::Deserialize<'de> for GetTransactionResponse {
 ///
 /// *** UNTESTED - TEST BEFORE USE ***
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-pub struct SubtreeRpcData {
-    /// A subtree data type that can hold Sapling or Orchard subtree roots.
-    pub inner: zebra_rpc::methods::trees::SubtreeRpcData,
-}
+pub struct SubtreeRpcData(zebra_rpc::methods::trees::SubtreeRpcData);
 
 impl std::ops::Deref for SubtreeRpcData {
     type Target = zebra_rpc::methods::trees::SubtreeRpcData;
 
     fn deref(&self) -> &Self::Target {
-        &self.inner
+        &self.0
     }
 }
 
 impl From<zebra_rpc::methods::trees::SubtreeRpcData> for SubtreeRpcData {
     fn from(inner: zebra_rpc::methods::trees::SubtreeRpcData) -> Self {
-        SubtreeRpcData { inner }
+        SubtreeRpcData(inner)
     }
 }
 
@@ -442,12 +430,10 @@ impl hex::FromHex for SubtreeRpcData {
         let height = u32::from_str_radix(height_hex, 16)
             .map_err(|_| hex::FromHexError::InvalidHexCharacter { c: '�', index: 0 })?;
 
-        Ok(SubtreeRpcData {
-            inner: zebra_rpc::methods::trees::SubtreeRpcData {
-                root,
-                end_height: zebra_chain::block::Height(height),
-            },
-        })
+        Ok(SubtreeRpcData(zebra_rpc::methods::trees::SubtreeRpcData {
+            root,
+            end_height: zebra_chain::block::Height(height),
+        }))
     }
 }
 
@@ -469,12 +455,10 @@ impl<'de> serde::Deserialize<'de> for SubtreeRpcData {
         let height = u32::from_str_radix(height_hex, 16)
             .map_err(|_| serde::de::Error::custom("Failed to parse height"))?;
 
-        Ok(SubtreeRpcData {
-            inner: zebra_rpc::methods::trees::SubtreeRpcData {
-                root,
-                end_height: zebra_chain::block::Height(height),
-            },
-        })
+        Ok(SubtreeRpcData(zebra_rpc::methods::trees::SubtreeRpcData {
+            root,
+            end_height: zebra_chain::block::Height(height),
+        }))
     }
 }
 
@@ -501,41 +485,38 @@ pub struct GetSubtreesResponse {
 
 /// Wrapper struct for a zebra Scrypt.
 ///
+/// # Correctness
+///
+/// Consensus-critical serialization uses [`ZcashSerialize`].
+/// [`serde`]-based hex serialization must only be used for RPCs and testing.
+///
 /// *** UNTESTED - TEST BEFORE USE ***
 #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
-pub struct Script {
-    /// # Correctness
-    ///
-    /// Consensus-critical serialization uses [`ZcashSerialize`].
-    /// [`serde`]-based hex serialization must only be used for RPCs and testing.
-    pub inner: zebra_chain::transparent::Script,
-}
+pub struct Script(zebra_chain::transparent::Script);
 
 impl std::ops::Deref for Script {
     type Target = zebra_chain::transparent::Script;
 
     fn deref(&self) -> &Self::Target {
-        &self.inner
+        &self.0
     }
 }
 
 impl AsRef<[u8]> for Script {
     fn as_ref(&self) -> &[u8] {
-        self.inner.as_raw_bytes()
+        self.0.as_raw_bytes()
     }
 }
 
 impl From<Vec<u8>> for Script {
     fn from(bytes: Vec<u8>) -> Self {
-        Self {
-            inner: zebra_chain::transparent::Script::new(bytes.as_ref()),
-        }
+        Self(zebra_chain::transparent::Script::new(bytes.as_ref()))
     }
 }
 
 impl From<zebra_chain::transparent::Script> for Script {
     fn from(inner: zebra_chain::transparent::Script) -> Self {
-        Script { inner }
+        Script(inner)
     }
 }
 
@@ -545,7 +526,7 @@ impl hex::FromHex for Script {
     fn from_hex<T: AsRef<[u8]>>(hex: T) -> Result<Self, Self::Error> {
         let bytes = Vec::from_hex(hex)?;
         let inner = zebra_chain::transparent::Script::new(&bytes);
-        Ok(Script { inner })
+        Ok(Script(inner))
     }
 }
 
@@ -558,7 +539,7 @@ impl<'de> serde::Deserialize<'de> for Script {
         if let Some(hex_str) = v.as_str() {
             let bytes = hex::decode(hex_str).map_err(serde::de::Error::custom)?;
             let inner = zebra_chain::transparent::Script::new(&bytes);
-            Ok(Script { inner })
+            Ok(Script(inner))
         } else {
             Err(serde::de::Error::custom("expected a hex string"))
         }
