@@ -223,15 +223,23 @@ impl CompactTxStreamer for GrpcClient {
                 .end
                 .map(|e| e.height as u32)
                 .ok_or(tonic::Status::invalid_argument("End block not specified"))?;
-            if start > end {
+            let rev_order = if start > end {
                 (start, end) = (end, start);
-            }
+                true
+            } else {
+                false
+            };
             println!("[TEST] Fetching blocks in range: {}-{}.", start, end);
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
                 // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
                 let timeout = timeout(std::time::Duration::from_secs(120), async {
-                    for height in (start..=end).rev() {
+                    for height in start..=end {
+                        let height = if rev_order {
+                            end - (height - start)
+                        } else {
+                            height
+                        };
                         println!("[TEST] Fetching block at height: {}.", height);
                         let compact_block = get_block_from_node(&zebrad_uri, &height).await;
                         match compact_block {
@@ -308,14 +316,22 @@ impl CompactTxStreamer for GrpcClient {
                 .end
                 .map(|e| e.height as u32)
                 .ok_or(tonic::Status::invalid_argument("End block not specified"))?;
-            if start > end {
+            let rev_order = if start > end {
                 (start, end) = (end, start);
-            }
+                true
+            } else {
+                false
+            };
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
                 // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
                 let timeout = timeout(std::time::Duration::from_secs(120), async {
                     for height in start..=end {
+                        let height = if rev_order {
+                            end - (height - start)
+                        } else {
+                            height
+                        };
                         let compact_block = get_nullifiers_from_node(&zebrad_uri, &height).await;
                         match compact_block {
                             Ok(block) => {
