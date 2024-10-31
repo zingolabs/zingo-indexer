@@ -13,7 +13,9 @@ use crate::{
 };
 use sha2::{Digest, Sha256};
 use std::io::Cursor;
-use zaino_proto::proto::compact_formats::{ChainMetadata, CompactBlock};
+use zaino_proto::proto::compact_formats::{
+    ChainMetadata, CompactBlock, CompactOrchardAction, CompactTx,
+};
 
 /// A block header, containing metadata about a block.
 ///
@@ -425,6 +427,54 @@ pub async fn get_block_from_node(
         Ok(GetBlockResponse::Raw(_)) => Err(BlockCacheError::ParseError(ParseError::InvalidData(
             "Received raw block type, this should not be possible here.".to_string(),
         ))),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Returns a compact block holding only action nullifiers.
+///
+/// Retrieves a full block from zebrad/zcashd using 2 get_block calls.
+/// This is because a get_block verbose = 1 call is require to fetch txids.
+///
+/// TODO / NOTE: This should be rewritten when the BlockCache is added.
+pub async fn get_nullifiers_from_node(
+    zebra_uri: &http::Uri,
+    height: &u32,
+) -> Result<CompactBlock, BlockCacheError> {
+    match get_block_from_node(zebra_uri, height).await {
+        Ok(block) => Ok(CompactBlock {
+            proto_version: block.proto_version,
+            height: block.height,
+            hash: block.hash,
+            prev_hash: block.prev_hash,
+            time: block.time,
+            header: block.header,
+            vtx: block
+                .vtx
+                .into_iter()
+                .map(|tx| CompactTx {
+                    index: tx.index,
+                    hash: tx.hash,
+                    fee: tx.fee,
+                    spends: tx.spends,
+                    outputs: Vec::new(),
+                    actions: tx
+                        .actions
+                        .into_iter()
+                        .map(|action| CompactOrchardAction {
+                            nullifier: action.nullifier,
+                            cmx: Vec::new(),
+                            ephemeral_key: Vec::new(),
+                            ciphertext: Vec::new(),
+                        })
+                        .collect(),
+                })
+                .collect(),
+            chain_metadata: Some(ChainMetadata {
+                sapling_commitment_tree_size: 0,
+                orchard_commitment_tree_size: 0,
+            }),
+        }),
         Err(e) => Err(e.into()),
     }
 }

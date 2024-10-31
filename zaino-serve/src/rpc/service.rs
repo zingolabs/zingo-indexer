@@ -6,7 +6,10 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use crate::{rpc::GrpcClient, utils::get_build_info};
 use zaino_fetch::{
-    chain::{block::get_block_from_node, mempool::Mempool},
+    chain::{
+        block::{get_block_from_node, get_nullifiers_from_node},
+        mempool::Mempool,
+    },
     jsonrpc::{connector::JsonRpcConnector, response::GetTransactionResponse},
 };
 use zaino_proto::proto::{
@@ -156,11 +159,10 @@ impl CompactTxStreamer for GrpcClient {
 
     /// Same as GetBlock except actions contain only nullifiers.
     ///
-    /// This RPC has not been implemented as it is not currently used by zingolib.
-    /// If you require this RPC please open an issue or PR at the Zingo-Indexer github (https://github.com/zingolabs/zingo-indexer).
+    /// NOTE: This should be reimplemented with the introduction of the BlockCache.
     fn get_block_nullifiers<'life0, 'async_trait>(
         &'life0 self,
-        _request: tonic::Request<BlockId>,
+        request: tonic::Request<BlockId>,
     ) -> core::pin::Pin<
         Box<
             dyn core::future::Future<
@@ -175,7 +177,14 @@ impl CompactTxStreamer for GrpcClient {
     {
         println!("[TEST] Received call of get_block_nullifiers.");
         Box::pin(async {
-            Err(tonic::Status::unimplemented("get_block_nullifiers not yet implemented. If you require this RPC please open an issue or PR at the Zingo-Indexer github (https://github.com/zingolabs/zingo-indexer)."))
+            let zebrad_uri = self.zebrad_uri.clone();
+            let height = request.into_inner().height as u32;
+            match get_nullifiers_from_node(&zebrad_uri, &height).await {
+                Ok(block) => Ok(tonic::Response::new(block)),
+                Err(e) => {
+                    return Err(tonic::Status::internal(e.to_string()));
+                }
+            }
         })
     }
 
