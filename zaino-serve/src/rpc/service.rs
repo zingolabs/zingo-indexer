@@ -124,13 +124,11 @@ impl CompactTxStreamer for GrpcClient {
 
     /// Return the compact block corresponding to the given block identifier.
     ///
-    /// This RPC has not been implemented as it is not currently used by zingolib.
-    /// If you require this RPC please open an issue or PR at the Zingo-Indexer github (https://github.com/zingolabs/zingo-indexer).
-    ///
-    /// TODO: This RPC should be implemented alongside the block cache.
+    /// TODO: This implementation is slow. An internal block cache should be implemented that this rpc, along with the get_block rpc, can rely on.
+    ///       - add get_block function that queries the block cache for block and calls get_block_from_node to fetch block if not present.
     fn get_block<'life0, 'async_trait>(
         &'life0 self,
-        _request: tonic::Request<BlockId>,
+        request: tonic::Request<BlockId>,
     ) -> core::pin::Pin<
         Box<
             dyn core::future::Future<
@@ -145,7 +143,14 @@ impl CompactTxStreamer for GrpcClient {
     {
         println!("[TEST] Received call of get_block.");
         Box::pin(async {
-            Err(tonic::Status::unimplemented("get_block not yet implemented. If you require this RPC please open an issue or PR at the Zingo-Indexer github (https://github.com/zingolabs/zingo-indexer)."))
+            let zebrad_uri = self.zebrad_uri.clone();
+            let height = request.into_inner().height as u32;
+            match get_block_from_node(&zebrad_uri, &height).await {
+                Ok(block) => Ok(tonic::Response::new(block)),
+                Err(e) => {
+                    return Err(tonic::Status::internal(e.to_string()));
+                }
+            }
         })
     }
 
