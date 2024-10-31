@@ -115,7 +115,10 @@ impl CompactTxStreamer for GrpcClient {
 
             let block_id = BlockId {
                 height: blockchain_info.blocks.0 as u64,
-                hash: blockchain_info.best_block_hash.0.to_vec(),
+                hash: blockchain_info
+                    .best_block_hash
+                    .bytes_in_display_order()
+                    .to_vec(),
             };
 
             Ok(tonic::Response::new(block_id))
