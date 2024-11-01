@@ -128,7 +128,8 @@ impl CompactTxStreamer for GrpcClient {
     /// Return the compact block corresponding to the given block identifier.
     ///
     /// TODO: This implementation is slow. An internal block cache should be implemented that this rpc, along with the get_block rpc, can rely on.
-    ///       - add get_block function that queries the block cache for block and calls get_block_from_node to fetch block if not present.
+    ///       - add get_block function that queries the block cache / internal state for block and calls get_block_from_node to fetch block if not present.
+    ///       - use chain height held in internal state to validate block height being requested.
     fn get_block<'life0, 'async_trait>(
         &'life0 self,
         request: tonic::Request<BlockId>,
@@ -147,11 +148,40 @@ impl CompactTxStreamer for GrpcClient {
         println!("[TEST] Received call of get_block.");
         Box::pin(async {
             let zebrad_uri = self.zebrad_uri.clone();
-            let height = request.into_inner().height as u32;
+            let height: u32 = match request.into_inner().height.try_into() {
+                Ok(height) => height,
+                Err(_) => {
+                    return Err(tonic::Status::invalid_argument(
+                        "Error: Height out of range. Failed to convert to u32.",
+                    ));
+                }
+            };
             match get_block_from_node(&zebrad_uri, &height).await {
                 Ok(block) => Ok(tonic::Response::new(block)),
                 Err(e) => {
-                    return Err(tonic::Status::internal(e.to_string()));
+                    if height
+                        < JsonRpcConnector::new(
+                            self.zebrad_uri.clone(),
+                            Some("xxxxxx".to_string()),
+                            Some("xxxxxx".to_string()),
+                        )
+                        .await?
+                        .get_blockchain_info()
+                        .await
+                        .map_err(|e| e.to_grpc_status())?
+                        .blocks
+                        .0
+                    {
+                        return Err(tonic::Status::invalid_argument(
+                            "Error: Height out of range. Height requested is greater than the best chain tip.",
+                        ));
+                    } else {
+                        // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                        return Err(tonic::Status::internal(format!(
+                            "Error: Failed to retrieve block from node. Server Error: {}",
+                            e.to_string(),
+                        )));
+                    };
                 }
             }
         })
@@ -160,6 +190,7 @@ impl CompactTxStreamer for GrpcClient {
     /// Same as GetBlock except actions contain only nullifiers.
     ///
     /// NOTE: This should be reimplemented with the introduction of the BlockCache.
+    ///       - use chain height held in internal state to validate block height being requested.
     fn get_block_nullifiers<'life0, 'async_trait>(
         &'life0 self,
         request: tonic::Request<BlockId>,
@@ -178,11 +209,40 @@ impl CompactTxStreamer for GrpcClient {
         println!("[TEST] Received call of get_block_nullifiers.");
         Box::pin(async {
             let zebrad_uri = self.zebrad_uri.clone();
-            let height = request.into_inner().height as u32;
+            let height: u32 = match request.into_inner().height.try_into() {
+                Ok(height) => height,
+                Err(_) => {
+                    return Err(tonic::Status::invalid_argument(
+                        "Error: Height out of range. Failed to convert to u32.",
+                    ));
+                }
+            };
             match get_nullifiers_from_node(&zebrad_uri, &height).await {
                 Ok(block) => Ok(tonic::Response::new(block)),
                 Err(e) => {
-                    return Err(tonic::Status::internal(e.to_string()));
+                    if height
+                        < JsonRpcConnector::new(
+                            self.zebrad_uri.clone(),
+                            Some("xxxxxx".to_string()),
+                            Some("xxxxxx".to_string()),
+                        )
+                        .await?
+                        .get_blockchain_info()
+                        .await
+                        .map_err(|e| e.to_grpc_status())?
+                        .blocks
+                        .0
+                    {
+                        return Err(tonic::Status::invalid_argument(
+                            "Error: Height out of range. Height requested is greater than the best chain tip.",
+                        ));
+                    } else {
+                        // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                        return Err(tonic::Status::internal(format!(
+                            "Error: Failed to retrieve nullifiers from node. Server Error: {}",
+                            e.to_string(),
+                        )));
+                    };
                 }
             }
         })
@@ -196,6 +256,7 @@ impl CompactTxStreamer for GrpcClient {
     ///
     /// TODO: This implementation is slow. An internal block cache should be implemented that this rpc, along with the get_block rpc, can rely on.
     ///       - add get_block function that queries the block cache for block and calls get_block_from_node to fetch block if not present.
+    ///       - use chain height held in internal state to validate block height being requested.
     fn get_block_range<'life0, 'async_trait>(
         &'life0 self,
         request: tonic::Request<BlockRange>,
@@ -218,20 +279,59 @@ impl CompactTxStreamer for GrpcClient {
         let zebrad_uri = self.zebrad_uri.clone();
         Box::pin(async move {
             let blockrange = request.into_inner();
-            let mut start = blockrange
-                .start
-                .map(|s| s.height as u32)
-                .ok_or(tonic::Status::invalid_argument("Start block not specified"))?;
-            let mut end = blockrange
-                .end
-                .map(|e| e.height as u32)
-                .ok_or(tonic::Status::invalid_argument("End block not specified"))?;
+            let mut start: u32 = match blockrange.start {
+                Some(block_id) => match block_id.height.try_into() {
+                    Ok(height) => height,
+                    Err(_) => {
+                        return Err(tonic::Status::invalid_argument(
+                            "Error: Start height out of range. Failed to convert to u32.",
+                        ));
+                    }
+                },
+                None => {
+                    return Err(tonic::Status::invalid_argument(
+                        "Error: No start height given.",
+                    ));
+                }
+            };
+            let mut end: u32 = match blockrange.end {
+                Some(block_id) => match block_id.height.try_into() {
+                    Ok(height) => height,
+                    Err(_) => {
+                        return Err(tonic::Status::invalid_argument(
+                            "Error: End height out of range. Failed to convert to u32.",
+                        ));
+                    }
+                },
+                None => {
+                    return Err(tonic::Status::invalid_argument(
+                        "Error: No start height given.",
+                    ));
+                }
+            };
             let rev_order = if start > end {
                 (start, end) = (end, start);
                 true
             } else {
                 false
             };
+            if end
+                < JsonRpcConnector::new(
+                    self.zebrad_uri.clone(),
+                    Some("xxxxxx".to_string()),
+                    Some("xxxxxx".to_string()),
+                )
+                .await?
+                .get_blockchain_info()
+                .await
+                .map_err(|e| e.to_grpc_status())?
+                .blocks
+                .0
+            {
+                return Err(tonic::Status::invalid_argument(
+                            "Error: Blockrange out of range. Height requested is greater than the best chain tip.",
+                        ));
+            }
             println!("[TEST] Fetching blocks in range: {}-{}.", start, end);
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
@@ -244,14 +344,14 @@ impl CompactTxStreamer for GrpcClient {
                             height
                         };
                         println!("[TEST] Fetching block at height: {}.", height);
-                        let compact_block = get_block_from_node(&zebrad_uri, &height).await;
-                        match compact_block {
+                        match get_block_from_node(&zebrad_uri, &height).await {
                             Ok(block) => {
                                 if channel_tx.send(Ok(block)).await.is_err() {
                                     break;
                                 }
                             }
                             Err(e) => {
+                                // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                                 if channel_tx
                                     .send(Err(tonic::Status::internal(e.to_string())))
                                     .await
@@ -289,6 +389,7 @@ impl CompactTxStreamer for GrpcClient {
     /// Same as GetBlockRange except actions contain only nullifiers.
     ///
     /// NOTE: This should be reimplemented with the introduction of the BlockCache.
+    ///       - use chain height held in internal state to validate block height being requested.
     fn get_block_range_nullifiers<'life0, 'async_trait>(
         &'life0 self,
         request: tonic::Request<BlockRange>,
@@ -311,20 +412,59 @@ impl CompactTxStreamer for GrpcClient {
         let zebrad_uri = self.zebrad_uri.clone();
         Box::pin(async move {
             let blockrange = request.into_inner();
-            let mut start = blockrange
-                .start
-                .map(|s| s.height as u32)
-                .ok_or(tonic::Status::invalid_argument("Start block not specified"))?;
-            let mut end = blockrange
-                .end
-                .map(|e| e.height as u32)
-                .ok_or(tonic::Status::invalid_argument("End block not specified"))?;
+            let mut start: u32 = match blockrange.start {
+                Some(block_id) => match block_id.height.try_into() {
+                    Ok(height) => height,
+                    Err(_) => {
+                        return Err(tonic::Status::invalid_argument(
+                            "Error: Start height out of range. Failed to convert to u32.",
+                        ));
+                    }
+                },
+                None => {
+                    return Err(tonic::Status::invalid_argument(
+                        "Error: No start height given.",
+                    ));
+                }
+            };
+            let mut end: u32 = match blockrange.end {
+                Some(block_id) => match block_id.height.try_into() {
+                    Ok(height) => height,
+                    Err(_) => {
+                        return Err(tonic::Status::invalid_argument(
+                            "Error: End height out of range. Failed to convert to u32.",
+                        ));
+                    }
+                },
+                None => {
+                    return Err(tonic::Status::invalid_argument(
+                        "Error: No end height given.",
+                    ));
+                }
+            };
             let rev_order = if start > end {
                 (start, end) = (end, start);
                 true
             } else {
                 false
             };
+            if end
+                < JsonRpcConnector::new(
+                    self.zebrad_uri.clone(),
+                    Some("xxxxxx".to_string()),
+                    Some("xxxxxx".to_string()),
+                )
+                .await?
+                .get_blockchain_info()
+                .await
+                .map_err(|e| e.to_grpc_status())?
+                .blocks
+                .0
+            {
+                return Err(tonic::Status::invalid_argument(
+                            "Error: Blockrange out of range. Block height requested are greater than the best chain tip.",
+                        ));
+            }
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
                 // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
@@ -343,6 +483,7 @@ impl CompactTxStreamer for GrpcClient {
                                 }
                             }
                             Err(e) => {
+                                // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                                 if channel_tx
                                     .send(Err(tonic::Status::internal(e.to_string())))
                                     .await
