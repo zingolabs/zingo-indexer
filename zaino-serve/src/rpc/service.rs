@@ -171,7 +171,7 @@ impl CompactTxStreamer for GrpcClient {
                     .blocks
                     .0;
                     if height > chain_height {
-                        return Err(tonic::Status::invalid_argument(
+                        return Err(tonic::Status::out_of_range(
                             format!(
                                 "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
                                 height, chain_height,
@@ -179,7 +179,7 @@ impl CompactTxStreamer for GrpcClient {
                         ));
                     } else {
                         // TODO: Hide server error from clients before release. Currently useful for dev purposes.
-                        return Err(tonic::Status::internal(format!(
+                        return Err(tonic::Status::unknown(format!(
                             "Error: Failed to retrieve block from node. Server Error: {}",
                             e.to_string(),
                         )));
@@ -234,7 +234,7 @@ impl CompactTxStreamer for GrpcClient {
                     .blocks
                     .0;
                     if height > chain_height {
-                        return Err(tonic::Status::invalid_argument(
+                        return Err(tonic::Status::out_of_range(
                             format!(
                                 "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
                                 height, chain_height,
@@ -242,7 +242,7 @@ impl CompactTxStreamer for GrpcClient {
                         ));
                     } else {
                         // TODO: Hide server error from clients before release. Currently useful for dev purposes.
-                        return Err(tonic::Status::internal(format!(
+                        return Err(tonic::Status::unknown(format!(
                             "Error: Failed to retrieve nullifiers from node. Server Error: {}",
                             e.to_string(),
                         )));
@@ -351,7 +351,7 @@ impl CompactTxStreamer for GrpcClient {
                             Err(e) => {
                                 if height > chain_height {
                                     let _ = channel_tx
-                                        .send(Err(tonic::Status::invalid_argument(format!(
+                                        .send(Err(tonic::Status::out_of_range(format!(
                                             "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
                                             height, chain_height,
                                         ))))
@@ -360,7 +360,7 @@ impl CompactTxStreamer for GrpcClient {
                                 } else {
                                     // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                                     if channel_tx
-                                        .send(Err(tonic::Status::internal(e.to_string())))
+                                        .send(Err(tonic::Status::unknown(e.to_string())))
                                         .await
                                         .is_err()
                                     {
@@ -376,8 +376,8 @@ impl CompactTxStreamer for GrpcClient {
                     Ok(_) => {}
                     Err(_) => {
                         channel_tx
-                            .send(Err(tonic::Status::internal(
-                                "get_block_range gRPC request timed out",
+                            .send(Err(tonic::Status::deadline_exceeded(
+                                "Error: get_block_range gRPC request timed out.",
                             )))
                             .await
                             .ok();
@@ -487,7 +487,7 @@ impl CompactTxStreamer for GrpcClient {
                             Err(e) => {
                                 if height > chain_height {
                                     let _ = channel_tx
-                                        .send(Err(tonic::Status::invalid_argument(format!(
+                                        .send(Err(tonic::Status::out_of_range(format!(
                                             "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
                                             height, chain_height,
                                         ))))
@@ -496,7 +496,7 @@ impl CompactTxStreamer for GrpcClient {
                                 } else {
                                     // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                                     if channel_tx
-                                        .send(Err(tonic::Status::internal(e.to_string())))
+                                        .send(Err(tonic::Status::unknown(e.to_string())))
                                         .await
                                         .is_err()
                                     {
@@ -512,8 +512,8 @@ impl CompactTxStreamer for GrpcClient {
                     Ok(_) => {}
                     Err(_) => {
                         channel_tx
-                            .send(Err(tonic::Status::internal(
-                                "get_block_range_nullifiers gRPC request timed out",
+                            .send(Err(tonic::Status::deadline_exceeded(
+                                "Error: get_block_range_nullifiers gRPC request timed out.",
                             )))
                             .await
                             .ok();
