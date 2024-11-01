@@ -159,21 +159,23 @@ impl CompactTxStreamer for GrpcClient {
             match get_block_from_node(&zebrad_uri, &height).await {
                 Ok(block) => Ok(tonic::Response::new(block)),
                 Err(e) => {
-                    if height
-                        < JsonRpcConnector::new(
-                            self.zebrad_uri.clone(),
-                            Some("xxxxxx".to_string()),
-                            Some("xxxxxx".to_string()),
-                        )
-                        .await?
-                        .get_blockchain_info()
-                        .await
-                        .map_err(|e| e.to_grpc_status())?
-                        .blocks
-                        .0
-                    {
+                    let chain_height = JsonRpcConnector::new(
+                        self.zebrad_uri.clone(),
+                        Some("xxxxxx".to_string()),
+                        Some("xxxxxx".to_string()),
+                    )
+                    .await?
+                    .get_blockchain_info()
+                    .await
+                    .map_err(|e| e.to_grpc_status())?
+                    .blocks
+                    .0;
+                    if height > chain_height {
                         return Err(tonic::Status::invalid_argument(
-                            "Error: Height out of range. Height requested is greater than the best chain tip.",
+                            format!(
+                                "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
+                                height, chain_height,
+                            )
                         ));
                     } else {
                         // TODO: Hide server error from clients before release. Currently useful for dev purposes.
@@ -220,21 +222,23 @@ impl CompactTxStreamer for GrpcClient {
             match get_nullifiers_from_node(&zebrad_uri, &height).await {
                 Ok(block) => Ok(tonic::Response::new(block)),
                 Err(e) => {
-                    if height
-                        < JsonRpcConnector::new(
-                            self.zebrad_uri.clone(),
-                            Some("xxxxxx".to_string()),
-                            Some("xxxxxx".to_string()),
-                        )
-                        .await?
-                        .get_blockchain_info()
-                        .await
-                        .map_err(|e| e.to_grpc_status())?
-                        .blocks
-                        .0
-                    {
+                    let chain_height = JsonRpcConnector::new(
+                        self.zebrad_uri.clone(),
+                        Some("xxxxxx".to_string()),
+                        Some("xxxxxx".to_string()),
+                    )
+                    .await?
+                    .get_blockchain_info()
+                    .await
+                    .map_err(|e| e.to_grpc_status())?
+                    .blocks
+                    .0;
+                    if height > chain_height {
                         return Err(tonic::Status::invalid_argument(
-                            "Error: Height out of range. Height requested is greater than the best chain tip.",
+                            format!(
+                                "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
+                                height, chain_height,
+                            )
                         ));
                     } else {
                         // TODO: Hide server error from clients before release. Currently useful for dev purposes.
@@ -315,23 +319,17 @@ impl CompactTxStreamer for GrpcClient {
             } else {
                 false
             };
-            if end
-                < JsonRpcConnector::new(
-                    self.zebrad_uri.clone(),
-                    Some("xxxxxx".to_string()),
-                    Some("xxxxxx".to_string()),
-                )
-                .await?
-                .get_blockchain_info()
-                .await
-                .map_err(|e| e.to_grpc_status())?
-                .blocks
-                .0
-            {
-                return Err(tonic::Status::invalid_argument(
-                            "Error: Blockrange out of range. Height requested is greater than the best chain tip.",
-                        ));
-            }
+            let chain_height = JsonRpcConnector::new(
+                self.zebrad_uri.clone(),
+                Some("xxxxxx".to_string()),
+                Some("xxxxxx".to_string()),
+            )
+            .await?
+            .get_blockchain_info()
+            .await
+            .map_err(|e| e.to_grpc_status())?
+            .blocks
+            .0;
             println!("[TEST] Fetching blocks in range: {}-{}.", start, end);
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
@@ -351,13 +349,23 @@ impl CompactTxStreamer for GrpcClient {
                                 }
                             }
                             Err(e) => {
-                                // TODO: Hide server error from clients before release. Currently useful for dev purposes.
-                                if channel_tx
-                                    .send(Err(tonic::Status::internal(e.to_string())))
-                                    .await
-                                    .is_err()
-                                {
-                                    break;
+                                if height > chain_height {
+                                    let _ = channel_tx
+                                        .send(Err(tonic::Status::invalid_argument(format!(
+                                            "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
+                                            height, chain_height,
+                                        ))))
+                                        .await;
+                                        break;
+                                } else {
+                                    // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                                    if channel_tx
+                                        .send(Err(tonic::Status::internal(e.to_string())))
+                                        .await
+                                        .is_err()
+                                    {
+                                        break;
+                                    }
                                 }
                             }
                         }
@@ -448,23 +456,17 @@ impl CompactTxStreamer for GrpcClient {
             } else {
                 false
             };
-            if end
-                < JsonRpcConnector::new(
-                    self.zebrad_uri.clone(),
-                    Some("xxxxxx".to_string()),
-                    Some("xxxxxx".to_string()),
-                )
-                .await?
-                .get_blockchain_info()
-                .await
-                .map_err(|e| e.to_grpc_status())?
-                .blocks
-                .0
-            {
-                return Err(tonic::Status::invalid_argument(
-                            "Error: Blockrange out of range. Block height requested are greater than the best chain tip.",
-                        ));
-            }
+            let chain_height = JsonRpcConnector::new(
+                self.zebrad_uri.clone(),
+                Some("xxxxxx".to_string()),
+                Some("xxxxxx".to_string()),
+            )
+            .await?
+            .get_blockchain_info()
+            .await
+            .map_err(|e| e.to_grpc_status())?
+            .blocks
+            .0;
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
                 // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
@@ -483,13 +485,23 @@ impl CompactTxStreamer for GrpcClient {
                                 }
                             }
                             Err(e) => {
-                                // TODO: Hide server error from clients before release. Currently useful for dev purposes.
-                                if channel_tx
-                                    .send(Err(tonic::Status::internal(e.to_string())))
-                                    .await
-                                    .is_err()
-                                {
-                                    break;
+                                if height > chain_height {
+                                    let _ = channel_tx
+                                        .send(Err(tonic::Status::invalid_argument(format!(
+                                            "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
+                                            height, chain_height,
+                                        ))))
+                                        .await;
+                                        break;
+                                } else {
+                                    // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                                    if channel_tx
+                                        .send(Err(tonic::Status::internal(e.to_string())))
+                                        .await
+                                        .is_err()
+                                    {
+                                        break;
+                                    }
                                 }
                             }
                         }
@@ -1180,7 +1192,7 @@ impl CompactTxStreamer for GrpcClient {
         })
     }
 
-    // /// Testing-only, requires lightwalletd --ping-very-insecure (do not enable in production) [from zebrad]
+    /// Testing-only, requires lightwalletd --ping-very-insecure (do not enable in production) [from zebrad]
     /// This RPC has not been implemented as it is not currently used by zingolib.
     /// If you require this RPC please open an issue or PR at the Zingo-Indexer github (https://github.com/zingolabs/zingo-indexer).
     fn ping<'life0, 'async_trait>(
