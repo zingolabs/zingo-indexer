@@ -951,6 +951,8 @@ impl CompactTxStreamer for GrpcClient {
     /// See section 3.7 of the Zcash protocol specification. It returns several other useful
     /// values also (even though they can be obtained using GetBlock).
     /// The block can be specified by either height or hash.
+    ///
+    /// TODO: This is slow. Chain, along with other blockchain info should be saved on startup and used here [blockcache?].
     fn get_tree_state<'life0, 'async_trait>(
         &'life0 self,
         request: tonic::Request<BlockId>,
@@ -968,38 +970,57 @@ impl CompactTxStreamer for GrpcClient {
     {
         println!("[TEST] Received call of get_tree_state.");
         Box::pin(async {
-            let block_id = request.into_inner();
-            let hash_or_height = if block_id.height != 0 {
-                block_id.height.to_string()
-            } else {
-                hex::encode(block_id.hash)
-            };
-
             let zebrad_client = JsonRpcConnector::new(
                 self.zebrad_uri.clone(),
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )
             .await?;
-
-            // TODO: This is slow. Chain, along with other blockchain info should be saved on startup and used here [blockcache?].
-            let chain = zebrad_client
+            let chain_info = zebrad_client
                 .get_blockchain_info()
                 .await
-                .map_err(|e| e.to_grpc_status())?
-                .chain;
-            let treestate = zebrad_client
-                .get_treestate(hash_or_height)
-                .await
                 .map_err(|e| e.to_grpc_status())?;
-            Ok(tonic::Response::new(TreeState {
-                network: chain,
-                height: treestate.height as u64,
-                hash: treestate.hash.to_string(),
-                time: treestate.time,
-                sapling_tree: treestate.sapling.inner().inner().clone(),
-                orchard_tree: treestate.orchard.inner().inner().clone(),
-            }))
+            let block_id = request.into_inner();
+            let hash_or_height = if block_id.height != 0 {
+                match u32::try_from(block_id.height) {
+                    Ok(height) => {
+                        if height > chain_info.blocks.0 {
+                            return Err(tonic::Status::out_of_range(
+                            format!(
+                                "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
+                                height, chain_info.blocks.0,
+                            )
+                        ));
+                        } else {
+                            height.to_string()
+                        }
+                    }
+                    Err(_) => {
+                        return Err(tonic::Status::invalid_argument(
+                            "Error: Height out of range. Failed to convert to u32.",
+                        ));
+                    }
+                }
+            } else {
+                hex::encode(block_id.hash)
+            };
+            match zebrad_client.get_treestate(hash_or_height).await {
+                Ok(state) => Ok(tonic::Response::new(TreeState {
+                    network: chain_info.chain,
+                    height: state.height as u64,
+                    hash: state.hash.to_string(),
+                    time: state.time,
+                    sapling_tree: state.sapling.inner().inner().clone(),
+                    orchard_tree: state.orchard.inner().inner().clone(),
+                })),
+                Err(e) => {
+                    // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                    return Err(tonic::Status::unknown(format!(
+                        "Error: Failed to retrieve treestate from node. Server Error: {}",
+                        e.to_string(),
+                    )));
+                }
+            }
         })
     }
 
