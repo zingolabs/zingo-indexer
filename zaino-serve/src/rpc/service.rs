@@ -1024,8 +1024,9 @@ impl CompactTxStreamer for GrpcClient {
         })
     }
 
-    /// This RPC has not been implemented as it is not currently used by zingolib.
-    /// If you require this RPC please open an issue or PR at the Zingo-Indexer github (https://github.com/zingolabs/zingo-indexer).
+    /// GetLatestTreeState returns the note commitment tree state corresponding to the chain tip.
+    ///
+    /// TODO: This is slow. Chain, along with other blockchain info should be saved on startup and used here [blockcache?].
     fn get_latest_tree_state<'life0, 'async_trait>(
         &'life0 self,
         _request: tonic::Request<Empty>,
@@ -1043,7 +1044,36 @@ impl CompactTxStreamer for GrpcClient {
     {
         println!("[TEST] Received call of get_latest_tree_state.");
         Box::pin(async {
-            Err(tonic::Status::unimplemented("get_latest_tree_state not yet implemented. If you require this RPC please open an issue or PR at the Zingo-Indexer github (https://github.com/zingolabs/zingo-indexer)."))
+            let zebrad_client = JsonRpcConnector::new(
+                self.zebrad_uri.clone(),
+                Some("xxxxxx".to_string()),
+                Some("xxxxxx".to_string()),
+            )
+            .await?;
+            let chain_info = zebrad_client
+                .get_blockchain_info()
+                .await
+                .map_err(|e| e.to_grpc_status())?;
+            match zebrad_client
+                .get_treestate(chain_info.blocks.0.to_string())
+                .await
+            {
+                Ok(state) => Ok(tonic::Response::new(TreeState {
+                    network: chain_info.chain,
+                    height: state.height as u64,
+                    hash: state.hash.to_string(),
+                    time: state.time,
+                    sapling_tree: state.sapling.inner().inner().clone(),
+                    orchard_tree: state.orchard.inner().inner().clone(),
+                })),
+                Err(e) => {
+                    // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                    return Err(tonic::Status::unknown(format!(
+                        "Error: Failed to retrieve treestate from node. Server Error: {}",
+                        e.to_string(),
+                    )));
+                }
+            }
         })
     }
 
