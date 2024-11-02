@@ -126,7 +126,7 @@ impl JsonRpcConnector {
             if body_str.contains("Work queue depth exceeded") {
                 if attempts >= max_attempts {
                     return Err(JsonRpcConnectorError::new(
-                        "Work queue depth exceeded after multiple attempts",
+                        "Error: The node's rpc queue depth was exceeded after multiple attempts",
                     ));
                 }
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -134,7 +134,7 @@ impl JsonRpcConnector {
             }
             if !status.is_success() {
                 return Err(JsonRpcConnectorError::new(format!(
-                    "HTTP Error: {}",
+                    "Error: Error status from node's rpc server: {}",
                     status
                 )));
             }
@@ -143,7 +143,7 @@ impl JsonRpcConnector {
                 .map_err(JsonRpcConnectorError::SerdeJsonError)?;
             return match response.error {
                 Some(error) => Err(JsonRpcConnectorError::new(format!(
-                    "RPC Error {}: {}",
+                    "Error: Error from node's rpc server: {} - {}",
                     error.code, error.message
                 ))),
                 None => Ok(response.result),

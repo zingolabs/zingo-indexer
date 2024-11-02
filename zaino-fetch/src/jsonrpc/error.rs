@@ -3,57 +3,40 @@
 /// General error type for handling JsonRpcConnector errors.
 #[derive(Debug, thiserror::Error)]
 pub enum JsonRpcConnectorError {
-    /// Uncatogorized Errors.
-    #[error("{0}")]
-    CustomError(String),
+    /// Type for errors without an underlying source.
+    #[error("Error: {0}")]
+    JsonRpcClientError(String),
 
     /// Serialization/Deserialization Errors.
-    #[error("Serialization/Deserialization Error: {0}")]
+    #[error("Error: Serialization/Deserialization Error: {0}")]
     SerdeJsonError(#[from] serde_json::Error),
 
     /// Reqwest Based Errors.
-    #[error("HTTP Request Error: {0}")]
+    #[error("Error: HTTP Request Error: {0}")]
     ReqwestError(#[from] reqwest::Error),
 
-    ///HTTP Errors.
-    #[error("HTTP Error: {0}")]
-    HttpError(#[from] http::Error),
-
     /// Invalid URI Errors.
-    #[error("Invalid URI: {0}")]
+    #[error("Error: Invalid URI: {0}")]
     InvalidUriError(#[from] http::uri::InvalidUri),
 
-    /// Invalid URL Errors.
-    #[error("Invalid URL: {0}")]
-    InvalidUrlError(#[from] url::ParseError),
-
-    /// UTF-8 Conversion Errors.
-    #[error("UTF-8 Conversion Error")]
-    Utf8Error(#[from] std::string::FromUtf8Error),
-
-    /// Request Timeout Errors.
-    #[error("Request Timeout Error")]
-    TimeoutError(#[from] tokio::time::error::Elapsed),
+    /// URL Parse Errors.
+    #[error("Error: Invalid URL:{0}")]
+    UrlParseError(#[from] url::ParseError),
 }
 
 impl JsonRpcConnectorError {
     /// Constructor for errors without an underlying source
     pub fn new(msg: impl Into<String>) -> Self {
-        JsonRpcConnectorError::CustomError(msg.into())
+        JsonRpcConnectorError::JsonRpcClientError(msg.into())
     }
 
-    /// Maps JsonRpcConnectorError to tonic::Status
+    /// Converts JsonRpcConnectorError to tonic::Status
+    ///
+    /// TODO: This impl should be changed to return the correct status [https://github.com/zcash/lightwalletd/issues/497] before release,
+    ///       however propagating the server error is useful durin development.
     pub fn to_grpc_status(&self) -> tonic::Status {
-        eprintln!("Error occurred: {}.", self);
-
-        match self {
-            JsonRpcConnectorError::SerdeJsonError(_) => {
-                tonic::Status::invalid_argument(self.to_string())
-            }
-            JsonRpcConnectorError::ReqwestError(_) => tonic::Status::unavailable(self.to_string()),
-            JsonRpcConnectorError::HttpError(_) => tonic::Status::internal(self.to_string()),
-            _ => tonic::Status::internal(self.to_string()),
-        }
+        // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+        tonic::Status::internal(format!("Error: JsonRPC Client Error: {}", self.to_string()))
     }
 }
 
