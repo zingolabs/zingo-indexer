@@ -642,31 +642,53 @@ impl CompactTxStreamer for GrpcClient {
     {
         println!("[TEST] Received call of get_taddress_txids.");
         Box::pin(async move {
-            let block_filter = request.into_inner();
-            let address = block_filter.address;
-            let start = block_filter
-                .range
-                .clone()
-                .and_then(|r| r.start)
-                .map(|s| s.height as u32)
-                .ok_or(tonic::Status::invalid_argument("Start block not specified"))?;
-            let end = block_filter
-                .range
-                .and_then(|r| r.end)
-                .map(|e| e.height as u32)
-                .ok_or(tonic::Status::invalid_argument("End block not specified"))?;
-
             let zebrad_client = JsonRpcConnector::new(
                 self.zebrad_uri.clone(),
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )
             .await?;
+            let chain_height = zebrad_client.get_blockchain_info().await?.blocks.0;
+            let block_filter = request.into_inner();
+            let (start, end) =
+                match block_filter.range {
+                    Some(range) => match (range.start, range.end) {
+                        (Some(start), Some(end)) => {
+                            let start = match u32::try_from(start.height) {
+                                Ok(height) => height.min(chain_height),
+                                Err(_) => return Err(tonic::Status::invalid_argument(
+                                    "Error: Start height out of range. Failed to convert to u32.",
+                                )),
+                            };
+                            let end =
+                                match u32::try_from(end.height) {
+                                    Ok(height) => height.min(chain_height),
+                                    Err(_) => return Err(tonic::Status::invalid_argument(
+                                        "Error: End height out of range. Failed to convert to u32.",
+                                    )),
+                                };
+                            if start > end {
+                                (end, start)
+                            } else {
+                                (start, end)
+                            }
+                        }
+                        _ => {
+                            return Err(tonic::Status::invalid_argument(
+                                "Error: Incomplete block range given.",
+                            ))
+                        }
+                    },
+                    None => {
+                        return Err(tonic::Status::invalid_argument(
+                            "Error: No block range given.",
+                        ))
+                    }
+                };
             let txids = zebrad_client
-                .get_address_txids(vec![address], start, end)
+                .get_address_txids(vec![block_filter.address], start, end)
                 .await
                 .map_err(|e| e.to_grpc_status())?;
-
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
                 let timeout = timeout(std::time::Duration::from_secs(30), async {
@@ -687,18 +709,18 @@ impl CompactTxStreamer for GrpcClient {
                             }
                             Ok(GetTransactionResponse::Raw(_)) => {
                                 if channel_tx
-                                .send(Err(tonic::Status::internal(
+                                    .send(Err(tonic::Status::unknown(
                                     "Received raw transaction type, this should not be impossible.",
-                                )))
-                                .await
-                                .is_err()
-                            {
-                                break;
-                            }
+                                    )))
+                                    .await
+                                    .is_err()
+                                {
+                                    break;
+                                }
                             }
                             Err(e) => {
                                 if channel_tx
-                                    .send(Err(tonic::Status::internal(e.to_string())))
+                                    .send(Err(tonic::Status::unknown(e.to_string())))
                                     .await
                                     .is_err()
                                 {
