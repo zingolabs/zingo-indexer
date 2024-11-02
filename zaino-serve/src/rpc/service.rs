@@ -865,20 +865,20 @@ impl CompactTxStreamer for GrpcClient {
     {
         println!("[TEST] Received call of get_mempool_stream.");
         Box::pin(async {
+            let zebrad_uri = self.zebrad_uri.clone();
             let zebrad_client = JsonRpcConnector::new(
                 self.zebrad_uri.clone(),
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )
             .await?;
-            let mempool_height = (zebrad_client.get_blockchain_info().await?.blocks.0) + 1;
-            let zebrad_uri = self.zebrad_uri.clone();
+            let mempool_height = zebrad_client.get_blockchain_info().await?.blocks.0;
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
                 let timeout = timeout(std::time::Duration::from_secs(30), async {
                     let mempool = Mempool::new();
                     if let Err(e) = mempool.update(&zebrad_uri).await {
-                        channel_tx.send(Err(tonic::Status::internal(e.to_string())))
+                        channel_tx.send(Err(tonic::Status::unknown(e.to_string())))
                             .await
                             .ok();
                         return;
@@ -918,7 +918,7 @@ impl CompactTxStreamer for GrpcClient {
                                         }
                                         Err(e) => {
                                             if channel_tx
-                                                .send(Err(tonic::Status::internal(e.to_string())))
+                                                .send(Err(tonic::Status::unknown(e.to_string())))
                                                 .await
                                                 .is_err()
                                             {
@@ -930,7 +930,7 @@ impl CompactTxStreamer for GrpcClient {
                             }
                             Err(e) => {
                                 if channel_tx
-                                    .send(Err(tonic::Status::internal(e.to_string())))
+                                    .send(Err(tonic::Status::unknown(e.to_string())))
                                     .await
                                     .is_err()
                                 {
@@ -942,7 +942,7 @@ impl CompactTxStreamer for GrpcClient {
                         mined = match mempool.update(&zebrad_uri).await {
                             Ok(mined) => mined,
                             Err(e) => {
-                                channel_tx.send(Err(tonic::Status::internal(e.to_string())))
+                                channel_tx.send(Err(tonic::Status::unknown(e.to_string())))
                                     .await
                                     .ok();
                                 break;
@@ -954,12 +954,8 @@ impl CompactTxStreamer for GrpcClient {
                 match timeout {
                     Ok(_) => {}
                     Err(_) => {
-                        channel_tx
-                            .send(Err(tonic::Status::internal(
-                                "get_mempool_stream gRPC request timed out",
-                            )))
-                            .await
-                            .ok();
+                        // NOTE: This should return 'channel_tx.send(Err(tonic::Status::deadline_expected(".."))).await.ok();'.
+                        //       However lightwalletd does not return any error and this could cause wallet panics.
                     }
                 }
             });
