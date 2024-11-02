@@ -1922,8 +1922,11 @@ dependencies = [
 name = "integration-tests"
 version = "0.1.0"
 dependencies = [
+ "once_cell",
  "tokio",
+ "tracing-subscriber",
  "zaino-testutils",
+ "zcash_local_net",
  "zingolib",
 ]
 
@@ -5331,6 +5334,28 @@ dependencies = [
  "zcash_primitives 0.16.0",
  "zcash_protocol 0.2.0",
  "zip32",
+]
+
+[[package]]
+name = "zcash_local_net"
+version = "0.1.0"
+source = "git+https://github.com/Oscar-Pepper/zcash-local-net.git?branch=add_get_block_range_reverse_test#6050f69581aa4af65a623486972f664179cd3a92"
+dependencies = [
+ "getset",
+ "http 1.1.0",
+ "json",
+ "portpicker",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tracing",
+ "zcash_client_backend",
+ "zcash_primitives 0.16.0",
+ "zcash_protocol 0.2.0",
+ "zingo-netutils",
+ "zingolib",
 ]
 
 [[package]]
