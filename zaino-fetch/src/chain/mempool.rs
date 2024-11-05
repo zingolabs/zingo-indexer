@@ -119,6 +119,35 @@ impl Mempool {
         Ok(txids.clone())
     }
 
+    /// Returns the txids currently in the mempool, filtered by exclude_txids.
+    ///
+    /// NOTE: THIS impl is inefficient and should be refactored with the addition of the internal mempool.
+    pub async fn get_filtered_mempool_txids(
+        &self,
+        exclude_txids: Vec<String>,
+    ) -> Result<Vec<String>, MempoolError> {
+        let mempool_txids = self.txids.read().await.clone();
+
+        let mut txids_to_exclude: HashSet<String> = HashSet::new();
+        for exclude_txid in &exclude_txids {
+            let matching_txids: Vec<&String> = mempool_txids
+                .iter()
+                .filter(|txid| txid.starts_with(exclude_txid))
+                .collect();
+
+            if matching_txids.len() == 1 {
+                txids_to_exclude.insert(matching_txids[0].clone());
+            }
+        }
+
+        let filtered_txids: Vec<String> = mempool_txids
+            .into_iter()
+            .filter(|txid| !txids_to_exclude.contains(txid))
+            .collect();
+
+        Ok(filtered_txids)
+    }
+
     /// Returns the hash of the block currently in the mempool.
     pub async fn get_best_block_hash(
         &self,

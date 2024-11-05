@@ -9,6 +9,8 @@ use zaino_fetch::{
     chain::{
         block::{get_block_from_node, get_nullifiers_from_node},
         mempool::Mempool,
+        transaction::FullTransaction,
+        utils::ParseFromSlice,
     },
     jsonrpc::{connector::JsonRpcConnector, response::GetTransactionResponse},
 };
@@ -38,6 +40,37 @@ impl RawTransactionStream {
 
 impl futures::Stream for RawTransactionStream {
     type Item = Result<RawTransaction, tonic::Status>;
+
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        let poll = std::pin::Pin::new(&mut self.inner).poll_next(cx);
+        match poll {
+            std::task::Poll::Ready(Some(Ok(raw_tx))) => std::task::Poll::Ready(Some(Ok(raw_tx))),
+            std::task::Poll::Ready(Some(Err(e))) => std::task::Poll::Ready(Some(Err(e))),
+            std::task::Poll::Ready(None) => std::task::Poll::Ready(None),
+            std::task::Poll::Pending => std::task::Poll::Pending,
+        }
+    }
+}
+
+/// Stream of RawTransactions, output type of get_taddress_txids.
+pub struct CompactTransactionStream {
+    inner: ReceiverStream<Result<CompactTx, tonic::Status>>,
+}
+
+impl CompactTransactionStream {
+    /// Returns new instanse of RawTransactionStream.
+    pub fn new(rx: tokio::sync::mpsc::Receiver<Result<CompactTx, tonic::Status>>) -> Self {
+        CompactTransactionStream {
+            inner: ReceiverStream::new(rx),
+        }
+    }
+}
+
+impl futures::Stream for CompactTransactionStream {
+    type Item = Result<CompactTx, tonic::Status>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
@@ -561,11 +594,11 @@ impl CompactTxStreamer for GrpcClient {
                 let (hex, height) = if let GetTransactionResponse::Object { hex, height, .. } = tx {
                     (hex, height)
                 } else {
-                    return Err(tonic::Status::not_found("Transaction not received"));
+                    return Err(tonic::Status::not_found("Error: Transaction not received"));
                 };
                 let height: u64 = height.try_into().map_err(|_e| {
-                    tonic::Status::internal(
-                        "Invalid response from server - Height conversion failed",
+                    tonic::Status::unknown(
+                        "Error: Invalid response from server - Height conversion failed",
                     )
                 })?;
 
@@ -575,7 +608,7 @@ impl CompactTxStreamer for GrpcClient {
                 }))
             } else {
                 Err(tonic::Status::invalid_argument(
-                    "Transaction hash incorrect",
+                    "Error: Transaction hash incorrect",
                 ))
             }
         })
@@ -719,6 +752,7 @@ impl CompactTxStreamer for GrpcClient {
                                 }
                             }
                             Err(e) => {
+                                // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                                 if channel_tx
                                     .send(Err(tonic::Status::unknown(e.to_string())))
                                     .await
@@ -736,7 +770,7 @@ impl CompactTxStreamer for GrpcClient {
                     Err(_) => {
                         channel_tx
                             .send(Err(tonic::Status::internal(
-                                "get_taddress_txids gRPC request timed out",
+                                "Error: get_taddress_txids gRPC request timed out",
                             )))
                             .await
                             .ok();
@@ -798,7 +832,7 @@ impl CompactTxStreamer for GrpcClient {
 
     /// Server streaming response type for the GetMempoolTx method.
     #[doc = "Server streaming response type for the GetMempoolTx method."]
-    type GetMempoolTxStream = tonic::Streaming<CompactTx>;
+    type GetMempoolTxStream = std::pin::Pin<Box<CompactTransactionStream>>;
 
     /// Return the compact transactions currently in the mempool; the results
     /// can be a few seconds out of date. If the Exclude list is empty, return
@@ -810,11 +844,10 @@ impl CompactTxStreamer for GrpcClient {
     /// match a shortened txid, they are all sent (none is excluded). Transactions
     /// in the exclude list that don't exist in the mempool are ignored.
     ///
-    /// This RPC has not been implemented as it is not currently used by zingolib.
-    /// If you require this RPC please open an issue or PR at the Zingo-Indexer github (https://github.com/zingolabs/zingo-indexer).
+    /// NOTE: This implementation is slow and should be re-implemented with the addition of the internal mempool and blockcache.
     fn get_mempool_tx<'life0, 'async_trait>(
         &'life0 self,
-        _request: tonic::Request<Exclude>,
+        request: tonic::Request<Exclude>,
     ) -> core::pin::Pin<
         Box<
             dyn core::future::Future<
@@ -832,7 +865,157 @@ impl CompactTxStreamer for GrpcClient {
     {
         println!("[TEST] Received call of get_mempool_tx.");
         Box::pin(async {
-            Err(tonic::Status::unimplemented("get_mempool_tx not yet implemented. If you require this RPC please open an issue or PR at the Zingo-Indexer github (https://github.com/zingolabs/zingo-indexer)."))
+            let zebrad_uri = self.zebrad_uri.clone();
+            let zebrad_client = JsonRpcConnector::new(
+                self.zebrad_uri.clone(),
+                Some("xxxxxx".to_string()),
+                Some("xxxxxx".to_string()),
+            )
+            .await?;
+            let exclude_txids: Vec<String> = request
+                .into_inner()
+                .txid
+                .iter()
+                .map(|txid_bytes| {
+                    let reversed_txid_bytes: Vec<u8> = txid_bytes.iter().cloned().rev().collect();
+                    hex::encode(&reversed_txid_bytes)
+                })
+                .collect();
+            let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
+            tokio::spawn(async move {
+                // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [streaming_rpc_timout = 4*rpc_timeout]
+                let timeout = timeout(std::time::Duration::from_secs(600), async {
+                    let mempool = Mempool::new();
+                    if let Err(e) = mempool.update(&zebrad_uri).await {
+                        channel_tx.send(Err(tonic::Status::unknown(e.to_string())))
+                            .await
+                            .ok();
+                        return;
+                    }
+                    match mempool.get_filtered_mempool_txids(exclude_txids).await {
+                        Ok(mempool_txids) => {
+                            for txid in mempool_txids {
+                                match zebrad_client
+                                    .get_raw_transaction(txid.clone(), Some(0))
+                                    .await {
+                                    Ok(GetTransactionResponse::Object { .. }) => {
+                                        if channel_tx
+                                        .send(Err(tonic::Status::internal(
+                                            "Error: Received transaction object type, this should not be impossible.",
+                                        )))
+                                        .await
+                                        .is_err()
+                                        {
+                                            break;
+                                        }
+
+                                    }
+                                    Ok(GetTransactionResponse::Raw(raw)) => {
+                                        let txid_bytes = match hex::decode(txid) {
+                                            Ok(bytes) => bytes,
+                                            Err(e) => {
+                                                if channel_tx
+                                                    .send(Err(tonic::Status::unknown(e.to_string())))
+                                                    .await
+                                                    .is_err()
+                                                {
+                                                    break;
+                                                } else {
+                                                    continue;
+                                                }
+                                            }
+                                        };
+                                        match FullTransaction::parse_from_slice(raw.as_ref(), Some(vec!(txid_bytes)), None) {
+                                            Ok(transaction) => {
+                                                if transaction.0.len() > 0 {
+                                                    // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                                                    if channel_tx
+                                                        .send(Err(tonic::Status::unknown("Error: ")))
+                                                        .await
+                                                        .is_err()
+                                                    {
+                                                        break;
+                                                    }
+                                                } else {
+                                                    match transaction.1.to_compact(0) {
+                                                        Ok(compact_tx) => {
+                                                            if channel_tx
+                                                                .send(Ok(compact_tx))
+                                                                .await
+                                                                .is_err()
+                                                            {
+                                                                break;
+                                                            }
+                                                        }
+                                                        Err(e) => {
+                                                            // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                                                            if channel_tx
+                                                                .send(Err(tonic::Status::unknown(e.to_string())))
+                                                                .await
+                                                                .is_err()
+                                                            {
+                                                                break;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            Err(e) => {
+                                                // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                                                if channel_tx
+                                                    .send(Err(tonic::Status::unknown(e.to_string())))
+                                                    .await
+                                                    .is_err()
+                                                {
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                                        if channel_tx
+                                        .send(Err(tonic::Status::unknown(e.to_string())))
+                                        .await
+                                        .is_err()
+                                        {
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                            if channel_tx
+                            .send(Err(tonic::Status::unknown(e.to_string())))
+                            .await
+                            .is_err()
+                            {
+                                return;
+                            }
+                        }
+                    }
+                })
+                .await;
+                match timeout {
+                    Ok(_) => {
+                        return;
+                    }
+                    Err(_) => {
+                        channel_tx
+                            .send(Err(tonic::Status::deadline_exceeded(
+                                "Error: get_mempool_stream gRPC request timed out",
+                            )))
+                            .await
+                            .ok();
+                        return;
+                    }
+                }
+            });
+            let output_stream = CompactTransactionStream::new(channel_rx);
+            let stream_boxed = Box::pin(output_stream);
+            Ok(tonic::Response::new(stream_boxed))
         })
     }
 
@@ -875,9 +1058,11 @@ impl CompactTxStreamer for GrpcClient {
             let mempool_height = zebrad_client.get_blockchain_info().await?.blocks.0;
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
-                let timeout = timeout(std::time::Duration::from_secs(30), async {
+                // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [streaming_rpc_timout = 4*rpc_timeout]
+                let timeout = timeout(std::time::Duration::from_secs(600), async {
                     let mempool = Mempool::new();
                     if let Err(e) = mempool.update(&zebrad_uri).await {
+                        // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                         channel_tx.send(Err(tonic::Status::unknown(e.to_string())))
                             .await
                             .ok();
@@ -908,7 +1093,7 @@ impl CompactTxStreamer for GrpcClient {
                                         Ok(GetTransactionResponse::Raw(_)) => {
                                             if channel_tx
                                             .send(Err(tonic::Status::internal(
-                                                "Received raw transaction type, this should not be impossible.",
+                                                "Error: Received raw transaction type, this should not be impossible.",
                                             )))
                                             .await
                                             .is_err()
@@ -917,6 +1102,7 @@ impl CompactTxStreamer for GrpcClient {
                                         }
                                         }
                                         Err(e) => {
+                                            // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                                             if channel_tx
                                                 .send(Err(tonic::Status::unknown(e.to_string())))
                                                 .await
@@ -929,6 +1115,7 @@ impl CompactTxStreamer for GrpcClient {
                                 }
                             }
                             Err(e) => {
+                                // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                                 if channel_tx
                                     .send(Err(tonic::Status::unknown(e.to_string())))
                                     .await
@@ -942,6 +1129,7 @@ impl CompactTxStreamer for GrpcClient {
                         mined = match mempool.update(&zebrad_uri).await {
                             Ok(mined) => mined,
                             Err(e) => {
+                                // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                                 channel_tx.send(Err(tonic::Status::unknown(e.to_string())))
                                     .await
                                     .ok();
@@ -952,10 +1140,17 @@ impl CompactTxStreamer for GrpcClient {
                 })
                 .await;
                 match timeout {
-                    Ok(_) => {}
+                    Ok(_) => {
+                        return;
+                    }
                     Err(_) => {
-                        // NOTE: This should return 'channel_tx.send(Err(tonic::Status::deadline_expected(".."))).await.ok();'.
-                        //       However lightwalletd does not return any error and this could cause wallet panics.
+                        channel_tx
+                            .send(Err(tonic::Status::deadline_exceeded(
+                                "Error: get_mempool_stream gRPC request timed out",
+                            )))
+                            .await
+                            .ok();
+                        return;
                     }
                 }
             });
