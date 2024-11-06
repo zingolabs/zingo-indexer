@@ -5339,7 +5339,7 @@ dependencies = [
 [[package]]
 name = "zcash_local_net"
 version = "0.1.0"
-source = "git+https://github.com/Oscar-Pepper/zcash-local-net.git?branch=add_get_block_range_reverse_test#6050f69581aa4af65a623486972f664179cd3a92"
+source = "git+https://github.com/zingolabs/zcash-local-net.git?branch=dev#15ea88389c396dfaaab77dae5f14eee660fc96e6"
 dependencies = [
  "getset",
  "http 1.1.0",
