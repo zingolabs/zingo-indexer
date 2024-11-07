@@ -1453,7 +1453,7 @@ impl CompactTxStreamer for GrpcClient {
     /// If you require this RPC please open an issue or PR at the Zingo-Indexer github (https://github.com/zingolabs/zingo-indexer).
     fn get_address_utxos<'life0, 'async_trait>(
         &'life0 self,
-        _request: tonic::Request<GetAddressUtxosArg>,
+        request: tonic::Request<GetAddressUtxosArg>,
     ) -> core::pin::Pin<
         Box<
             dyn core::future::Future<
@@ -1471,7 +1471,62 @@ impl CompactTxStreamer for GrpcClient {
     {
         println!("[TEST] Received call of get_address_utxos.");
         Box::pin(async {
-            Err(tonic::Status::unimplemented("get_address_utxos not yet implemented. If you require this RPC please open an issue or PR at the Zingo-Indexer github (https://github.com/zingolabs/zingo-indexer)."))
+            let zebrad_client = JsonRpcConnector::new(
+                self.zebrad_uri.clone(),
+                Some("xxxxxx".to_string()),
+                Some("xxxxxx".to_string()),
+            )
+            .await?;
+            let addr_args = request.into_inner();
+            if !addr_args
+                .addresses
+                .iter()
+                .all(|taddr| check_taddress(taddr).is_some())
+            {
+                return Err(tonic::Status::invalid_argument(
+                    "Error: One or more invalid taddresses given.",
+                ));
+            }
+            let utxos = zebrad_client.get_address_utxos(addr_args.addresses).await?;
+            let mut address_utxos: Vec<GetAddressUtxosReply> = Vec::new();
+            let mut entries: u32 = 0;
+            for utxo in utxos {
+                if (utxo.height.0 as u64) < addr_args.start_height {
+                    continue;
+                }
+                entries += 1;
+                if addr_args.max_entries > 0 && entries > addr_args.max_entries {
+                    break;
+                }
+                let checked_index = match i32::try_from(utxo.output_index) {
+                    Ok(index) => index,
+                    Err(_) => {
+                        return Err(tonic::Status::unknown(
+                            "Error: Index out of range. Failed to convert to i32.",
+                        ));
+                    }
+                };
+                let checked_satoshis = match i64::try_from(utxo.satoshis) {
+                    Ok(satoshis) => satoshis,
+                    Err(_) => {
+                        return Err(tonic::Status::unknown(
+                            "Error: Satoshis out of range. Failed to convert to i64.",
+                        ));
+                    }
+                };
+                let utxo_reply = GetAddressUtxosReply {
+                    address: utxo.address.to_string(),
+                    txid: utxo.txid.0.to_vec(),
+                    index: checked_index,
+                    script: utxo.script.as_ref().to_vec(),
+                    value_zat: checked_satoshis,
+                    height: utxo.height.0 as u64,
+                };
+                address_utxos.push(utxo_reply)
+            }
+            Ok(tonic::Response::new(GetAddressUtxosReplyList {
+                address_utxos,
+            }))
         })
     }
 
