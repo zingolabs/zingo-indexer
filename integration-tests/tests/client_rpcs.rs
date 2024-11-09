@@ -1,8 +1,6 @@
 //! Tests Zainod release binary against the `zcash_local_net` client RPC test fixtures.
 //!
-//! Pre-requisites:
-//! - Run `cargo build --release` to update to latest release binary
-//! - Run `generate_zcashd_chain_cache` to generate the chain cache for testing.
+//! See `Testing` section of README.md for more details.
 
 use std::path::PathBuf;
 

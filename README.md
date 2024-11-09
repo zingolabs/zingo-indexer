@@ -60,7 +60,8 @@ Holds tonic generated code for the lightwallet service RPCs and compact formats.
 - To run client rpc tests:
 1) Simlink or copy compiled `zcashd` and `zcash-cli` binaries to `$ zaino/test_binaries/bins/*`
 2) Build release binary `cargo build --release` WARNING: these tests do not use the binary built by cargo nextest
-3) Run `cargo nextest run --test client_rpcs`
+3) Generate the chain cache `cargo nextest run generate_zcashd_large_chain_cach --run-ignored ignored-only --features test_fixtures`
+4) Run `cargo nextest run --test client_rpcs`
 
 # Running ZainoD
 - To run zingo-cli through Zaino, connecting to zebrad locally: [in seperate terminals]
