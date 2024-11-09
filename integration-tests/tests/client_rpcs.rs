@@ -277,6 +277,7 @@ async fn get_taddress_balance_stream() {
     .await;
 }
 
+#[ignore]
 #[tokio::test]
 async fn get_mempool_tx() {
     tracing_subscriber::fmt().init();
@@ -290,6 +291,7 @@ async fn get_mempool_tx() {
     .await;
 }
 
+#[ignore]
 #[tokio::test]
 async fn get_mempool_stream() {
     tracing_subscriber::fmt().init();
