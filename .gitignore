@@ -1,3 +1,4 @@
 /target
 /db
 /test_binaries/bins/*
+/integration-tests/chain_cache/
