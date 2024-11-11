@@ -219,7 +219,7 @@ impl CompactTxStreamer for GrpcClient {
                     .map_err(|e| e.to_grpc_status())?
                     .blocks
                     .0;
-                    if height > chain_height {
+                    if height >= chain_height {
                         return Err(tonic::Status::out_of_range(
                             format!(
                                 "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
@@ -282,7 +282,7 @@ impl CompactTxStreamer for GrpcClient {
                     .map_err(|e| e.to_grpc_status())?
                     .blocks
                     .0;
-                    if height > chain_height {
+                    if height >= chain_height {
                         return Err(tonic::Status::out_of_range(
                             format!(
                                 "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
@@ -398,14 +398,21 @@ impl CompactTxStreamer for GrpcClient {
                                 }
                             }
                             Err(e) => {
-                                if height > chain_height {
-                                    let _ = channel_tx
+                                if height >= chain_height {
+                                    match channel_tx
                                         .send(Err(tonic::Status::out_of_range(format!(
                                             "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
                                             height, chain_height,
                                         ))))
-                                        .await;
-                                        break;
+                                        .await
+                                        
+                                    {
+                                        Ok(_) => break,
+                                        Err(e) => {
+                                            eprintln!("Error: Channel closed unexpectedly: {}", e.to_string());
+                                            break;
+                                        }
+                                    }
                                 } else {
                                     // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                                     if channel_tx
@@ -534,14 +541,21 @@ impl CompactTxStreamer for GrpcClient {
                                 }
                             }
                             Err(e) => {
-                                if height > chain_height {
-                                    let _ = channel_tx
+                                if height >= chain_height {
+                                    match channel_tx
                                         .send(Err(tonic::Status::out_of_range(format!(
                                             "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
                                             height, chain_height,
                                         ))))
-                                        .await;
-                                        break;
+                                        .await
+                                        
+                                    {
+                                        Ok(_) => break,
+                                        Err(e) => {
+                                            eprintln!("Error: Channel closed unexpectedly: {}", e.to_string());
+                                            break;
+                                        }
+                                    }
                                 } else {
                                     // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                                     if channel_tx
@@ -1323,7 +1337,7 @@ impl CompactTxStreamer for GrpcClient {
             let hash_or_height = if block_id.height != 0 {
                 match u32::try_from(block_id.height) {
                     Ok(height) => {
-                        if height > chain_info.blocks.0 {
+                        if height >= chain_info.blocks.0 {
                             return Err(tonic::Status::out_of_range(
                             format!(
                                 "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",

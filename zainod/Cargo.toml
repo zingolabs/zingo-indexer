@@ -9,7 +9,7 @@ repository = { workspace = true }
 
 [[bin]]
 name = "zainod"
-path = "src/bin/zainod.rs"
+path = "src/main.rs"
 
 [lib]
 name = "zainodlib"
