@@ -350,13 +350,20 @@ impl CompactTxStreamer for GrpcClient {
                             }
                             Err(e) => {
                                 if height > chain_height {
-                                    let _ = channel_tx
+                                    match channel_tx
                                         .send(Err(tonic::Status::out_of_range(format!(
                                             "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
                                             height, chain_height,
                                         ))))
-                                        .await;
-                                        break;
+                                        .await
+                                        
+                                    {
+                                        Ok(_) => break,
+                                        Err(e) => {
+                                            eprintln!("Error: Channel closed unexpectedly: {}", e.to_string());
+                                            break;
+                                        }
+                                    }
                                 } else {
                                     // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                                     if channel_tx
@@ -486,13 +493,20 @@ impl CompactTxStreamer for GrpcClient {
                             }
                             Err(e) => {
                                 if height > chain_height {
-                                    let _ = channel_tx
+                                    match channel_tx
                                         .send(Err(tonic::Status::out_of_range(format!(
                                             "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
                                             height, chain_height,
                                         ))))
-                                        .await;
-                                        break;
+                                        .await
+                                        
+                                    {
+                                        Ok(_) => break,
+                                        Err(e) => {
+                                            eprintln!("Error: Channel closed unexpectedly: {}", e.to_string());
+                                            break;
+                                        }
+                                    }
                                 } else {
                                     // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                                     if channel_tx

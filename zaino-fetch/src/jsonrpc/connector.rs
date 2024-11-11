@@ -1,6 +1,7 @@
 //! JsonRPC client implementation.
 //!
 //! TODO: - Add option for http connector.
+//!       - Refactor JsonRpcConnectorError into concrete error types and implement fmt::display [https://github.com/zingolabs/zaino/issues/67].
 
 use http::Uri;
 use reqwest::{Client, Url};
