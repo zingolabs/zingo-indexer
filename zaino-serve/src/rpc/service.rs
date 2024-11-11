@@ -998,7 +998,7 @@ impl CompactTxStreamer for GrpcClient {
             let hash_or_height = if block_id.height != 0 {
                 match u32::try_from(block_id.height) {
                     Ok(height) => {
-                        if height > chain_info.blocks.0 {
+                        if height >= chain_info.blocks.0 {
                             return Err(tonic::Status::out_of_range(
                             format!(
                                 "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
