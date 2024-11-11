@@ -170,7 +170,7 @@ impl CompactTxStreamer for GrpcClient {
                     .map_err(|e| e.to_grpc_status())?
                     .blocks
                     .0;
-                    if height > chain_height {
+                    if height >= chain_height {
                         return Err(tonic::Status::out_of_range(
                             format!(
                                 "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
@@ -233,7 +233,7 @@ impl CompactTxStreamer for GrpcClient {
                     .map_err(|e| e.to_grpc_status())?
                     .blocks
                     .0;
-                    if height > chain_height {
+                    if height >= chain_height {
                         return Err(tonic::Status::out_of_range(
                             format!(
                                 "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
@@ -349,7 +349,7 @@ impl CompactTxStreamer for GrpcClient {
                                 }
                             }
                             Err(e) => {
-                                if height > chain_height {
+                                if height >= chain_height {
                                     match channel_tx
                                         .send(Err(tonic::Status::out_of_range(format!(
                                             "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
@@ -492,7 +492,7 @@ impl CompactTxStreamer for GrpcClient {
                                 }
                             }
                             Err(e) => {
-                                if height > chain_height {
+                                if height >= chain_height {
                                     match channel_tx
                                         .send(Err(tonic::Status::out_of_range(format!(
                                             "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
