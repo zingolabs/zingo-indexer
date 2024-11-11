@@ -275,7 +275,6 @@ async fn get_taddress_balance_stream() {
     .await;
 }
 
-#[ignore]
 #[tokio::test]
 async fn get_mempool_tx() {
     tracing_subscriber::fmt().init();
@@ -289,7 +288,19 @@ async fn get_mempool_tx() {
     .await;
 }
 
-#[ignore]
+#[tokio::test]
+async fn get_mempool_stream_zingolib_mempool_monitor() {
+    tracing_subscriber::fmt().init();
+
+    zcash_local_net::test_fixtures::get_mempool_stream_zingolib_mempool_monitor(
+        ZCASHD_BIN.clone(),
+        ZCASH_CLI_BIN.clone(),
+        ZAINOD_BIN.clone(),
+        LIGHTWALLETD_BIN.clone(),
+    )
+    .await;
+}
+
 #[tokio::test]
 async fn get_mempool_stream() {
     tracing_subscriber::fmt().init();
