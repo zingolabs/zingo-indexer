@@ -11,6 +11,9 @@ repository = { workspace = true }
 # NOTE: Deprecated
 nym_poc = []
 
+# Used by zcash-local-net:
+test_fixtures = []
+
 [dependencies]
 zaino-fetch = { path = "../zaino-fetch" }
 zainod = { path = "../zainod" }
