@@ -12,6 +12,9 @@ repository = { workspace = true }
 # NOTE: Deprecated
 nym_poc = []
 
+# Used by zcash-local-net:
+test_fixtures = []
+
 [dependencies]
 # Test utility
 zaino-testutils = { path = "../zaino-testutils" }
