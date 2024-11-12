@@ -33,8 +33,11 @@ zingolib = { git = "https://github.com/zingolabs/zingolib.git", tag = "zaino_dep
 zcash_protocol = { git = "https://github.com/zingolabs/librustzcash.git", tag = "zcash_client_sqlite-0.11.2_plus_zingolabs_changes-1-g7ad60b5d5-2-g121371a08" }
 
 # Zebra
-zebra-chain = { git = "https://github.com/idky137/zebra.git", branch = "zaino_dep_changes" }
-zebra-rpc = { git = "https://github.com/idky137/zebra.git", branch = "zaino_dep_changes" }
+#
+# TODO: Update to release tag once zaino changes PR enters release.
+zebra-chain = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "4eb285de50848f1a4dcebd0fbe353e4f150fd371" }
+zebra-rpc = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "4eb285de50848f1a4dcebd0fbe353e4f150fd371" }
+
 
 # Temporarily removed until dependency conflict can be resolved.
 # Nym

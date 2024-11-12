@@ -425,7 +425,7 @@ dependencies = [
  "hmac",
  "rand_core 0.6.4",
  "ripemd",
- "secp256k1 0.27.0",
+ "secp256k1",
  "sha2 0.10.8",
  "subtle",
  "zeroize",
@@ -535,11 +535,11 @@ dependencies = [
 
 [[package]]
 name = "bridgetree"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f62227647af796dd9f1637da0392676a2e200973b817b082fc9be89bf93ddd74"
+checksum = "cef977c7f8e75aa81fc589064c121ab8d32448b7939d34d58df479aa93e65ea5"
 dependencies = [
- "incrementalmerkletree",
+ "incrementalmerkletree 0.7.0",
 ]
 
 [[package]]
@@ -1523,7 +1523,7 @@ dependencies = [
  "pasta_curves",
  "rand 0.8.5",
  "subtle",
- "uint",
+ "uint 0.9.5",
 ]
 
 [[package]]
@@ -2032,6 +2032,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "incrementalmerkletree"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d45063fbc4b0a37837f6bfe0445f269d13d730ad0aa3b5a7f74aa7bf27a0f4df"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "indenter"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2458,9 +2467,9 @@ dependencies = [
 
 [[package]]
 name = "metrics"
-version = "0.23.0"
+version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "884adb57038347dfbaf2d5065887b6cf4312330dc8e94bc30a1a839bd79d3261"
+checksum = "8ae428771d17306715c5091d446327d1cfdedc82185c65ba8423ab404e45bf10"
 dependencies = [
  "ahash",
  "portable-atomic",
@@ -2714,7 +2723,38 @@ dependencies = [
  "halo2_gadgets",
  "halo2_proofs",
  "hex",
- "incrementalmerkletree",
+ "incrementalmerkletree 0.6.0",
+ "lazy_static",
+ "memuse",
+ "nonempty",
+ "pasta_curves",
+ "rand 0.8.5",
+ "reddsa",
+ "serde",
+ "subtle",
+ "tracing",
+ "visibility",
+ "zcash_note_encryption",
+ "zcash_spec",
+ "zip32",
+]
+
+[[package]]
+name = "orchard"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f18e997fa121de5c73e95cdc7e8512ae43b7de38904aeea5e5713cc48f3c0ba"
+dependencies = [
+ "aes",
+ "bitvec",
+ "blake2b_simd",
+ "ff",
+ "fpe",
+ "group",
+ "halo2_gadgets",
+ "halo2_proofs",
+ "hex",
+ "incrementalmerkletree 0.7.0",
  "lazy_static",
  "memuse",
  "nonempty",
@@ -3009,7 +3049,7 @@ checksum = "0b34d9fd68ae0b74a41b21c03c2f62847aa0ffea044eee893b4c140b37e244e2"
 dependencies = [
  "fixed-hash",
  "impl-codec",
- "uint",
+ "uint 0.9.5",
 ]
 
 [[package]]
@@ -3767,7 +3807,39 @@ dependencies = [
  "fpe",
  "group",
  "hex",
- "incrementalmerkletree",
+ "incrementalmerkletree 0.6.0",
+ "jubjub",
+ "lazy_static",
+ "memuse",
+ "rand 0.8.5",
+ "rand_core 0.6.4",
+ "redjubjub",
+ "subtle",
+ "tracing",
+ "zcash_note_encryption",
+ "zcash_spec",
+ "zip32",
+]
+
+[[package]]
+name = "sapling-crypto"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfff8cfce16aeb38da50b8e2ed33c9018f30552beff2210c266662a021b17f38"
+dependencies = [
+ "aes",
+ "bellman",
+ "bitvec",
+ "blake2b_simd",
+ "blake2s_simd",
+ "bls12_381",
+ "byteorder",
+ "document-features",
+ "ff",
+ "fpe",
+ "group",
+ "hex",
+ "incrementalmerkletree 0.7.0",
  "jubjub",
  "lazy_static",
  "memuse",
@@ -3808,21 +3880,12 @@ dependencies = [
 
 [[package]]
 name = "secp256k1"
-version = "0.26.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4124a35fe33ae14259c490fd70fa199a32b9ce9502f2ee6bc4f81ec06fa65894"
-dependencies = [
- "secp256k1-sys",
- "serde",
-]
-
-[[package]]
-name = "secp256k1"
 version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25996b82292a7a57ed3508f052cfff8640d38d32018784acd714758b43da9c8f"
 dependencies = [
  "secp256k1-sys",
+ "serde",
 ]
 
 [[package]]
@@ -4020,7 +4083,7 @@ checksum = "78222845cd8bbe5eb95687407648ff17693a35de5e8abaa39a4681fb21e033f9"
 dependencies = [
  "bitflags 2.6.0",
  "either",
- "incrementalmerkletree",
+ "incrementalmerkletree 0.6.0",
  "tracing",
 ]
 
@@ -4577,8 +4640,8 @@ dependencies = [
 
 [[package]]
 name = "tower-batch-control"
-version = "0.2.41-beta.15"
-source = "git+https://github.com/idky137/zebra.git?branch=zaino_dep_changes#449c6652de4a6d9000a77f649aa28847e6eeadff"
+version = "0.2.41-beta.18"
+source = "git+https://github.com/ZcashFoundation/zebra.git?rev=4eb285de50848f1a4dcebd0fbe353e4f150fd371#4eb285de50848f1a4dcebd0fbe353e4f150fd371"
 dependencies = [
  "futures",
  "futures-core",
@@ -4593,8 +4656,8 @@ dependencies = [
 
 [[package]]
 name = "tower-fallback"
-version = "0.2.41-beta.15"
-source = "git+https://github.com/idky137/zebra.git?branch=zaino_dep_changes#449c6652de4a6d9000a77f649aa28847e6eeadff"
+version = "0.2.41-beta.18"
+source = "git+https://github.com/ZcashFoundation/zebra.git?rev=4eb285de50848f1a4dcebd0fbe353e4f150fd371#4eb285de50848f1a4dcebd0fbe353e4f150fd371"
 dependencies = [
  "futures-core",
  "pin-project",
@@ -4718,6 +4781,18 @@ name = "uint"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "76f64bba2c53b04fcab63c01a7d7427eadc821e3bc48c34dc9ba29c501164b52"
+dependencies = [
+ "byteorder",
+ "crunchy",
+ "hex",
+ "static_assertions",
+]
+
+[[package]]
+name = "uint"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "909988d098b2f738727b161a106cfc7cab00c539c2687a8836f8e565976fb53e"
 dependencies = [
  "byteorder",
  "crunchy",
@@ -5487,15 +5562,15 @@ dependencies = [
 
 [[package]]
 name = "zcash_address"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14bccd6cefb76f87b6d15a9e7b02b6c0515648c6de8e806c4e2d6f0f6ae640c5"
+checksum = "4ff95eac82f71286a79c750e674550d64fb2b7aadaef7b89286b2917f645457d"
 dependencies = [
  "bech32",
  "bs58",
  "f4jumble 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "zcash_encoding 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "zcash_protocol 0.3.0",
+ "zcash_protocol 0.4.0",
 ]
 
 [[package]]
@@ -5514,16 +5589,16 @@ dependencies = [
  "group",
  "hex",
  "hyper-util",
- "incrementalmerkletree",
+ "incrementalmerkletree 0.6.0",
  "memuse",
  "nom",
  "nonempty",
- "orchard",
+ "orchard 0.9.0",
  "percent-encoding",
  "prost",
  "rand_core 0.6.4",
  "rayon",
- "sapling-crypto",
+ "sapling-crypto 0.2.0",
  "secrecy",
  "shardtree",
  "subtle",
@@ -5587,9 +5662,9 @@ dependencies = [
  "group",
  "memuse",
  "nonempty",
- "orchard",
+ "orchard 0.9.0",
  "rand_core 0.6.4",
- "sapling-crypto",
+ "sapling-crypto 0.2.0",
  "secrecy",
  "subtle",
  "tracing",
@@ -5651,17 +5726,17 @@ dependencies = [
  "fpe",
  "group",
  "hex",
- "incrementalmerkletree",
+ "incrementalmerkletree 0.6.0",
  "jubjub",
  "memuse",
  "nonempty",
- "orchard",
+ "orchard 0.9.0",
  "rand 0.8.5",
  "rand_core 0.6.4",
  "redjubjub",
  "ripemd",
- "sapling-crypto",
- "secp256k1 0.27.0",
+ "sapling-crypto 0.2.0",
+ "secp256k1",
  "sha2 0.10.8",
  "subtle",
  "tracing",
@@ -5675,9 +5750,9 @@ dependencies = [
 
 [[package]]
 name = "zcash_primitives"
-version = "0.17.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d87ab6a55591a8cf1866749fdc739ae1bbd06e6cec07ab0bbe5d57ee3390eb2"
+checksum = "6ab47d526d7fd6f88b3a2854ad81b54757a80c2aeadd1d8b06f690556af9743c"
 dependencies = [
  "aes",
  "bip32",
@@ -5690,24 +5765,24 @@ dependencies = [
  "fpe",
  "group",
  "hex",
- "incrementalmerkletree",
+ "incrementalmerkletree 0.7.0",
  "jubjub",
  "memuse",
  "nonempty",
- "orchard",
+ "orchard 0.10.0",
  "rand 0.8.5",
  "rand_core 0.6.4",
  "redjubjub",
  "ripemd",
- "sapling-crypto",
- "secp256k1 0.27.0",
+ "sapling-crypto 0.3.0",
+ "secp256k1",
  "sha2 0.10.8",
  "subtle",
  "tracing",
- "zcash_address 0.5.0",
+ "zcash_address 0.6.0",
  "zcash_encoding 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "zcash_note_encryption",
- "zcash_protocol 0.3.0",
+ "zcash_protocol 0.4.0",
  "zcash_spec",
  "zip32",
 ]
@@ -5728,7 +5803,7 @@ dependencies = [
  "lazy_static",
  "rand_core 0.6.4",
  "redjubjub",
- "sapling-crypto",
+ "sapling-crypto 0.2.0",
  "tracing",
  "xdg",
  "zcash_primitives 0.16.0",
@@ -5736,9 +5811,9 @@ dependencies = [
 
 [[package]]
 name = "zcash_proofs"
-version = "0.17.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b9fc0032b3d90f000f50dba7a996ad6556b7dba5b5145f93ab67b6eb74d3a48"
+checksum = "daba607872e60d91a09248d8e1ea3d6801c819fb80d67016d9de02d81323c10d"
 dependencies = [
  "bellman",
  "blake2b_simd",
@@ -5751,10 +5826,10 @@ dependencies = [
  "lazy_static",
  "rand_core 0.6.4",
  "redjubjub",
- "sapling-crypto",
+ "sapling-crypto 0.3.0",
  "tracing",
  "xdg",
- "zcash_primitives 0.17.0",
+ "zcash_primitives 0.19.0",
 ]
 
 [[package]]
@@ -5768,9 +5843,9 @@ dependencies = [
 
 [[package]]
 name = "zcash_protocol"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b1ff002bd41ba76b42d42a02ee11de06790b7fdbc904bdea4486b9a93b2a5e4"
+checksum = "6bc22b9155b2c7eb20105cd06de170d188c1bc86489b92aa3fda7b8da8d96acf"
 dependencies = [
  "document-features",
  "memuse",
@@ -5797,8 +5872,8 @@ dependencies = [
 
 [[package]]
 name = "zebra-chain"
-version = "1.0.0-beta.39"
-source = "git+https://github.com/idky137/zebra.git?branch=zaino_dep_changes#449c6652de4a6d9000a77f649aa28847e6eeadff"
+version = "1.0.0-beta.42"
+source = "git+https://github.com/ZcashFoundation/zebra.git?rev=4eb285de50848f1a4dcebd0fbe353e4f150fd371#4eb285de50848f1a4dcebd0fbe353e4f150fd371"
 dependencies = [
  "bitflags 2.6.0",
  "bitflags-serde-legacy",
@@ -5809,6 +5884,7 @@ dependencies = [
  "bs58",
  "byteorder",
  "chrono",
+ "dirs",
  "ed25519-zebra",
  "equihash 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures",
@@ -5816,43 +5892,44 @@ dependencies = [
  "halo2_proofs",
  "hex",
  "humantime",
- "incrementalmerkletree",
+ "incrementalmerkletree 0.7.0",
  "itertools 0.13.0",
  "jubjub",
  "lazy_static",
  "num-integer",
- "orchard",
+ "orchard 0.10.0",
  "primitive-types",
  "rand_core 0.6.4",
  "rayon",
  "reddsa",
  "redjubjub",
  "ripemd",
- "sapling-crypto",
- "secp256k1 0.26.0",
+ "sapling-crypto 0.3.0",
+ "secp256k1",
  "serde",
  "serde-big-array",
  "serde_json",
  "serde_with",
  "sha2 0.10.8",
  "static_assertions",
+ "tempfile",
  "thiserror",
  "tokio",
  "tracing",
- "uint",
+ "uint 0.10.0",
  "x25519-dalek",
- "zcash_address 0.5.0",
+ "zcash_address 0.6.0",
  "zcash_encoding 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "zcash_history",
  "zcash_note_encryption",
- "zcash_primitives 0.17.0",
- "zcash_protocol 0.3.0",
+ "zcash_primitives 0.19.0",
+ "zcash_protocol 0.4.0",
 ]
 
 [[package]]
 name = "zebra-consensus"
-version = "1.0.0-beta.39"
-source = "git+https://github.com/idky137/zebra.git?branch=zaino_dep_changes#449c6652de4a6d9000a77f649aa28847e6eeadff"
+version = "1.0.0-beta.42"
+source = "git+https://github.com/ZcashFoundation/zebra.git?rev=4eb285de50848f1a4dcebd0fbe353e4f150fd371#4eb285de50848f1a4dcebd0fbe353e4f150fd371"
 dependencies = [
  "bellman",
  "blake2b_simd",
@@ -5865,10 +5942,10 @@ dependencies = [
  "lazy_static",
  "metrics",
  "once_cell",
- "orchard",
+ "orchard 0.10.0",
  "rand 0.8.5",
  "rayon",
- "sapling-crypto",
+ "sapling-crypto 0.3.0",
  "serde",
  "thiserror",
  "tokio",
@@ -5878,7 +5955,7 @@ dependencies = [
  "tracing",
  "tracing-futures",
  "wagyu-zcash-parameters",
- "zcash_proofs 0.17.0",
+ "zcash_proofs 0.19.0",
  "zebra-chain",
  "zebra-node-services",
  "zebra-script",
@@ -5887,8 +5964,8 @@ dependencies = [
 
 [[package]]
 name = "zebra-network"
-version = "1.0.0-beta.39"
-source = "git+https://github.com/idky137/zebra.git?branch=zaino_dep_changes#449c6652de4a6d9000a77f649aa28847e6eeadff"
+version = "1.0.0-beta.42"
+source = "git+https://github.com/ZcashFoundation/zebra.git?rev=4eb285de50848f1a4dcebd0fbe353e4f150fd371#4eb285de50848f1a4dcebd0fbe353e4f150fd371"
 dependencies = [
  "bitflags 2.6.0",
  "byteorder",
@@ -5923,35 +6000,40 @@ dependencies = [
 
 [[package]]
 name = "zebra-node-services"
-version = "1.0.0-beta.39"
-source = "git+https://github.com/idky137/zebra.git?branch=zaino_dep_changes#449c6652de4a6d9000a77f649aa28847e6eeadff"
+version = "1.0.0-beta.42"
+source = "git+https://github.com/ZcashFoundation/zebra.git?rev=4eb285de50848f1a4dcebd0fbe353e4f150fd371#4eb285de50848f1a4dcebd0fbe353e4f150fd371"
 dependencies = [
  "color-eyre",
  "jsonrpc-core",
  "reqwest 0.11.27",
  "serde",
  "serde_json",
+ "tokio",
  "zebra-chain",
 ]
 
 [[package]]
 name = "zebra-rpc"
-version = "1.0.0-beta.39"
-source = "git+https://github.com/idky137/zebra.git?branch=zaino_dep_changes#449c6652de4a6d9000a77f649aa28847e6eeadff"
+version = "1.0.0-beta.42"
+source = "git+https://github.com/ZcashFoundation/zebra.git?rev=4eb285de50848f1a4dcebd0fbe353e4f150fd371#4eb285de50848f1a4dcebd0fbe353e4f150fd371"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
+ "color-eyre",
  "futures",
  "hex",
  "indexmap 2.6.0",
  "jsonrpc-core",
  "jsonrpc-derive",
  "jsonrpc-http-server",
+ "nix",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "tokio",
  "tower 0.4.13",
  "tracing",
- "zcash_primitives 0.17.0",
+ "zcash_primitives 0.19.0",
  "zebra-chain",
  "zebra-consensus",
  "zebra-network",
@@ -5962,8 +6044,8 @@ dependencies = [
 
 [[package]]
 name = "zebra-script"
-version = "1.0.0-beta.39"
-source = "git+https://github.com/idky137/zebra.git?branch=zaino_dep_changes#449c6652de4a6d9000a77f649aa28847e6eeadff"
+version = "1.0.0-beta.42"
+source = "git+https://github.com/ZcashFoundation/zebra.git?rev=4eb285de50848f1a4dcebd0fbe353e4f150fd371#4eb285de50848f1a4dcebd0fbe353e4f150fd371"
 dependencies = [
  "thiserror",
  "zcash_script",
@@ -5972,8 +6054,8 @@ dependencies = [
 
 [[package]]
 name = "zebra-state"
-version = "1.0.0-beta.39"
-source = "git+https://github.com/idky137/zebra.git?branch=zaino_dep_changes#449c6652de4a6d9000a77f649aa28847e6eeadff"
+version = "1.0.0-beta.42"
+source = "git+https://github.com/ZcashFoundation/zebra.git?rev=4eb285de50848f1a4dcebd0fbe353e4f150fd371#4eb285de50848f1a4dcebd0fbe353e4f150fd371"
 dependencies = [
  "bincode",
  "chrono",
@@ -6176,11 +6258,11 @@ dependencies = [
  "crossbeam-channel",
  "futures",
  "getset",
- "incrementalmerkletree",
+ "incrementalmerkletree 0.6.0",
  "memuse",
- "orchard",
+ "orchard 0.9.0",
  "rayon",
- "sapling-crypto",
+ "sapling-crypto 0.2.0",
  "shardtree",
  "tokio",
  "tonic",
@@ -6200,11 +6282,11 @@ dependencies = [
  "crossbeam-channel",
  "futures",
  "getset",
- "incrementalmerkletree",
+ "incrementalmerkletree 0.6.0",
  "memuse",
- "orchard",
+ "orchard 0.9.0",
  "rayon",
- "sapling-crypto",
+ "sapling-crypto 0.2.0",
  "shardtree",
  "tokio",
  "tonic",
@@ -6240,7 +6322,7 @@ dependencies = [
  "group",
  "hex",
  "http 1.1.0",
- "incrementalmerkletree",
+ "incrementalmerkletree 0.6.0",
  "indoc",
  "json",
  "jubjub",
@@ -6248,7 +6330,7 @@ dependencies = [
  "log",
  "log4rs",
  "nonempty",
- "orchard",
+ "orchard 0.9.0",
  "portpicker",
  "proptest",
  "prost",
@@ -6256,8 +6338,8 @@ dependencies = [
  "reqwest 0.12.9",
  "ring 0.17.8",
  "rust-embed",
- "sapling-crypto",
- "secp256k1 0.27.0",
+ "sapling-crypto 0.2.0",
+ "secp256k1",
  "secrecy",
  "serde",
  "serde_json",
@@ -6309,7 +6391,7 @@ dependencies = [
  "group",
  "hex",
  "http 1.1.0",
- "incrementalmerkletree",
+ "incrementalmerkletree 0.6.0",
  "indoc",
  "json",
  "jubjub",
@@ -6317,7 +6399,7 @@ dependencies = [
  "log",
  "log4rs",
  "nonempty",
- "orchard",
+ "orchard 0.9.0",
  "portpicker",
  "proptest",
  "prost",
@@ -6325,8 +6407,8 @@ dependencies = [
  "reqwest 0.12.9",
  "ring 0.17.8",
  "rust-embed",
- "sapling-crypto",
- "secp256k1 0.27.0",
+ "sapling-crypto 0.2.0",
+ "secp256k1",
  "secrecy",
  "serde",
  "serde_json",
