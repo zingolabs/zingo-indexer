@@ -246,7 +246,7 @@ impl JsonRpcConnector {
     /// method: post
     /// tags: blockchain
     ///
-    /// NOTE: Currently unused by Zingo-Indexer and untested!
+    /// WARNING: Unused by Zaino and untested!
     pub async fn get_best_block_hash(
         &self,
     ) -> Result<BestBlockHashResponse, JsonRpcConnectorError> {
@@ -293,7 +293,7 @@ impl JsonRpcConnector {
     /// - `start_index`: (number, required) The index of the first 2^16-leaf subtree to return.
     /// - `limit`: (number, optional) The maximum number of subtree values to return.
     ///
-    /// NOTE: Currently unused by Zingo-Indexer and untested!
+    /// WARNING: Currently unused by Zingo-Indexer and untested!
     pub async fn get_subtrees_by_index(
         &self,
         pool: String,

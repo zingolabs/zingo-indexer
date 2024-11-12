@@ -18,10 +18,7 @@ use zaino_fetch::{
 use zaino_proto::proto::{
     compact_formats::{CompactBlock, CompactTx},
     service::{
-        compact_tx_streamer_server::CompactTxStreamer, Address, AddressList, Balance, BlockId,
-        BlockRange, ChainSpec, Duration, Empty, Exclude, GetAddressUtxosArg, GetAddressUtxosReply,
-        GetAddressUtxosReplyList, GetSubtreeRootsArg, LightdInfo, PingResponse, RawTransaction,
-        SendResponse, SubtreeRoot, TransparentAddressBlockFilter, TreeState, TxFilter,
+        compact_tx_streamer_server::CompactTxStreamer, Address, AddressList, Balance, BlockId, BlockRange, ChainSpec, Duration, Empty, Exclude, GetAddressUtxosArg, GetAddressUtxosReply, GetAddressUtxosReplyList, GetSubtreeRootsArg, LightdInfo, PingResponse, RawTransaction, SendResponse, ShieldedProtocol, SubtreeRoot, TransparentAddressBlockFilter, TreeState, TxFilter
     },
 };
 
@@ -151,6 +148,39 @@ impl UtxoReplyStream {
 
 impl futures::Stream for UtxoReplyStream {
     type Item = Result<GetAddressUtxosReply, tonic::Status>;
+
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        let poll = std::pin::Pin::new(&mut self.inner).poll_next(cx);
+        match poll {
+            std::task::Poll::Ready(Some(Ok(raw_tx))) => std::task::Poll::Ready(Some(Ok(raw_tx))),
+            std::task::Poll::Ready(Some(Err(e))) => std::task::Poll::Ready(Some(Err(e))),
+            std::task::Poll::Ready(None) => std::task::Poll::Ready(None),
+            std::task::Poll::Pending => std::task::Poll::Pending,
+        }
+    }
+}
+
+/// Stream of CompactBlocks, output type of get_block_range.
+pub struct SubtreeRootReplyStream {
+    inner: ReceiverStream<Result<SubtreeRoot, tonic::Status>>,
+}
+
+impl SubtreeRootReplyStream {
+    /// Returns new instanse of CompactBlockStream.
+    pub fn new(
+        rx: tokio::sync::mpsc::Receiver<Result<SubtreeRoot, tonic::Status>>,
+    ) -> Self {
+        SubtreeRootReplyStream {
+            inner: ReceiverStream::new(rx),
+        }
+    }
+}
+
+impl futures::Stream for SubtreeRootReplyStream {
+    type Item = Result<SubtreeRoot, tonic::Status>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
@@ -1465,16 +1495,15 @@ impl CompactTxStreamer for GrpcClient {
 
     /// Server streaming response type for the GetSubtreeRoots method.
     #[doc = " Server streaming response type for the GetSubtreeRoots method."]
-    type GetSubtreeRootsStream = tonic::Streaming<SubtreeRoot>;
+    // type GetSubtreeRootsStream = tonic::Streaming<SubtreeRoot>;
+    type GetSubtreeRootsStream = std::pin::Pin<Box<SubtreeRootReplyStream>>;
+
 
     /// Returns a stream of information about roots of subtrees of the Sapling and Orchard
     /// note commitment trees.
-    ///
-    /// This RPC has not been implemented as it is not currently used by zingolib.
-    /// If you require this RPC please open an issue or PR at the Zingo-Indexer github (https://github.com/zingolabs/zingo-indexer).
     fn get_subtree_roots<'life0, 'async_trait>(
         &'life0 self,
-        _request: tonic::Request<GetSubtreeRootsArg>,
+        request: tonic::Request<GetSubtreeRootsArg>,
     ) -> core::pin::Pin<
         Box<
             dyn core::future::Future<
@@ -1491,8 +1520,81 @@ impl CompactTxStreamer for GrpcClient {
         Self: 'async_trait,
     {
         println!("[TEST] Received call of get_subtree_roots.");
-        Box::pin(async {
-            Err(tonic::Status::unimplemented("get_subtree_roots not yet implemented. If you require this RPC please open an issue or PR at the Zingo-Indexer github (https://github.com/zingolabs/zingo-indexer)."))
+        Box::pin(async move {
+            let zebrad_uri  =self.zebrad_uri.clone();
+            let zebrad_client = JsonRpcConnector::new(
+                zebrad_uri.clone(),
+                Some("xxxxxx".to_string()),
+                Some("xxxxxx".to_string()),
+            )
+            .await?;
+            let subtree_roots_args = request.into_inner();
+            let pool = match ShieldedProtocol::try_from(subtree_roots_args.shielded_protocol) {
+                Ok(protocol) => protocol.as_str_name(),
+                Err(_) => return Err(tonic::Status::invalid_argument("Error: Invalid shielded protocol value.")),
+            };
+            let start_index = match u16::try_from(subtree_roots_args.start_index) {
+                Ok(value) => value,
+                Err(_) => return Err(tonic::Status::invalid_argument("Error: start_index value exceeds u16 range.")),
+            };
+            let limit = if subtree_roots_args.max_entries == 0 {
+                None
+            } else {
+                match u16::try_from(subtree_roots_args.max_entries) {
+                    Ok(value) => Some(value),
+                    Err(_) => return Err(tonic::Status::invalid_argument("Error: max_entries value exceeds u16 range.")),
+                }
+            };
+            let subtrees = zebrad_client.get_subtrees_by_index(pool.to_string(), start_index, limit).await?;
+            let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
+            tokio::spawn(async move {
+                // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [streaming_rpc_timout = 4*rpc_timeout]
+                let timeout = timeout(std::time::Duration::from_secs(600), async {
+                    for subtree in subtrees.subtrees {
+                        match get_block_from_node(&zebrad_uri.clone(), &subtree.end_height.0).await {
+                            Ok(block_data) => {
+                                if channel_tx.send(
+                                    Ok(SubtreeRoot {
+                                        root_hash: subtree.root.clone().into_bytes(),
+                                        completing_block_hash: block_data.hash,
+                                        completing_block_height: block_data.height,
+                                    })).await.is_err() {
+                                    break;
+                                }
+                                todo!();
+                            }
+                            Err(e) => {
+                                // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                                if channel_tx
+                                    .send(Err(tonic::Status::unknown(e.to_string())))
+                                    .await
+                                    .is_err()
+                                    {
+                                        break;
+                                    }
+                            }
+                        }
+                    }
+                })
+                .await;
+                match timeout {
+                    Ok(_) => {
+                        return;
+                    }
+                    Err(_) => {
+                        channel_tx
+                            .send(Err(tonic::Status::deadline_exceeded(
+                                "Error: get_mempool_stream gRPC request timed out",
+                            )))
+                            .await
+                            .ok();
+                        return;
+                    }
+                }
+            });
+            let output_stream = SubtreeRootReplyStream::new(channel_rx);
+            let stream_boxed = Box::pin(output_stream);
+            Ok(tonic::Response::new(stream_boxed))
         })
     }
 
