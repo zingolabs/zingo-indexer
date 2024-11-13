@@ -139,6 +139,49 @@ impl<'de> serde::Deserialize<'de> for SerializedBlock {
     }
 }
 
+/// Sapling note commitment tree information.
+///
+/// Wrapper struct for zebra's SaplingTrees
+#[derive(Copy, Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct SaplingTrees {
+    size: u64,
+}
+
+/// Orchard note commitment tree information.
+///
+/// Wrapper struct for zebra's OrchardTrees
+#[derive(Copy, Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct OrchardTrees {
+    size: u64,
+}
+
+/// Information about the sapling and orchard note commitment trees if any.
+///
+/// Wrapper struct for zebra's GetBlockTrees
+#[derive(Copy, Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct GetBlockTrees {
+    sapling: Option<SaplingTrees>,
+    orchard: Option<OrchardTrees>,
+}
+
+impl GetBlockTrees {
+    /// Returns sapling data held by ['GetBlockTrees'].
+    pub fn sapling(&self) -> u64 {
+        self.sapling.map_or(0, |s| s.size)
+    }
+
+    /// Returns orchard data held by ['GetBlockTrees'].
+    pub fn orchard(&self) -> u64 {
+        self.orchard.map_or(0, |o| o.size)
+    }
+}
+
+impl Into<zebra_rpc::methods::GetBlockTrees> for GetBlockTrees {
+    fn into(self) -> zebra_rpc::methods::GetBlockTrees {
+        zebra_rpc::methods::GetBlockTrees::new(self.sapling(), self.orchard())
+    }
+}
+
 /// Contains the hex-encoded hash of the sent transaction.
 ///
 /// This is used for the output parameter of [`JsonRpcConnector::get_block`].
@@ -168,16 +211,9 @@ pub enum GetBlockResponse {
         tx: Vec<String>,
 
         /// Information about the note commitment trees.
-        trees: zebra_rpc::methods::GetBlockTrees,
+        trees: GetBlockTrees,
     },
 }
-
-/// Contains the hex-encoded hash of the requested block.
-///
-/// This is used for the output parameter of [`JsonRpcConnector::get_best_block_hash`].
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(transparent)]
-pub struct BestBlockHashResponse(#[serde(with = "hex")] pub zebra_chain::block::Hash);
 
 /// Vec of transaction ids, as a JSON array.
 ///
@@ -389,12 +425,7 @@ impl<'de> serde::Deserialize<'de> for GetTransactionResponse {
     }
 }
 
-/// *** THE FOLLOWING CODE IS CURRENTLY UNUSED BY ZINGO-PROXY AND UNTESTED! ***
-/// ***                           TEST BEFORE USE                           ***
-
 /// Wrapper struct for a zebra SubtreeRpcData.
-///
-/// *** UNTESTED - TEST BEFORE USE ***
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct SubtreeRpcData(zebra_rpc::methods::trees::SubtreeRpcData);
 
@@ -442,22 +473,15 @@ impl<'de> serde::Deserialize<'de> for SubtreeRpcData {
     where
         D: serde::Deserializer<'de>,
     {
-        let hex_str = String::deserialize(deserializer)?;
-
-        if hex_str.len() < 8 {
-            return Err(serde::de::Error::custom("Hex string is too short"));
+        #[derive(serde::Deserialize)]
+        struct SubtreeDataHelper {
+            root: String,
+            end_height: u32,
         }
-
-        let root_end_index = hex_str.len() - 8;
-        let (root_hex, height_hex) = hex_str.split_at(root_end_index);
-
-        let root = root_hex.to_string();
-        let height = u32::from_str_radix(height_hex, 16)
-            .map_err(|_| serde::de::Error::custom("Failed to parse height"))?;
-
+        let helper = SubtreeDataHelper::deserialize(deserializer)?;
         Ok(SubtreeRpcData(zebra_rpc::methods::trees::SubtreeRpcData {
-            root,
-            end_height: zebra_chain::block::Height(height),
+            root: helper.root,
+            end_height: zebra_chain::block::Height(helper.end_height),
         }))
     }
 }
@@ -466,8 +490,6 @@ impl<'de> serde::Deserialize<'de> for SubtreeRpcData {
 /// and a list of subtree roots and end heights.
 ///
 /// This is used for the output parameter of [`JsonRpcConnector::get_subtrees_by_index`].
-///
-/// *** UNTESTED - TEST BEFORE USE ***
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct GetSubtreesResponse {
     /// The shielded pool to which the subtrees belong.
@@ -489,8 +511,6 @@ pub struct GetSubtreesResponse {
 ///
 /// Consensus-critical serialization uses [`ZcashSerialize`].
 /// [`serde`]-based hex serialization must only be used for RPCs and testing.
-///
-/// *** UNTESTED - TEST BEFORE USE ***
 #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
 pub struct Script(zebra_chain::transparent::Script);
 
@@ -547,8 +567,6 @@ impl<'de> serde::Deserialize<'de> for Script {
 }
 
 /// This is used for the output parameter of [`JsonRpcConnector::get_address_utxos`].
-///
-/// *** UNTESTED - TEST BEFORE USE ***
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct GetUtxosResponse {
     /// The transparent address, base58check encoded

@@ -13,7 +13,7 @@ use zaino_fetch::{
         transaction::FullTransaction,
         utils::ParseFromSlice,
     },
-    jsonrpc::{connector::JsonRpcConnector, response::GetTransactionResponse},
+    jsonrpc::{connector::JsonRpcConnector, response::{GetBlockResponse, GetTransactionResponse}},
 };
 use zaino_proto::proto::{
     compact_formats::{CompactBlock, CompactTx},
@@ -1495,7 +1495,6 @@ impl CompactTxStreamer for GrpcClient {
 
     /// Server streaming response type for the GetSubtreeRoots method.
     #[doc = " Server streaming response type for the GetSubtreeRoots method."]
-    // type GetSubtreeRootsStream = tonic::Streaming<SubtreeRoot>;
     type GetSubtreeRootsStream = std::pin::Pin<Box<SubtreeRootReplyStream>>;
 
 
@@ -1551,22 +1550,75 @@ impl CompactTxStreamer for GrpcClient {
                 // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [streaming_rpc_timout = 4*rpc_timeout]
                 let timeout = timeout(std::time::Duration::from_secs(600), async {
                     for subtree in subtrees.subtrees {
-                        match get_block_from_node(&zebrad_uri.clone(), &subtree.end_height.0).await {
-                            Ok(block_data) => {
+                        match zebrad_client.get_block(subtree.end_height.0.to_string(), Some(1)).await {
+                            Ok(GetBlockResponse::Object {
+                                hash,
+                                confirmations: _,
+                                height,
+                                time: _,
+                                tx: _,
+                                trees: _,
+                            }) => {
+                                let checked_height = match height {
+                                    Some(h) => h.0 as u64,
+                                    None => {
+                                        match channel_tx
+                                            .send(Err(tonic::Status::unknown("Error: No block height returned by node.")))
+                                            .await
+                                        {
+                                            Ok(_) => break,
+                                            Err(e) => {
+                                                eprintln!("Error: Channel closed unexpectedly: {}", e.to_string());
+                                                break;
+                                            }
+                                        }
+                                    }
+                                };
+                                let checked_root_hash = match hex::decode(&subtree.root) {
+                                    Ok(hash) => hash,
+                                    Err(e) => {
+                                        match channel_tx
+                                            .send(Err(tonic::Status::unknown(format!("Error: Failed to hex decode root hash: {}.", 
+                                                e.to_string()
+                                            ))))
+                                            .await
+                                        {
+                                            Ok(_) => break,
+                                            Err(e) => {
+                                                eprintln!("Error: Channel closed unexpectedly: {}", e.to_string());
+                                                break;
+                                            }
+                                        }
+                                    }
+                                };
                                 if channel_tx.send(
                                     Ok(SubtreeRoot {
-                                        root_hash: subtree.root.clone().into_bytes(),
-                                        completing_block_hash: block_data.hash,
-                                        completing_block_height: block_data.height,
-                                    })).await.is_err() {
+                                        root_hash: checked_root_hash,
+                                        completing_block_hash: hash.0.bytes_in_display_order().to_vec(),
+                                        completing_block_height: checked_height,
+                                    })).await.is_err() 
+                                {
                                     break;
                                 }
-                                todo!();
+
+                            }
+                            Ok(GetBlockResponse::Raw(_)) => {
+                                // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                                if channel_tx
+                                    .send(Err(tonic::Status::unknown("Error: Received raw block type, this should not be possible.")))
+                                    .await
+                                    .is_err()
+                                    {
+                                        break;
+                                    }
                             }
                             Err(e) => {
                                 // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                                 if channel_tx
-                                    .send(Err(tonic::Status::unknown(e.to_string())))
+                                    .send(Err(tonic::Status::unknown(format!("Error: Could not fetch block at height [{}] from node: {}", 
+                                        subtree.end_height.0.to_string(), 
+                                        e.to_string()
+                                    ))))
                                     .await
                                     .is_err()
                                     {
@@ -1684,7 +1736,6 @@ impl CompactTxStreamer for GrpcClient {
 
     /// Server streaming response type for the GetAddressUtxosStream method.
     #[doc = "Server streaming response type for the GetAddressUtxosStream method."]
-    // type GetAddressUtxosStreamStream = tonic::Streaming<GetAddressUtxosReply>;
     type GetAddressUtxosStreamStream = std::pin::Pin<Box<UtxoReplyStream>>;
 
     /// Returns all unspent outputs for a list of addresses.
