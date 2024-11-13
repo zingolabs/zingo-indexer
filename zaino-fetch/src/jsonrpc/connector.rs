@@ -184,8 +184,6 @@ impl JsonRpcConnector {
     ///
     /// - `address_strings`: (object, example={"addresses": ["tmYXBYJj1K7vhejSec5osXK2QsGa5MTisUQ"]}) A JSON map with a single entry
     ///     - `addresses`: (array of strings) A list of base-58 encoded addresses.
-    ///
-    /// NOTE: Currently unused by Zingo-Indexer and untested!
     pub async fn get_address_balance(
         &self,
         addresses: Vec<String>,
@@ -375,13 +373,11 @@ impl JsonRpcConnector {
     /// # Parameters
     ///
     /// - `addresses`: (array, required, example={\"addresses\": [\"tmYXBYJj1K7vhejSec5osXK2QsGa5MTisUQ\"]}) The addresses to get outputs from.
-    ///
-    /// NOTE: Currently unused by Zingo-Indexer and untested!
     pub async fn get_address_utxos(
         &self,
         addresses: Vec<String>,
     ) -> Result<Vec<GetUtxosResponse>, JsonRpcConnectorError> {
-        let params = vec![serde_json::to_value(addresses)?];
+        let params = vec![serde_json::json!({ "addresses": addresses })];
         self.send_request("getaddressutxos", params).await
     }
 }
