@@ -5705,7 +5705,7 @@ dependencies = [
 [[package]]
 name = "zcash_local_net"
 version = "0.1.0"
-source = "git+https://github.com/Oscar-Pepper/zcash-local-net.git?branch=testnet_framework#ebaf8684f9a9eadfaf0632b99a530aecf00e3031"
+source = "git+https://github.com/Oscar-Pepper/zcash-local-net.git?branch=testnet_framework#e25bed3e5d69f91efa0de365c9d64a828a4158ac"
 dependencies = [
  "getset",
  "hex",

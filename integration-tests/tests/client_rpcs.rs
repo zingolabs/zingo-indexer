@@ -19,7 +19,7 @@ static ZCASH_CLI_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
 static ZEBRAD_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
     let mut workspace_root_path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     workspace_root_path.pop();
-    Some(workspace_root_path.join("test_binaries/bins/zcashd"))
+    Some(workspace_root_path.join("test_binaries/bins/zebrad"))
 });
 static LIGHTWALLETD_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
     let mut workspace_root_path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
