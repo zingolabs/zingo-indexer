@@ -135,8 +135,8 @@ impl JsonRpcConnector {
             }
             if !status.is_success() {
                 return Err(JsonRpcConnectorError::new(format!(
-                    "Error: Error status from node's rpc server: {}",
-                    status
+                    "Error: Error status from node's rpc server: {}, {}",
+                    status, body_str
                 )));
             }
 
@@ -190,7 +190,7 @@ impl JsonRpcConnector {
         &self,
         addresses: Vec<String>,
     ) -> Result<GetBalanceResponse, JsonRpcConnectorError> {
-        let params = vec![serde_json::to_value(addresses)?];
+        let params = vec![serde_json::json!({ "addresses": addresses })];
         self.send_request("getaddressbalance", params).await
     }
 
