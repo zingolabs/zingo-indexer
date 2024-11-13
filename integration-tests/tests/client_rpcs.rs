@@ -16,6 +16,11 @@ static ZCASH_CLI_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
     workspace_root_path.pop();
     Some(workspace_root_path.join("test_binaries/bins/zcash-cli"))
 });
+static ZEBRAD_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
+    let mut workspace_root_path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    workspace_root_path.pop();
+    Some(workspace_root_path.join("test_binaries/bins/zebrad"))
+});
 static LIGHTWALLETD_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
     let mut workspace_root_path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     workspace_root_path.pop();
@@ -366,30 +371,32 @@ async fn get_latest_tree_state() {
     .await;
 }
 
-// this is not a satisfactory test for this rpc and will return empty vecs.
-// this rpc should also be tested in testnet/mainnet or a local chain with at least 2 shards should be cached.
+/// This test requires Zebrad testnet to be already synced to at least 2 sapling shards with the cache at
+/// `zaino/chain_cache/testnet_get_subtree_roots`
+///
+/// See doc comments of test_fixture for more details.
 #[tokio::test]
 async fn get_subtree_roots_sapling() {
     tracing_subscriber::fmt().init();
 
     zcash_local_net::test_fixtures::get_subtree_roots_sapling(
-        ZCASHD_BIN.clone(),
-        ZCASH_CLI_BIN.clone(),
+        ZEBRAD_BIN.clone(),
         ZAINOD_BIN.clone(),
         LIGHTWALLETD_BIN.clone(),
     )
     .await;
 }
 
-// this is not a satisfactory test for this rpc and will return empty vecs.
-// this rpc should also be tested in testnet/mainnet or a local chain with at least 2 shards should be cached.
+/// This test requires Zebrad testnet to be already synced to at least 2 orchard shards with the cache at
+/// `zaino/chain_cache/testnet_get_subtree_roots`
+///
+/// See doc comments of test_fixture for more details.
 #[tokio::test]
 async fn get_subtree_roots_orchard() {
     tracing_subscriber::fmt().init();
 
     zcash_local_net::test_fixtures::get_subtree_roots_orchard(
-        ZCASHD_BIN.clone(),
-        ZCASH_CLI_BIN.clone(),
+        ZEBRAD_BIN.clone(),
         ZAINOD_BIN.clone(),
         LIGHTWALLETD_BIN.clone(),
     )
