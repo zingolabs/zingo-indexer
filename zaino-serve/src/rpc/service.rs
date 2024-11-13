@@ -446,6 +446,7 @@ impl CompactTxStreamer for GrpcClient {
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
                 // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
+                // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [mempool_rpc_timout = 4*rpc_timeout]
                 let timeout = timeout(std::time::Duration::from_secs(120), async {
                     for height in start..=end {
                         let height = if rev_order {
@@ -589,6 +590,7 @@ impl CompactTxStreamer for GrpcClient {
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
                 // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
+                // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [mempool_rpc_timout = 4*rpc_timeout]
                 let timeout = timeout(std::time::Duration::from_secs(120), async {
                     for height in start..=end {
                         let height = if rev_order {
@@ -817,7 +819,9 @@ impl CompactTxStreamer for GrpcClient {
                 .map_err(|e| e.to_grpc_status())?;
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
-                let timeout = timeout(std::time::Duration::from_secs(30), async {
+                // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
+                // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [mempool_rpc_timout = 4*rpc_timeout]
+                let timeout = timeout(std::time::Duration::from_secs(120), async {
                     for txid in txids.transactions {
                         let transaction = zebrad_client.get_raw_transaction(txid, Some(1)).await;
                         match transaction {
@@ -948,7 +952,9 @@ impl CompactTxStreamer for GrpcClient {
             .await?;
             let (channel_tx, mut channel_rx) = tokio::sync::mpsc::channel::<String>(32);
             let fetcher_task_handle = tokio::spawn(async move {
-                let fetcher_timeout = timeout(std::time::Duration::from_secs(30), async {
+                // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
+                // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [mempool_rpc_timout = 4*rpc_timeout]
+                let fetcher_timeout = timeout(std::time::Duration::from_secs(120), async {
                     let mut total_balance: u64 = 0;
                     loop {
                         match channel_rx.recv().await {
@@ -977,7 +983,9 @@ impl CompactTxStreamer for GrpcClient {
                     )),
                 }
             });
-            let addr_recv_timeout = timeout(std::time::Duration::from_secs(30), async {
+            // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
+            // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [mempool_rpc_timout = 4*rpc_timeout]
+            let addr_recv_timeout = timeout(std::time::Duration::from_secs(120), async {
                 let mut address_stream = request.into_inner();
                 while let Some(address_result) = address_stream.next().await {
                     // TODO: Hide server error from clients before release. Currently useful for dev purposes.
@@ -1086,8 +1094,9 @@ impl CompactTxStreamer for GrpcClient {
                 .collect();
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
-                // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [streaming_rpc_timout = 4*rpc_timeout]
-                let timeout = timeout(std::time::Duration::from_secs(600), async {
+                // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
+                // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [mempool_rpc_timout = 4*rpc_timeout]
+                let timeout = timeout(std::time::Duration::from_secs(480), async {
                     let mempool = Mempool::new();
                     if let Err(e) = mempool.update(&zebrad_uri).await {
                         channel_tx.send(Err(tonic::Status::unknown(e.to_string())))
@@ -1261,8 +1270,9 @@ impl CompactTxStreamer for GrpcClient {
             let mempool_height = zebrad_client.get_blockchain_info().await?.blocks.0;
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
-                // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [streaming_rpc_timout = 4*rpc_timeout]
-                let timeout = timeout(std::time::Duration::from_secs(600), async {
+                // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
+                // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [mempool_rpc_timout = 4*rpc_timeout]
+                let timeout = timeout(std::time::Duration::from_secs(480), async {
                     let mempool = Mempool::new();
                     if let Err(e) = mempool.update(&zebrad_uri).await {
                         // TODO: Hide server error from clients before release. Currently useful for dev purposes.
@@ -1547,8 +1557,9 @@ impl CompactTxStreamer for GrpcClient {
             let subtrees = zebrad_client.get_subtrees_by_index(pool.to_string(), start_index, limit).await?;
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
-                // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [streaming_rpc_timout = 4*rpc_timeout]
-                let timeout = timeout(std::time::Duration::from_secs(600), async {
+                // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
+                // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [mempool_rpc_timout = 4*rpc_timeout]
+                let timeout = timeout(std::time::Duration::from_secs(120), async {
                     for subtree in subtrees.subtrees {
                         match zebrad_client.get_block(subtree.end_height.0.to_string(), Some(1)).await {
                             Ok(GetBlockResponse::Object {
@@ -1782,46 +1793,65 @@ impl CompactTxStreamer for GrpcClient {
             let utxos = zebrad_client.get_address_utxos(addr_args.addresses).await?;
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
-                let mut entries: u32 = 0;
-                for utxo in utxos {
-                    if (utxo.height.0 as u64) < addr_args.start_height {
-                        continue;
-                    }
-                    entries += 1;
-                    if addr_args.max_entries > 0 && entries > addr_args.max_entries {
-                        break;
-                    }
-                    let checked_index = match i32::try_from(utxo.output_index) {
-                        Ok(index) => index,
-                        Err(_) => {
-                            let _ = channel_tx
-                                .send(Err(tonic::Status::unknown(
-                                    "Error: Index out of range. Failed to convert to i32.",
-                                )))
-                                .await;
+                // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
+                // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [mempool_rpc_timout = 4*rpc_timeout]
+                let timeout = timeout(std::time::Duration::from_secs(120), async {
+                    let mut entries: u32 = 0;
+                    for utxo in utxos {
+                        if (utxo.height.0 as u64) < addr_args.start_height {
+                            continue;
+                        }
+                        entries += 1;
+                        if addr_args.max_entries > 0 && entries > addr_args.max_entries {
+                            break;
+                        }
+                        let checked_index = match i32::try_from(utxo.output_index) {
+                            Ok(index) => index,
+                            Err(_) => {
+                                let _ = channel_tx
+                                    .send(Err(tonic::Status::unknown(
+                                        "Error: Index out of range. Failed to convert to i32.",
+                                    )))
+                                    .await;
+                                return;
+                            }
+                        };
+                        let checked_satoshis = match i64::try_from(utxo.satoshis) {
+                            Ok(satoshis) => satoshis,
+                            Err(_) => {
+                                let _ = channel_tx
+                                    .send(Err(tonic::Status::unknown(
+                                        "Error: Satoshis out of range. Failed to convert to i64.",
+                                    )))
+                                    .await;
+                                return;
+                            }
+                        };
+                        let utxo_reply = GetAddressUtxosReply {
+                            address: utxo.address.to_string(),
+                            txid: utxo.txid.0.to_vec(),
+                            index: checked_index,
+                            script: utxo.script.as_ref().to_vec(),
+                            value_zat: checked_satoshis,
+                            height: utxo.height.0 as u64,
+                        };
+                        if channel_tx.send(Ok(utxo_reply)).await.is_err() {
                             return;
                         }
-                    };
-                    let checked_satoshis = match i64::try_from(utxo.satoshis) {
-                        Ok(satoshis) => satoshis,
-                        Err(_) => {
-                            let _ = channel_tx
-                                .send(Err(tonic::Status::unknown(
-                                    "Error: Satoshis out of range. Failed to convert to i64.",
-                                )))
-                                .await;
-                            return;
-                        }
-                    };
-                    let utxo_reply = GetAddressUtxosReply {
-                        address: utxo.address.to_string(),
-                        txid: utxo.txid.0.to_vec(),
-                        index: checked_index,
-                        script: utxo.script.as_ref().to_vec(),
-                        value_zat: checked_satoshis,
-                        height: utxo.height.0 as u64,
-                    };
-                    if channel_tx.send(Ok(utxo_reply)).await.is_err() {
+                    }
+                })
+                .await;
+                match timeout {
+                    Ok(_) => {
+                        return;
+                    }
+                    Err(_) => {
+                        channel_tx
+                            .send(Err(tonic::Status::deadline_exceeded(
+                                "Error: get_mempool_stream gRPC request timed out",
+                            )))
+                            .await
+                            .ok();
                         return;
                     }
                 }
