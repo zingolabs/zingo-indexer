@@ -1,9 +1,7 @@
 # Zaino
-A(n eventual) rust implemented, nym enhanced, indexer and lightwallet service for Zcash.
+A rust implemented indexer and lightwallet service for Zcash.
 
-Zaino is intended to provide all necessary funtionality for clients, including "standalone" (formerly "light") clients/wallets and integrated (formerly "full") client/wallets to access both the finalized chain and non-finalized best chain and the mempool, held by a Zebrad full validator.
-
-*A note to developers/consumers/contributers: The end goal is not an exact one-to-one port of all existing lwd functionality. We currently plan to hold the Service and Darkside RPC implementations, along with a Nym counterpart to the service RPCs for sending and recieving currency over the Nym Mixnet.
+Zaino is intended to provide all necessary funtionality for clients, including "standalone" (formerly "light") clients/wallets, integrated (formerly "full") client/wallets and block explorers to access both the finalized chain and non-finalized best chain and mempool, held by either a Zebrad or Zcashd full validator.
 
 # Security Vulnerability Disclosure
 If you believe you have discovered a security issue, please contact us at:
@@ -11,19 +9,12 @@ If you believe you have discovered a security issue, please contact us at:
 zingodisclosure@proton.me
 
 # ZainoD
-The Zaino Indexer service.
-
-Under the "nym_poc" feature flag ZainoD can also act as a Nym powered proxy, running between zcash wallets and Zingo-IndexerD, capable of sending zcash transactions over the Nym Mixnet. 
-Note: The wallet-side nym service RPC implementations are moving to CompactTxStreamerClient for easier consumption by wallets. Functionality under the "nym_poc" feature flag will be removed once a working example has been implemented directly in zingolib.
-
-This is the POC and initial work on enabling zcash infrastructure to use the nym mixnet.
+The Zaino Indexer gRPC service.
 
 # Zaino-Serve
-Holds a gRPC server capable of servicing clients over both https and the nym mixnet.
+Holds a gRPC server capable of servicing clients over both https and the nym mixnet (currently removed due to dependecy conflicts).
 
-Also holds the rust implementations of the LightWallet Service (CompactTxStreamerServer) and (eventually) Darkside RPCs (DarksideTxStremerServer).
-
-* Currently only send_transaction and get_lightd_info are implemented over nym.
+Also holds the rust implementations of the LightWallet gRPC Service (CompactTxStreamerServer).
 
 # Zaino-Wallet [*Temporarily Removed due to Nym Dependency Conflict]
 Holds the nym-enhanced, wallet-side rust implementations of the LightWallet Service RPCs (NymTxStreamerClient).
