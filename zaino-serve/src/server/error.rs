@@ -4,7 +4,6 @@ use std::io;
 use tokio::sync::mpsc::error::TrySendError;
 
 use crate::server::request::ZingoIndexerRequest;
-// use zaino_nym::error::NymError;
 
 /// Zingo-Indexer queue errors.
 #[derive(Debug, thiserror::Error)]
@@ -29,9 +28,6 @@ pub enum RequestError {
     /// System time errors.
     #[error("System time error: {0}")]
     SystemTimeError(#[from] std::time::SystemTimeError),
-    // /// Nym Related Errors
-    // #[error("Nym error: {0}")]
-    // NymError(#[from] NymError),
 }
 
 /// Zingo-Indexer ingestor errors.
@@ -40,9 +36,6 @@ pub enum IngestorError {
     /// Request based errors.
     #[error("Request error: {0}")]
     RequestError(#[from] RequestError),
-    // /// Nym based errors.
-    // #[error("Nym error: {0}")]
-    // NymError(#[from] NymError),
     /// Tcp listener based error.
     #[error("Failed to accept TcpStream: {0}")]
     ClientConnectionError(#[from] io::Error),
@@ -74,9 +67,6 @@ pub enum ServerError {
     /// Request based errors.
     #[error("Request error: {0}")]
     RequestError(#[from] RequestError),
-    // /// Nym based errors.
-    // #[error("Nym error: {0}")]
-    // NymError(#[from] NymError),
     /// Ingestor based errors.
     #[error("Ingestor error: {0}")]
     IngestorError(#[from] IngestorError),

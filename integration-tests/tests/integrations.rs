@@ -6,7 +6,7 @@
 use std::sync::{atomic::AtomicBool, Arc};
 use zaino_testutils::{drop_test_manager, zingo_lightclient::get_address, TestManager};
 
-mod wallet_basic {
+mod zingo_wallet_basic {
     use zingolib::{lightclient::LightClient, testutils::lightclient::from_inputs};
 
     use super::*;
@@ -313,8 +313,4 @@ mod wallet_basic {
         )
         .await;
     }
-}
-
-mod nym {
-    // TODO: Build nym enhanced zingolib version using zingo-rpc::walletrpc::service.
 }

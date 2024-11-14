@@ -1,6 +1,8 @@
-//! Holds a gRPC server capable of servicing clients over both https and the nym mixnet.
+//! Holds a gRPC server capable of servicing clients over TCP.
 //!
-//! Also holds the rust implementations of the LightWallet Service (CompactTxStreamerServer) and (eventually) Darkside RPCs (DarksideTxStremerServer).
+//! - server::ingestor has been built so that other ingestors may be added that use different transport protocols (Nym, TOR).
+//!
+//! Also holds rust implementations of the LightWallet gRPC Service (CompactTxStreamerServer).
 
 #![warn(missing_docs)]
 #![forbid(unsafe_code)]
@@ -8,4 +10,3 @@
 pub mod rpc;
 pub mod server;
 pub(crate) mod utils;
-
