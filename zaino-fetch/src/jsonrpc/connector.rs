@@ -12,9 +12,9 @@ use std::sync::atomic::{AtomicI32, Ordering};
 use crate::jsonrpc::{
     error::JsonRpcConnectorError,
     response::{
-        BestBlockHashResponse, GetBalanceResponse, GetBlockResponse, GetBlockchainInfoResponse,
-        GetInfoResponse, GetSubtreesResponse, GetTransactionResponse, GetTreestateResponse,
-        GetUtxosResponse, SendTransactionResponse, TxidsResponse,
+        GetBalanceResponse, GetBlockResponse, GetBlockchainInfoResponse, GetInfoResponse,
+        GetSubtreesResponse, GetTransactionResponse, GetTreestateResponse, GetUtxosResponse,
+        SendTransactionResponse, TxidsResponse,
     },
 };
 
@@ -240,20 +240,6 @@ impl JsonRpcConnector {
         self.send_request("getblock", params).await
     }
 
-    /// Returns the hash of the current best blockchain tip block, as a [`GetBlockHash`] JSON string.
-    ///
-    /// zcashd reference: [`getbestblockhash`](https://zcash.github.io/rpc/getbestblockhash.html)
-    /// method: post
-    /// tags: blockchain
-    ///
-    /// NOTE: Currently unused by Zingo-Indexer and untested!
-    pub async fn get_best_block_hash(
-        &self,
-    ) -> Result<BestBlockHashResponse, JsonRpcConnectorError> {
-        self.send_request::<(), BestBlockHashResponse>("getbestblockhash", ())
-            .await
-    }
-
     /// Returns all transaction ids in the memory pool, as a JSON array.
     ///
     /// zcashd reference: [`getrawmempool`](https://zcash.github.io/rpc/getrawmempool.html)
@@ -292,8 +278,6 @@ impl JsonRpcConnector {
     /// - `pool`: (string, required) The pool from which subtrees should be returned. Either "sapling" or "orchard".
     /// - `start_index`: (number, required) The index of the first 2^16-leaf subtree to return.
     /// - `limit`: (number, optional) The maximum number of subtree values to return.
-    ///
-    /// NOTE: Currently unused by Zingo-Indexer and untested!
     pub async fn get_subtrees_by_index(
         &self,
         pool: String,

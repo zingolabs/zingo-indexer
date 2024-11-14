@@ -13,15 +13,12 @@ use zaino_fetch::{
         transaction::FullTransaction,
         utils::ParseFromSlice,
     },
-    jsonrpc::{connector::JsonRpcConnector, response::GetTransactionResponse},
+    jsonrpc::{connector::JsonRpcConnector, response::{GetBlockResponse, GetTransactionResponse}},
 };
 use zaino_proto::proto::{
     compact_formats::{CompactBlock, CompactTx},
     service::{
-        compact_tx_streamer_server::CompactTxStreamer, Address, AddressList, Balance, BlockId,
-        BlockRange, ChainSpec, Duration, Empty, Exclude, GetAddressUtxosArg, GetAddressUtxosReply,
-        GetAddressUtxosReplyList, GetSubtreeRootsArg, LightdInfo, PingResponse, RawTransaction,
-        SendResponse, SubtreeRoot, TransparentAddressBlockFilter, TreeState, TxFilter,
+        compact_tx_streamer_server::CompactTxStreamer, Address, AddressList, Balance, BlockId, BlockRange, ChainSpec, Duration, Empty, Exclude, GetAddressUtxosArg, GetAddressUtxosReply, GetAddressUtxosReplyList, GetSubtreeRootsArg, LightdInfo, PingResponse, RawTransaction, SendResponse, ShieldedProtocol, SubtreeRoot, TransparentAddressBlockFilter, TreeState, TxFilter
     },
 };
 
@@ -151,6 +148,39 @@ impl UtxoReplyStream {
 
 impl futures::Stream for UtxoReplyStream {
     type Item = Result<GetAddressUtxosReply, tonic::Status>;
+
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        let poll = std::pin::Pin::new(&mut self.inner).poll_next(cx);
+        match poll {
+            std::task::Poll::Ready(Some(Ok(raw_tx))) => std::task::Poll::Ready(Some(Ok(raw_tx))),
+            std::task::Poll::Ready(Some(Err(e))) => std::task::Poll::Ready(Some(Err(e))),
+            std::task::Poll::Ready(None) => std::task::Poll::Ready(None),
+            std::task::Poll::Pending => std::task::Poll::Pending,
+        }
+    }
+}
+
+/// Stream of CompactBlocks, output type of get_block_range.
+pub struct SubtreeRootReplyStream {
+    inner: ReceiverStream<Result<SubtreeRoot, tonic::Status>>,
+}
+
+impl SubtreeRootReplyStream {
+    /// Returns new instanse of CompactBlockStream.
+    pub fn new(
+        rx: tokio::sync::mpsc::Receiver<Result<SubtreeRoot, tonic::Status>>,
+    ) -> Self {
+        SubtreeRootReplyStream {
+            inner: ReceiverStream::new(rx),
+        }
+    }
+}
+
+impl futures::Stream for SubtreeRootReplyStream {
+    type Item = Result<SubtreeRoot, tonic::Status>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
@@ -416,6 +446,7 @@ impl CompactTxStreamer for GrpcClient {
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
                 // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
+                // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [mempool_rpc_timout = 4*rpc_timeout]
                 let timeout = timeout(std::time::Duration::from_secs(120), async {
                     for height in start..=end {
                         let height = if rev_order {
@@ -559,6 +590,7 @@ impl CompactTxStreamer for GrpcClient {
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
                 // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
+                // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [mempool_rpc_timout = 4*rpc_timeout]
                 let timeout = timeout(std::time::Duration::from_secs(120), async {
                     for height in start..=end {
                         let height = if rev_order {
@@ -787,7 +819,9 @@ impl CompactTxStreamer for GrpcClient {
                 .map_err(|e| e.to_grpc_status())?;
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
-                let timeout = timeout(std::time::Duration::from_secs(30), async {
+                // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
+                // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [mempool_rpc_timout = 4*rpc_timeout]
+                let timeout = timeout(std::time::Duration::from_secs(120), async {
                     for txid in txids.transactions {
                         let transaction = zebrad_client.get_raw_transaction(txid, Some(1)).await;
                         match transaction {
@@ -918,7 +952,9 @@ impl CompactTxStreamer for GrpcClient {
             .await?;
             let (channel_tx, mut channel_rx) = tokio::sync::mpsc::channel::<String>(32);
             let fetcher_task_handle = tokio::spawn(async move {
-                let fetcher_timeout = timeout(std::time::Duration::from_secs(30), async {
+                // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
+                // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [mempool_rpc_timout = 4*rpc_timeout]
+                let fetcher_timeout = timeout(std::time::Duration::from_secs(120), async {
                     let mut total_balance: u64 = 0;
                     loop {
                         match channel_rx.recv().await {
@@ -947,7 +983,9 @@ impl CompactTxStreamer for GrpcClient {
                     )),
                 }
             });
-            let addr_recv_timeout = timeout(std::time::Duration::from_secs(30), async {
+            // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
+            // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [mempool_rpc_timout = 4*rpc_timeout]
+            let addr_recv_timeout = timeout(std::time::Duration::from_secs(120), async {
                 let mut address_stream = request.into_inner();
                 while let Some(address_result) = address_stream.next().await {
                     // TODO: Hide server error from clients before release. Currently useful for dev purposes.
@@ -1056,8 +1094,9 @@ impl CompactTxStreamer for GrpcClient {
                 .collect();
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
-                // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [streaming_rpc_timout = 4*rpc_timeout]
-                let timeout = timeout(std::time::Duration::from_secs(600), async {
+                // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
+                // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [mempool_rpc_timout = 4*rpc_timeout]
+                let timeout = timeout(std::time::Duration::from_secs(480), async {
                     let mempool = Mempool::new();
                     if let Err(e) = mempool.update(&zebrad_uri).await {
                         channel_tx.send(Err(tonic::Status::unknown(e.to_string())))
@@ -1231,8 +1270,9 @@ impl CompactTxStreamer for GrpcClient {
             let mempool_height = zebrad_client.get_blockchain_info().await?.blocks.0;
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
-                // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [streaming_rpc_timout = 4*rpc_timeout]
-                let timeout = timeout(std::time::Duration::from_secs(600), async {
+                // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
+                // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [mempool_rpc_timout = 4*rpc_timeout]
+                let timeout = timeout(std::time::Duration::from_secs(480), async {
                     let mempool = Mempool::new();
                     if let Err(e) = mempool.update(&zebrad_uri).await {
                         // TODO: Hide server error from clients before release. Currently useful for dev purposes.
@@ -1465,16 +1505,14 @@ impl CompactTxStreamer for GrpcClient {
 
     /// Server streaming response type for the GetSubtreeRoots method.
     #[doc = " Server streaming response type for the GetSubtreeRoots method."]
-    type GetSubtreeRootsStream = tonic::Streaming<SubtreeRoot>;
+    type GetSubtreeRootsStream = std::pin::Pin<Box<SubtreeRootReplyStream>>;
+
 
     /// Returns a stream of information about roots of subtrees of the Sapling and Orchard
     /// note commitment trees.
-    ///
-    /// This RPC has not been implemented as it is not currently used by zingolib.
-    /// If you require this RPC please open an issue or PR at the Zingo-Indexer github (https://github.com/zingolabs/zingo-indexer).
     fn get_subtree_roots<'life0, 'async_trait>(
         &'life0 self,
-        _request: tonic::Request<GetSubtreeRootsArg>,
+        request: tonic::Request<GetSubtreeRootsArg>,
     ) -> core::pin::Pin<
         Box<
             dyn core::future::Future<
@@ -1491,8 +1529,135 @@ impl CompactTxStreamer for GrpcClient {
         Self: 'async_trait,
     {
         println!("[TEST] Received call of get_subtree_roots.");
-        Box::pin(async {
-            Err(tonic::Status::unimplemented("get_subtree_roots not yet implemented. If you require this RPC please open an issue or PR at the Zingo-Indexer github (https://github.com/zingolabs/zingo-indexer)."))
+        Box::pin(async move {
+            let zebrad_uri  =self.zebrad_uri.clone();
+            let zebrad_client = JsonRpcConnector::new(
+                zebrad_uri.clone(),
+                Some("xxxxxx".to_string()),
+                Some("xxxxxx".to_string()),
+            )
+            .await?;
+            let subtree_roots_args = request.into_inner();
+            let pool = match ShieldedProtocol::try_from(subtree_roots_args.shielded_protocol) {
+                Ok(protocol) => protocol.as_str_name(),
+                Err(_) => return Err(tonic::Status::invalid_argument("Error: Invalid shielded protocol value.")),
+            };
+            let start_index = match u16::try_from(subtree_roots_args.start_index) {
+                Ok(value) => value,
+                Err(_) => return Err(tonic::Status::invalid_argument("Error: start_index value exceeds u16 range.")),
+            };
+            let limit = if subtree_roots_args.max_entries == 0 {
+                None
+            } else {
+                match u16::try_from(subtree_roots_args.max_entries) {
+                    Ok(value) => Some(value),
+                    Err(_) => return Err(tonic::Status::invalid_argument("Error: max_entries value exceeds u16 range.")),
+                }
+            };
+            let subtrees = zebrad_client.get_subtrees_by_index(pool.to_string(), start_index, limit).await?;
+            let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
+            tokio::spawn(async move {
+                // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
+                // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [mempool_rpc_timout = 4*rpc_timeout]
+                let timeout = timeout(std::time::Duration::from_secs(120), async {
+                    for subtree in subtrees.subtrees {
+                        match zebrad_client.get_block(subtree.end_height.0.to_string(), Some(1)).await {
+                            Ok(GetBlockResponse::Object {
+                                hash,
+                                confirmations: _,
+                                height,
+                                time: _,
+                                tx: _,
+                                trees: _,
+                            }) => {
+                                let checked_height = match height {
+                                    Some(h) => h.0 as u64,
+                                    None => {
+                                        match channel_tx
+                                            .send(Err(tonic::Status::unknown("Error: No block height returned by node.")))
+                                            .await
+                                        {
+                                            Ok(_) => break,
+                                            Err(e) => {
+                                                eprintln!("Error: Channel closed unexpectedly: {}", e.to_string());
+                                                break;
+                                            }
+                                        }
+                                    }
+                                };
+                                let checked_root_hash = match hex::decode(&subtree.root) {
+                                    Ok(hash) => hash,
+                                    Err(e) => {
+                                        match channel_tx
+                                            .send(Err(tonic::Status::unknown(format!("Error: Failed to hex decode root hash: {}.", 
+                                                e.to_string()
+                                            ))))
+                                            .await
+                                        {
+                                            Ok(_) => break,
+                                            Err(e) => {
+                                                eprintln!("Error: Channel closed unexpectedly: {}", e.to_string());
+                                                break;
+                                            }
+                                        }
+                                    }
+                                };
+                                if channel_tx.send(
+                                    Ok(SubtreeRoot {
+                                        root_hash: checked_root_hash,
+                                        completing_block_hash: hash.0.bytes_in_display_order().to_vec(),
+                                        completing_block_height: checked_height,
+                                    })).await.is_err() 
+                                {
+                                    break;
+                                }
+
+                            }
+                            Ok(GetBlockResponse::Raw(_)) => {
+                                // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                                if channel_tx
+                                    .send(Err(tonic::Status::unknown("Error: Received raw block type, this should not be possible.")))
+                                    .await
+                                    .is_err()
+                                    {
+                                        break;
+                                    }
+                            }
+                            Err(e) => {
+                                // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                                if channel_tx
+                                    .send(Err(tonic::Status::unknown(format!("Error: Could not fetch block at height [{}] from node: {}", 
+                                        subtree.end_height.0.to_string(), 
+                                        e.to_string()
+                                    ))))
+                                    .await
+                                    .is_err()
+                                    {
+                                        break;
+                                    }
+                            }
+                        }
+                    }
+                })
+                .await;
+                match timeout {
+                    Ok(_) => {
+                        return;
+                    }
+                    Err(_) => {
+                        channel_tx
+                            .send(Err(tonic::Status::deadline_exceeded(
+                                "Error: get_mempool_stream gRPC request timed out",
+                            )))
+                            .await
+                            .ok();
+                        return;
+                    }
+                }
+            });
+            let output_stream = SubtreeRootReplyStream::new(channel_rx);
+            let stream_boxed = Box::pin(output_stream);
+            Ok(tonic::Response::new(stream_boxed))
         })
     }
 
@@ -1582,7 +1747,6 @@ impl CompactTxStreamer for GrpcClient {
 
     /// Server streaming response type for the GetAddressUtxosStream method.
     #[doc = "Server streaming response type for the GetAddressUtxosStream method."]
-    // type GetAddressUtxosStreamStream = tonic::Streaming<GetAddressUtxosReply>;
     type GetAddressUtxosStreamStream = std::pin::Pin<Box<UtxoReplyStream>>;
 
     /// Returns all unspent outputs for a list of addresses.
@@ -1629,46 +1793,65 @@ impl CompactTxStreamer for GrpcClient {
             let utxos = zebrad_client.get_address_utxos(addr_args.addresses).await?;
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
-                let mut entries: u32 = 0;
-                for utxo in utxos {
-                    if (utxo.height.0 as u64) < addr_args.start_height {
-                        continue;
-                    }
-                    entries += 1;
-                    if addr_args.max_entries > 0 && entries > addr_args.max_entries {
-                        break;
-                    }
-                    let checked_index = match i32::try_from(utxo.output_index) {
-                        Ok(index) => index,
-                        Err(_) => {
-                            let _ = channel_tx
-                                .send(Err(tonic::Status::unknown(
-                                    "Error: Index out of range. Failed to convert to i32.",
-                                )))
-                                .await;
+                // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
+                // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [mempool_rpc_timout = 4*rpc_timeout]
+                let timeout = timeout(std::time::Duration::from_secs(120), async {
+                    let mut entries: u32 = 0;
+                    for utxo in utxos {
+                        if (utxo.height.0 as u64) < addr_args.start_height {
+                            continue;
+                        }
+                        entries += 1;
+                        if addr_args.max_entries > 0 && entries > addr_args.max_entries {
+                            break;
+                        }
+                        let checked_index = match i32::try_from(utxo.output_index) {
+                            Ok(index) => index,
+                            Err(_) => {
+                                let _ = channel_tx
+                                    .send(Err(tonic::Status::unknown(
+                                        "Error: Index out of range. Failed to convert to i32.",
+                                    )))
+                                    .await;
+                                return;
+                            }
+                        };
+                        let checked_satoshis = match i64::try_from(utxo.satoshis) {
+                            Ok(satoshis) => satoshis,
+                            Err(_) => {
+                                let _ = channel_tx
+                                    .send(Err(tonic::Status::unknown(
+                                        "Error: Satoshis out of range. Failed to convert to i64.",
+                                    )))
+                                    .await;
+                                return;
+                            }
+                        };
+                        let utxo_reply = GetAddressUtxosReply {
+                            address: utxo.address.to_string(),
+                            txid: utxo.txid.0.to_vec(),
+                            index: checked_index,
+                            script: utxo.script.as_ref().to_vec(),
+                            value_zat: checked_satoshis,
+                            height: utxo.height.0 as u64,
+                        };
+                        if channel_tx.send(Ok(utxo_reply)).await.is_err() {
                             return;
                         }
-                    };
-                    let checked_satoshis = match i64::try_from(utxo.satoshis) {
-                        Ok(satoshis) => satoshis,
-                        Err(_) => {
-                            let _ = channel_tx
-                                .send(Err(tonic::Status::unknown(
-                                    "Error: Satoshis out of range. Failed to convert to i64.",
-                                )))
-                                .await;
-                            return;
-                        }
-                    };
-                    let utxo_reply = GetAddressUtxosReply {
-                        address: utxo.address.to_string(),
-                        txid: utxo.txid.0.to_vec(),
-                        index: checked_index,
-                        script: utxo.script.as_ref().to_vec(),
-                        value_zat: checked_satoshis,
-                        height: utxo.height.0 as u64,
-                    };
-                    if channel_tx.send(Ok(utxo_reply)).await.is_err() {
+                    }
+                })
+                .await;
+                match timeout {
+                    Ok(_) => {
+                        return;
+                    }
+                    Err(_) => {
+                        channel_tx
+                            .send(Err(tonic::Status::deadline_exceeded(
+                                "Error: get_mempool_stream gRPC request timed out",
+                            )))
+                            .await
+                            .ok();
                         return;
                     }
                 }
