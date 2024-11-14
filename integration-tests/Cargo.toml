@@ -20,7 +20,7 @@ test_fixtures = []
 zaino-testutils = { path = "../zaino-testutils" }
 
 # Test fixtures
-zcash_local_net = { git = "https://github.com/Oscar-Pepper/zcash-local-net.git", branch = "testnet_framework", features = [ "test_fixtures" ] }
+zcash_local_net = { git = "https://github.com/Oscar-Pepper/zcash-local-net.git", branch = "mainnet_framework", features = [ "test_fixtures" ] }
 # zcash_local_net = { git = "https://github.com/zingolabs/zcash-local-net.git", branch = "dev", features = [ "test_fixtures" ] }
 
 # Lightclient
