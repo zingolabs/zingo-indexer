@@ -34,7 +34,7 @@ Zaino will extend the functionality of Zebra's ReadStateService, using a Hyper w
 - [Internal Architecture](./docs/internal_architecture.pdf): Holds the internal Zaino system architecture diagrams.
 - [Internal Specification](./docs/internal_spec.md): Holds a specification for Zaino and its crates, detailing and their functionality, interfaces and dependencies.
 - [RPC API Spec](./docs/rpc_api.md): Holds a full specification of all of the RPC services served by Zaino.
-- [Cargo Docs](./docs/index.md): Holds a full code specification for Zaino.
+- [Cargo Docs](https://zingolabs.github.io/zaino/): Holds a full code specification for Zaino.
 
 
 ## Security Vulnerability Disclosure

@@ -19,7 +19,7 @@ The main crates are:
   
 Below is a detailed specification for each crate.
 
-A full specification of the public functionality and RPC services available in Zaino is availabe in [Cargo Docs](./index.md) and [RPC API Spec](./rpc_api.md).
+A full specification of the public functionality and RPC services available in Zaino is availabe in [Cargo Docs](https://zingolabs.github.io/zaino/index.html) and [RPC API Spec](./rpc_api.md).
 
 
 ## ZainoD
@@ -53,7 +53,7 @@ A full specification of the public functionality and RPC services available in Z
   - `toml`
   - `clap`
 
-Full documentation for `ZainoD` can be found [here](./cargo_docs/zainod/index.html) and [here](./cargo_docs/zainodlib/index.html).
+Full documentation for `ZainoD` can be found [here](https://zingolabs.github.io/zaino/zainod/index.html) and [here](https://zingolabs.github.io/zaino/zainodlib/index.html).
 
 
 ## Zaino-Serve
@@ -102,7 +102,7 @@ Full documentation for `ZainoD` can be found [here](./cargo_docs/zainod/index.ht
   - `lazy-regex`
   - `whoami`
 
-Full documentation for `Zaino-Serve` can be found [here](./cargo_docs/zaino_serve/index.html).
+Full documentation for `Zaino-Serve` can be found [here](https://zingolabs.github.io/zaino/zaino_serve/index.html).
 
 
 ## Zaino-State
@@ -138,7 +138,7 @@ Caching Mechanisms:
   - `tokio`
   - `thiserror`
 
-Full documentation for `Zaino-State` can be found [here](./cargo_docs/zaino_state/index.html).
+Full documentation for `Zaino-State` can be found [here](https://zingolabs.github.io/zaino/zaino_state/index.html).
 
 
 ## Zaino-Fetch
@@ -188,7 +188,7 @@ Full documentation for `Zaino-State` can be found [here](./cargo_docs/zaino_stat
   - `byteorder`
   - `sha2`
 
-Full documentation for `Zaino-Fetch` can be found [here](./cargo_docs/zaino_fetch/index.html).
+Full documentation for `Zaino-Fetch` can be found [here](https://zingolabs.github.io/zaino/zaino_fetch/index.html).
 
 
 ## Zaino-Proto
@@ -216,8 +216,6 @@ Full documentation for `Zaino-Fetch` can be found [here](./cargo_docs/zaino_fetc
 
 * We plan to eventually rely on `LibRustZcash`'s versions but hold our our here for development purposes.
 
-Full documentation for `Zaino-Proto` can be found [here](./cargo_docs/zaino_proto/index.html).
-
 
 ## Zaino-Testutils and Integration-Tests
 The `Zaino-Testutils` and `Integration-Tests` crates are dedicated to testing the Zaino project. They provide utilities and comprehensive tests to ensure the correctness, performance, and reliability of Zaino's components.
@@ -243,4 +241,4 @@ The `Zaino-Testutils` and `Integration-Tests` crates are dedicated to testing th
   - `tracing-subscriber`
   - `once_cell`
 
-Full documentation for `Zaino-Testutils` can be found [here](./cargo_docs/zaino_testutils/index.html).
+Full documentation for `Zaino-Testutils` can be found [here](https://zingolabs.github.io/zaino/zaino_testutils/index.html).
