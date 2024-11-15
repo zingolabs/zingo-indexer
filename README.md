@@ -30,10 +30,10 @@ Zaino will extend the functionality of Zebra's ReadStateService, using a Hyper w
 ## Documentation
 - [Use Cases](./docs/use_cases.md): Holds instructions and example use cases.
 - [Testing](./docs/testing.md): Hold intructions fo running tests.
-- [System Architecture](./docs/system_arcitecture.pdf): Holds the Zcash system architecture diagrams.
+- [System Architecture](./docs/system_architecture.pdf): Holds the Zcash system architecture diagrams.
 - [Internal Architecture](./docs/internal_architecture.pdf): Holds the internal Zaino system architecture diagrams.
 - [Internal Specification](./docs/internal_spec.md): Holds a specification for Zaino and its crates, detailing and their functionality, interfaces and dependencies.
-- [RPC API Spec](./docs/api_spec.md): Holds a full specification of all of the RPC services served by Zaino.
+- [RPC API Spec](./docs/rpc_api.md): Holds a full specification of all of the RPC services served by Zaino.
 - [Cargo Docs](./docs/index.md): Holds a full code specification for Zaino.
 
 
