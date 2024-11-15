@@ -4,8 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="generator" content="rustdoc">
-    <meta name="description" content="Zingo Workspace Documentation">
-    <title>Zingo Workspace - Rust</title>
+    <meta name="description" content="Zaino Workspace Documentation">
+    <title>Zaino Workspace - Rust</title>
     <script>
         if (window.location.protocol !== "file:") {
             document.head.insertAdjacentHTML(
@@ -36,7 +36,7 @@
     </nav>
     <nav class="sidebar">
         <div class="sidebar-crate">
-            <h2>Zingo Workspace</h2>
+            <h2>Zaino Workspace</h2>
         </div>
         <div class="sidebar-elems">
             <ul class="block">
@@ -57,16 +57,58 @@
             <rustdoc-search></rustdoc-search>
             <section id="main-content" class="content">
                 <div class="main-heading">
-                    <h1>Zingo Workspace Documentation</h1>
+                    <h1>Zaino Workspace Documentation</h1>
                 </div>
-                <p>Welcome to the Zingo workspace documentation! This workspace includes the following crates:</p>
+                <p>Zaino consists of several crates that collectively provide an indexing service and APIs for the Zcash blockchain. The crates are modularized to separate concerns, enhance maintainability, and allow for flexible integration. This workspace includes the following crates:</p>
                 <ul>
-                    <li><a href="./zainod/index.html">Zainod</a> - Core service</li>
-                    <li><a href="./zainodlib/index.html">Zainodlib</a> - Library for the core service</li>
-                    <li><a href="./zaino_fetch/index.html">Zaino Fetch</a> - Fetching utilities</li>
-                    <li><a href="./zaino_state/index.html">Zaino State</a> - State management</li>
-                    <li><a href="./zaino_serve/index.html">Zaino Serve</a> - Service handlers</li>
-                    <li><a href="./zaino_testutils/index.html">Zaino Testutils</a> - Service handlers</li>
+                    <li>
+                        <a href="./zainod/index.html">Zainod</a>
+                        <ul>
+                            <li>
+                                ZainoD is the main executable that runs the Zaino indexer gRPC service. It serves as the entry point for deploying the Zaino service, handling configuration and initialization of the server components.
+                            </li>
+                        </ul>
+                    </li>
+                    <li>
+                        <a href="./zainodlib/index.html">Zainodlib</a>
+                        <ul>
+                            <li>
+                                Library and utilities for ZainoD.
+                            </li>
+                        </ul>
+                    </li>
+                    <li>
+                        <a href="./zaino_fetch/index.html">Zaino Fetch</a>
+                        <ul>
+                            <li>
+                                Zaino-Fetch is a library that provides access to the mempool and blockchain data using Zebra's RPC interface. It is primarily used as a backup and for backward compatibility with systems that rely on RPC communication such as Zcashd.
+                            </li>
+                        </ul>
+                    </li>
+                    <li>
+                        <a href="./zaino_state/index.html">Zaino State</a>
+                        <ul>
+                            <li>
+                                Zaino-State is a library that provides access to the mempool and blockchain data by interfacing directly with Zebra's ReadStateService. It is designed for direct consumption by full node wallets and internal services. (Currently unimplemented.)
+                            </li>
+                        </ul>
+                    </li>
+                    <li>
+                        <a href="./zaino_serve/index.html">Zaino Serve</a>
+                        <ul>
+                            <li>
+                                Zaino-Serve contains the gRPC server and the Rust implementations of the LightWallet gRPC service (CompactTxStreamerServer). It handles incoming client requests and interacts with backend services to fulfill them.
+                            </li>
+                        </ul>
+                    </li>
+                    <li>
+                        <a href="./zaino_testutils/index.html">Zaino Testutils</a>
+                        <ul>
+                            <li>
+                                The Zaino-Testutils and Integration-Tests crates are dedicated to testing the Zaino project. They provide utilities and comprehensive tests to ensure the correctness, performance, and reliability of Zaino's components.
+                            </li>
+                        </ul>
+                    </li>
                 </ul>
             </section>
         </div>
