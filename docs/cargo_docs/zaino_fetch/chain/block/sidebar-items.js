@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_block_from_node","get_nullifiers_from_node"],"struct":["BlockHeaderData","FullBlock","FullBlockHeader"]};

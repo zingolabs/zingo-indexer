@@ -1,0 +1,1 @@
+searchState.loadedDescShard("zaino_state", 0, "A mempool and chain-fetching service built on top of zebra…")

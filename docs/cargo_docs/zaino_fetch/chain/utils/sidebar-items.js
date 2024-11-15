@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_COMPACT_SIZE"],"fn":["display_txids_to_server","read_bool","read_bytes","read_i32","read_u32","read_u64","read_zcash_script_i64","skip_bytes"],"struct":["CompactSize"],"trait":["ParseFromSlice"]};

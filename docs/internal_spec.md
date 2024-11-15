@@ -19,7 +19,7 @@ The main crates are:
   
 Below is a detailed specification for each crate.
 
-A full specification of the public functionality and RPC services available in Zaino is availabe in [Public API Spec](./sdk_spec.md) and [RPC API Spec](./docs/api_spec.md).
+A full specification of the public functionality and RPC services available in Zaino is availabe in [Cargo Docs](./index.md) and [RPC API Spec](./docs/api_spec.md).
 
 
 ## ZainoD
@@ -53,6 +53,8 @@ A full specification of the public functionality and RPC services available in Z
   - `toml`
   - `clap`
 
+Full documentation for `ZainoD` can be found [here](./docs/cargo_docs/zainod/index.html) and [here](./docs/cargo_docs/zainodlib/index.html).
+
 
 ## Zaino-Serve
 `Zaino-Serve` contains the gRPC server and the Rust implementations of the LightWallet gRPC service (`CompactTxStreamerServer`). It handles incoming client requests and interacts with backend services to fulfill them.
@@ -64,7 +66,7 @@ A full specification of the public functionality and RPC services available in Z
   - Hosts the `CompactTxStreamerServer` service for client interactions.
 
 - `CompactTxStreamerServer` Method Implementations:
-  - Implements the full set of methods as defined in the [LightWalletd Protocol](https://zcash.readthedocs.io/en/latest/lightwalletd/index.html).
+  - Implements the full set of methods as defined in the [LightWalletd Protocol](https://github.com/zcash/librustzcash/blob/main/zcash_client_backend/proto/service.proto).
 
 - Request Handling:
   - Validates and parses client requests.
@@ -100,6 +102,8 @@ A full specification of the public functionality and RPC services available in Z
   - `lazy-regex`
   - `whoami`
 
+Full documentation for `Zaino-Serve` can be found [here](./docs/cargo_docs/zaino_serve/index.html).
+
 
 ## Zaino-State
 `Zaino-State` is a library that provides access to the mempool and blockchain data by interfacing directly with `Zebra`'s `ReadStateService`. It is designed for direct consumption by full node wallets and internal services. (Currently unimplemented.)
@@ -133,6 +137,8 @@ Caching Mechanisms:
   - `zebra-state`
   - `tokio`
   - `thiserror`
+
+Full documentation for `Zaino-State` can be found [here](./docs/cargo_docs/zaino_state/index.html).
 
 
 ## Zaino-Fetch
@@ -182,6 +188,8 @@ Caching Mechanisms:
   - `byteorder`
   - `sha2`
 
+Full documentation for `Zaino-Fetch` can be found [here](./docs/cargo_docs/zaino_fetch/index.html).
+
 
 ## Zaino-Proto
 `Zaino-Proto` contains the `Tonic`-generated code for the LightWallet service RPCs and compact formats. It holds the protocol buffer definitions and the generated Rust code necessary for gRPC communication.
@@ -208,6 +216,8 @@ Caching Mechanisms:
 
 * We plan to eventually rely on `LibRustZcash`'s versions but hold our our here for development purposes.
 
+Full documentation for `Zaino-Proto` can be found [here](./docs/cargo_docs/zaino_proto/index.html).
+
 
 ## Zaino-Testutils and Integration-Tests
 The `Zaino-Testutils` and `Integration-Tests` crates are dedicated to testing the Zaino project. They provide utilities and comprehensive tests to ensure the correctness, performance, and reliability of Zaino's components.
@@ -233,3 +243,4 @@ The `Zaino-Testutils` and `Integration-Tests` crates are dedicated to testing th
   - `tracing-subscriber`
   - `once_cell`
 
+Full documentation for `Zaino-Testutils` can be found [here](./docs/cargo_docs/zaino_testutils/index.html).

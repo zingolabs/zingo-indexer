@@ -2,7 +2,7 @@
 ### Dependencies
 1) [Zebrad](https://github.com/ZcashFoundation/zebra.git)
 2) [Lightwalletd](https://github.com/zcash/lightwalletd.git)
-4) [Zcashd, Zcash-Cli](https://github.com/zcash/zcash)
+3) [Zcashd, Zcash-Cli](https://github.com/zcash/zcash)
 
 ### Wallet to Node Tests
 - To run tests:

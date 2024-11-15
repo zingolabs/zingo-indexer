@@ -9,18 +9,13 @@
 2) Add compiled binary held at `#PATH_TO/zaino/target/release/zainod` to PATH.
 
 - Then to launch Zaino: [in seperate terminals]:
-1) Run `$ zebrad --config #PATH_TO_CONF/zebrad.toml start`
-2) Run `$ zainod --config #PATH_TO_CONF/zindexer.toml` 
+3) Run `$ zebrad --config #PATH_TO_CONF/zebrad.toml start`
+4) Run `$ zainod --config #PATH_TO_CONF/zindexer.toml` 
 
 - To launch Zingo-Cli running through Zaino [from #PATH_TO/zingolib]:
-1) Run `$ cargo run --release --package zingo-cli -- --chain "CHAIN_TYPE" --server "ZAINO_LISTEN_ADDR" --data-dir #PATH_TO_WALLET_DATA_DIR`
+5) Run `$ cargo run --release --package zingo-cli -- --chain "CHAIN_TYPE" --server "ZAINO_LISTEN_ADDR" --data-dir #PATH_TO_WALLET_DATA_DIR`
 
 - Example Config files for running Zebra and Zaino on testnet are given in `zaino/zainod/*`
-
-Note:
-Configuration data can be set using a .toml file (an example zindexer.toml is given in zingo-indexer/zindexer.toml) and can be set at runtime using the --config arg:
-- Run `$ cargo run --config zingo-indexerd/zindexer.toml`
-
 
 
 # Local Library
