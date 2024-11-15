@@ -1,0 +1,233 @@
+# Zaino
+The Zaino repo consists of several crates that collectively provide an indexing service and APIs for the Zcash blockchain. The crates are modularized to separate concerns, enhance maintainability, and allow for flexible integration.
+
+The main crates are:
+  - `Zainod`
+  - `Zaino-Serve`
+  - `Zaino-State`
+  - `Zaino-Fetch`
+  - `Zaino-Proto`
+
+### Workspace Dependencies
+  - `zcash_protocol`
+  - `zebra-chain`
+  - `zebra-rpc`
+  - `tokio`
+  - `tonic`
+  - `http`
+  - `thiserror`
+  
+Below is a detailed specification for each crate.
+
+
+## ZainoD
+`ZainoD` is the main executable that runs the Zaino indexer gRPC service. It serves as the entry point for deploying the Zaino service, handling configuration and initialization of the server components.
+
+### Functionality
+- Service Initialization:
+  - Parses command-line arguments and configuration files.
+  - Initializes the gRPC server and internal caching systems using components from `zaino-serve` and `zaino-state` (backed by `zaino-fetch`).
+  - Sets up logging and monitoring systems.
+  
+- Runtime Management:
+  - Manages the asynchronous runtime using `Tokio`.
+  - Handles graceful shutdowns and restarts.
+
+### Interfaces
+- Executable Interface:
+  - Provides a CLI for configuring the service. (Currently it is only possible to set the conf file path.)
+
+- Configuration Files:
+  - Supports TOML files for complex configurations.
+
+### Dependencies
+  - `zaino-fetch`
+  - `zaino-serve`
+  - `tokio`
+  - `http`
+  - `thiserror`
+  - `serde`
+  - `ctrlc`
+  - `toml`
+  - `clap`
+
+
+## Zaino-Serve
+`Zaino-Serve` contains the gRPC server and the Rust implementations of the LightWallet gRPC service (`CompactTxStreamerServer`). It handles incoming client requests and interacts with backend services to fulfill them.
+
+### Functionality
+- gRPC Server Implementation:
+  - Utilizes `Tonic` to implement the gRPC server.
+  - Uses a `Director-Ingestor-Worker` model (see [Internal Architecture](./internal_architecture.pdf)) to allow the addition of Nym or Tor based `Ingestors`.
+  - Hosts the `CompactTxStreamerServer` service for client interactions.
+
+- `CompactTxStreamerServer` Method Implementations:
+  - Implements the full set of methods as defined in the [LightWalletd Protocol](https://zcash.readthedocs.io/en/latest/lightwalletd/index.html).
+
+- Request Handling:
+  - Validates and parses client requests.
+  - Communicates with `zaino-state` or `zaino-fetch` to retrieve data.
+
+- Error Handling:
+  - Maps internal errors to appropriate gRPC status codes.
+  - Provides meaningful error messages to clients.
+
+### Interfaces
+- Public gRPC API:
+  - Defined in `zaino-proto` and exposed to clients.
+
+- Internal Library:
+  - The `server::director` module provides the following gRPC server management functions: `ServerStatus::new`, `ServerStatus::load`, `Server::spawn`, `Server::serve`, `Server::check_for_shutdown`, `Server::shutdown`, `Server::status`, `Server::statustype`, `Server::statuses`, `Server::check_statuses`.
+  - The `server::request` module provides the following request creation and management functions: `TcpRequest::get_stream`, `TcpServerRequest::get_request`, `ZingoIndexerRequest::new_from_grpc`, `ZingoIndexerRequest::increase_requeues`, `ZingoIndexerRequest::duration`, `ZingoIndexerRequest::requeues`.
+
+### Dependencies
+  - `zaino-proto`
+  - `zaino-fetch`
+  - `zebra-chain`
+  - `zebra-rpc`
+  - `tokio`
+  - `tonic`
+  - `http`
+  - `thiserror`
+  - `prost`
+  - `hex`
+  - `tokio-stream`
+  - `futures`
+  - `async-stream`
+  - `crossbeam-channel`
+  - `lazy-regex`
+  - `whoami`
+
+
+## Zaino-State
+`Zaino-State` is a library that provides access to the mempool and blockchain data by interfacing directly with `Zebra`'s `ReadStateService`. It is designed for direct consumption by full node wallets and internal services. (Currently unimplemented.)
+
+### Functionality
+- Blockchain Data Access:
+  - Fetches finalized and non-finalized state data.
+  - Retrieves transaction data and block headers.
+  - Accesses chain metadata like network height and difficulty.
+
+- Mempool Management:
+  - Interfaces with the mempool to fetch pending transactions.
+  - Provides efficient methods to monitor mempool changes.
+
+- Chain Synchronization:
+  - Keeps track of the chain state in sync with Zebra.
+  - Handles reorgs and updates to the best chain.
+
+Caching Mechanisms:
+  - Implements caching for frequently accessed data to improve performance.
+
+### Interfaces
+- Public Library API:
+  - Provides data retrieval and submission functions that directly correspond to the RPC services offered by `zaino-serve`.
+  - Provides asynchronous interfaces compatible with `Tokio`.
+
+- Event Streams:
+  - Offers highly concurrent, lock-free streams or channels to subscribe to blockchain events.
+
+### Dependencies
+  - `zebra-state`
+  - `tokio`
+  - `thiserror`
+
+
+## Zaino-Fetch
+`zaino-fetch` is a library that provides access to the mempool and blockchain data using Zebra's RPC interface. It is primarily used as a backup and for backward compatibility with systems that rely on RPC communication such as `Zcashd`.
+
+### Functionality
+- RPC Client Implementation:
+  - Implements a `JSON-RPC` client to interact with `Zebra`'s RPC endpoints.
+  - Handles serialization and deserialization of RPC calls.
+
+- Data Retrieval and Transaction Submission:
+  - Fetches blocks, transactions, and mempool data via RPC.
+  - Sends transactions to the network using the `sendrawtransaction` RPC method.
+
+- Mempool and CompactFormat access:
+  - Provides a simple mempool implementation for use in gRPC service implementations. (This is due to be refactored and possibly moved with the development of `Zaino-State`.)
+  - Provides parse implementations for converting "full" blocks and transactions to "compact" blocks and transactions.
+
+- Fallback Mechanism:
+  - Acts as a backup when direct access via `zaino-state` is unavailable.
+
+### Interfaces
+- Internal API:
+  - The `jsonrpc::connector` module provides the following JSON-RPC client management functions: `new`, `uri`, `url`, `test_node_and_return_uri`.
+  - The `jsonrpc::connector` module provides the following data retrieval and submission functions: `get_info`, `get_blockchain_info`, `get_address_balance`, `send_raw_transaction`, `get_block`, `get_raw_mempool`, `get_treestate`, `get_subtrees_by_index`, `get_raw_transaction`, `get_address_txids`, `get_address_utxos`. (This may be expanded to match the set of Zcash RPC's that Zaino is taking over from Zcashd.)
+  - The `chain::block` and `chain::transaction` modules provide the following block and transaction parsing functions: `get_block_from_node`, `get_nullifiers_from_node`, `parse_full_block`, `parse_to_compact`, `FullBlock::to_compact`, `FullTransaction::to_compact`.
+  - The `chain::mempool` module provides the following mempool management and fetching functions: `new`, `update`, `get_mempool_txids`, `get_filtered_mempool_txids`, `get_best_block_hash`. (This is due to be refactored and possibly moved with the development of `Zaino-State`.)
+  - Designed to be used by `zaino-serve` transparently.
+
+### Dependencies
+  - `zaino-proto`
+  - `zcash_protocol`
+  - `zebra-chain`
+  - `zebra-rpc`
+  - `tokio`
+  - `tonic`
+  - `http`
+  - `thiserror`
+  - `prost`
+  - `reqwest`
+  - `url`
+  - `serde_json`
+  - `serde`
+  - `hex`
+  - `indexmap`
+  - `base64`
+  - `byteorder`
+  - `sha2`
+
+
+## Zaino-Proto
+`Zaino-Proto` contains the `Tonic`-generated code for the LightWallet service RPCs and compact formats. It holds the protocol buffer definitions and the generated Rust code necessary for gRPC communication.
+
+### Functionality
+- Protocol Definitions:
+  - `.proto` files defining the services and messages for LightWalletd APIs.
+  - Includes definitions for compact blocks, transactions, and other data structures.
+
+- Code Generation:
+  - Uses `prost` to generate Rust types from `.proto` files.
+  - Generates client and server stubs for gRPC services.
+
+### Interfaces
+- Generated Code:
+  - Provides Rust modules that can be imported by other crates.
+  - Exposes types and traits required for implementing gRPC services.
+
+### Dependencies
+  - `tonic`
+  - `prost`
+  - `tonic-build`
+  - `which`
+
+* We plan to eventually rely on `LibRustZcash`'s versions but hold our our here for development purposes.
+
+
+## Zaino-Testutils and Integration-Tests
+The `Zaino-Testutils` and `Integration-Tests` crates are dedicated to testing the Zaino project. They provide utilities and comprehensive tests to ensure the correctness, performance, and reliability of Zaino's components.
+- `Zaino-Testutils`: This crate contains common testing utilities and helper functions used across multiple test suites within the Zaino project.
+- `Integration-Tests`: This crate houses integration tests that validate the interaction between different Zaino components and external services like `Zebra` and `Zingolib`.
+
+### Test Modules
+- `integrations`: Holds Wallet-to-Validator tests that test Zaino's functionality within the compete software stack.
+- `client_rpcs`: Holds RPC tests that test the functionality of the LightWallet gRPC services in Zaino and compares the outputs with the corresponding services in `Lightwalletd` to ensure compatibility.
+
+### Dependencies
+  - `zaino-fetch`
+  - `zainod`
+  - `zingolib`
+  - `zaino-testutils`
+  - `zcash_local_net`
+  - `tokio`
+  - `tonic`
+  - `http`
+  - `ctrlc`
+  - `tempfile`
+  - `portpicker`
+  - `tracing-subscriber`
+  - `once_cell`
+
