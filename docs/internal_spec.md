@@ -63,10 +63,11 @@ Full documentation for `ZainoD` can be found [here](https://zingolabs.github.io/
 - gRPC Server Implementation:
   - Utilizes `Tonic` to implement the gRPC server.
   - Uses a `Director-Ingestor-Worker` model (see [Internal Architecture](./internal_architecture.pdf)) to allow the addition of Nym or Tor based `Ingestors`.
+  - Dynamically manages the internal Worker pool and Request queue and active Ingestors, handling errors and restarting services where necessary.
   - Hosts the `CompactTxStreamerServer` service for client interactions.
 
 - `CompactTxStreamerServer` Method Implementations:
-  - Implements the full set of methods as defined in the [LightWalletd Protocol](https://github.com/zcash/librustzcash/blob/main/zcash_client_backend/proto/service.proto).
+  - Implements the full set of methods as defined in the [LightWallet Protocol](https://github.com/zcash/librustzcash/blob/main/zcash_client_backend/proto/service.proto).
 
 - Request Handling:
   - Validates and parses client requests.
