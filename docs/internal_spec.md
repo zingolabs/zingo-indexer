@@ -19,6 +19,8 @@ The main crates are:
   
 Below is a detailed specification for each crate.
 
+A full specification of the public functionality and RPC services available in Zaino is availabe in [Public API Spec](./sdk_spec.md) and [RPC API Spec](./docs/api_spec.md).
+
 
 ## ZainoD
 `ZainoD` is the main executable that runs the Zaino indexer gRPC service. It serves as the entry point for deploying the Zaino service, handling configuration and initialization of the server components.

@@ -1,85 +1,47 @@
 # Zaino
-A rust implemented indexer and lightwallet service for Zcash.
+Zaino is a Rust-implemented indexer for Zcash.
 
-Zaino is intended to provide all necessary funtionality for clients, including "standalone" (formerly "light") clients/wallets, integrated (formerly "full") client/wallets and block explorers to access both the finalized chain and non-finalized best chain and mempool, held by either a Zebrad or Zcashd full validator.
+Zaino provides all necessary functionality for "standalone" (formerly "light") clients / wallets, "integrated" (formerly "full") clients / wallets, and block explorers to access both the finalized chain and the non-finalized best chain and mempool, held by either a Zebra or Zcashd full validator.
 
-# Security Vulnerability Disclosure
+
+### Motivations
+With the ongoing Zcashd deprecation project, there is a push to transition to a modern, Rust-based software stack for the Zcash ecosystem. By implementing Zaino in Rust, we aim to modernize the codebase, enhance performance, and improve overall security. This work will build on the foundations laid down by Librustzcash and Zebra, helping to ensure that the Zcash infrastructure remains robust and maintainable for the future.
+
+Due to current potential data leaks / security weaknesses highlighted in [revised-nym-for-zcash-network-level-privacy](https://forum.zcashcommunity.com/t/revised-nym-for-zcash-network-level-privacy/46688) and [wallet-threat-model](https://zcash.readthedocs.io/en/master/rtd_pages/wallet_threat_model.html), there is a need to use anonymous transport protocols (such as Nym or Tor) to obfuscate clients' identities from Zcash's indexing servers ([Lightwalletd](https://github.com/zcash/lightwalletd), [Zcashd](https://github.com/zcash/zcash), Zaino). As Nym has chosen Rust as their primary SDK ([Nym-SDK](https://github.com/nymtech/nym)), and Tor is currently implementing Rust support ([Arti](https://gitlab.torproject.org/tpo/core/arti)), Rust is an obvious and well-suited choice for this software.
+
+Zebra has been designed to allow direct read access to the finalized state and RPC access to the non-finalized state through its ReadStateService. Integrating directly with this service enables efficient access to chain data and allows new indices to be offered with minimal development.
+
+Separation of validation and indexing functionality serves several purposes. Primarily, removing indexing functionality from the Validator ([Zebra](https://github.com/ZcashFoundation/zebra)) will lead to a smaller and more maintainable codebase. Also, Separating this functionality serves to create a clear trust boundary between the Indexer and Validator, allowing the Indexer to take on this responsibility, this has been the case for "standalone" (formerly "light") clients/wallets using Lightwalletd for some time but is not the case with integrated (formerly "full") client/wallets and block explorers that are currently directly served by Zcashd. Moving all indexing functionality into Zaino will unify this paradigm and simplify Zcash's security model.
+
+
+### Goals
+Our primary goal with Zaino is to serve all non-miner clients, such as wallets and block explorers, in a manner that prioritizes security and privacy while also ensuring the time efficiency critical to a stable currency. We are committed to ensuring that these clients can access all necessary blockchain data and services without exposing sensitive information or being vulnerable to attacks. By implementing robust security measures and privacy protections, Zaino will enable users to interact with the Zcash network confidently and securely.
+
+To facilitate a smooth transition for existing users and developers, Zaino is designed, where possible, to maintain full backward compatibility with Lightwalletd and Zcashd. This means that applications and services currently relying on these platforms can switch to Zaino with minimal adjustments. By providing compatible APIs and interfaces, we aim to reduce friction in adoption and ensure that the broader Zcash ecosystem can benefit from Zaino's enhancements without significant rewrites or learning curves.
+
+### Scope
+Zaino will implement a comprehensive RPC API to serve all non-miner client requests effectively. This API will encompass all functionality currently in the LightWallet gRPC service ([CompactTxStreamer](https://zcash.readthedocs.io/en/latest/lightwalletd/index.html)), currently served by Lightwalletd, and a subset of the [Zcash RPC](https://zcash.github.io/rpc/)s required by wallets and block explorers, currently served by Zcashd. Zaino will unify these two RPC services and provide a single, straightforward interface for Zcash clients and service providers to access the data and services they require.
+
+In addition to the RPC API, Zaino will offer a client library allowing developers to integrate Zaino's functionality directly into their Rust applications. Along with the RemoteReadStateService mentioned below, this will allow both local and remote access to the data and services provided by Zaino without the overhead of using an RPC protocol, and also allows Zebra to stay insulated from directly interfacing with client software.
+
+Zaino will extend the functionality of Zebra's ReadStateService, using a Hyper wrapper, to offer remote read access to the chain state data held by Zebra. This will primarily be designed as a remote link between Zebra and Zaino and it is not intended for developers to directly interface with this service, but to instead use functionality exposed by the client library in Zaino. This will allow a diverse range of setup options when running Zebra, Zaino, and external client code, and will also allow developers to integrate remote chain access directly into their code, as mentioned above.
+
+
+## Documentation
+- [Use Cases](./docs/use_cases.md): Holds instructions and example use cases.
+- [Testing](./docs/testing.md): Hold intructions fo running tests.
+- [System Architecture](./docs/system_arcitecture.pdf): Holds the Zcash system architecture diagrams.
+- [Internal Architecture](./docs/internal_architecture.pdf): Holds the internal Zaino system architecture diagrams.
+- [Internal Specification](./docs/internal_spec.md): Holds a specification for Zaino and its crates, detailing and their functionality, interfaces and dependencies.
+- [Public API Spec](./docs/sdk_spec.md): Holds a full specification of all of the public functionality available in each of Zaino's crates.
+- [RPC API Spec](./docs/api_spec.md): Holds a full specification of all of the RPC services served by Zaino.
+
+
+## Security Vulnerability Disclosure
 If you believe you have discovered a security issue, please contact us at:
 
 zingodisclosure@proton.me
 
-# ZainoD
-The Zaino Indexer gRPC service.
 
-# Zaino-Serve
-Holds a gRPC server capable of servicing clients over both https and the nym mixnet (currently removed due to dependecy conflicts).
-
-Also holds the rust implementations of the LightWallet gRPC Service (CompactTxStreamerServer).
-
-# Zaino-Wallet [*Temporarily Removed due to Nym Dependency Conflict]
-Holds the nym-enhanced, wallet-side rust implementations of the LightWallet Service RPCs (NymTxStreamerClient).
-
-* Currently only send_transaction and get_lightd_info are implemented over nym.
-
-# Zaino-State
-A mempool and chain-fetching service built on top of zebra's ReadStateService and TrustedChainSync, exosed as a library for direct consumption by full node wallets.
-
-# Zaino-Fetch
-A mempool-fetching, chain-fetching and transaction submission service that uses zebra's RPC interface. Used primarily as a backup and legacy option for backwards compatibility.
-
-# Zaino-Nym [*Temporarily Removed due to Nym Dependency Conflict]
-Holds backend nym functionality used by Zaino.
-
-# Zaino-Proto
-Holds tonic generated code for the lightwallet service RPCs and compact formats.
-
-* We plan to eventually rely on LibRustZcash's versions but hold our our here for development purposes.
-
-
-# Dependencies
-1) zebrad <https://github.com/ZcashFoundation/zebra.git>
-2) lightwalletd <https://github.com/zcash/lightwalletd.git> [require for testing]
-3) zingolib <https://github.com/zingolabs/zingolib.git> [if running zingo-cli]
-4) zcashd, zcash-cli <https://github.com/zcash/zcash> [required until switch to zebras regtest mode]
-
-
-# Testing
-- To run tests:
-1) Simlink or copy compiled `zcashd`, `zcash-cli`, `zebrad` and `lightwalletd` binaries to `$ zaino/test_binaries/bins/*`
-2) Run `$ cargo nextest run` or `$ cargo test`
-
-- To run client rpc tests:
-1) Simlink or copy compiled `zcashd` and `zcash-cli` binaries to `$ zaino/test_binaries/bins/*`
-2) Build release binary `cargo build --release` WARNING: these tests do not use the binary built by cargo nextest
-3) Generate the chain cache `cargo nextest run generate_zcashd_chain_cach --run-ignored ignored-only --features test_fixtures`
-4) Run `cargo nextest run --test client_rpcs`
-
-- To Run client rpc testnet tests i.e. `get_subtree_roots_sapling`:
-1) sync Zebrad testnet to at least 2 sapling and 2 orchard shards
-2) copy the Zebrad cache to `zaino/integration-tests/chain_cache/testnet_get_subtree_roots_sapling` directory.
-3) copy the Zebrad cache to `zaino/integration-tests/chain_cache/testnet_get_subtree_roots_orchard` directory.
-See the `get_subtree_roots_sapling` test fixture doc comments in zcash_local_net for more details.
-
-# Running ZainoD
-- To run zingo-cli through Zaino, connecting to zebrad locally: [in seperate terminals]
-1) Run `$ zebrad --config #PATH_TO_ZINGO_PROXY/zebrad.toml start`
-3) Run `$ cargo run`
-
-From #PATH_TO/zingolib:
-4) Run `$ cargo run --release --package zingo-cli -- --chain "testnet" --server "127.0.0.1:8080" --data-dir ~/wallets/test_wallet`
-
-# Nym POC [*Temporarily Removed due to Nym Dependency Conflict]
-The walletside Nym implementations are moving to ease wallet integration but the POC walletside nym server is still available under the "nym_poc" feature flag.
-- To run the POC [in seperate terminals]:
-1) Run `$ zebrad --config #PATH_TO_ZINGO_PROXY/zebrad.toml start`
-3) Run `$ cargo run`
-4) Copy nym address displayed
-5) Run `$ cargo run --features "nym_poc" -- <nym address copied>`
-
-From #PATH_TO/zingolib: [send_transaction commands sent with this build will be sent over the mixnet]
-6) Run `$ cargo run --release --package zingo-cli -- --chain "testnet" --server "127.0.0.1:8088" --data-dir ~/wallets/testnet_wallet`
-
-Note:
-Configuration data can be set using a .toml file (an example zindexer.toml is given in zingo-indexer/zindexer.toml) and can be set at runtime using the --config arg:
-- Run `$ cargo run --config zingo-indexerd/zindexer.toml`
-
+## License
+This project is licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). See the [LICENSE](./LICENSE) file for details.
