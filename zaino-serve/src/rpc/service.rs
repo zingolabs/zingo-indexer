@@ -18,7 +18,11 @@ use zaino_fetch::{
 use zaino_proto::proto::{
     compact_formats::{CompactBlock, CompactTx},
     service::{
-        compact_tx_streamer_server::CompactTxStreamer, Address, AddressList, Balance, BlockId, BlockRange, ChainSpec, Duration, Empty, Exclude, GetAddressUtxosArg, GetAddressUtxosReply, GetAddressUtxosReplyList, GetSubtreeRootsArg, LightdInfo, PingResponse, RawTransaction, SendResponse, ShieldedProtocol, SubtreeRoot, TransparentAddressBlockFilter, TreeState, TxFilter
+        compact_tx_streamer_server::CompactTxStreamer, Address, AddressList, Balance, BlockId, 
+        BlockRange, ChainSpec, Duration, Empty, Exclude, GetAddressUtxosArg, GetAddressUtxosReply, 
+        GetAddressUtxosReplyList, GetSubtreeRootsArg, LightdInfo, PingResponse, RawTransaction, 
+        SendResponse, ShieldedProtocol, SubtreeRoot, TransparentAddressBlockFilter, TreeState, 
+        TxFilter
     },
 };
 
@@ -1880,7 +1884,6 @@ impl CompactTxStreamer for GrpcClient {
     {
         println!("[TEST] Received call of get_lightd_info.");
         // TODO: Add user and password as fields of GrpcClient and use here.
-        // TODO: Return Nym_Address in get_lightd_info response, for use by wallets.
         Box::pin(async {
             let zebrad_client = JsonRpcConnector::new(
                 self.zebrad_uri.clone(),

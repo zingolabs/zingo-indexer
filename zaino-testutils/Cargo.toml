@@ -8,9 +8,6 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [features]
-# NOTE: Deprecated
-nym_poc = []
-
 # Used by zcash-local-net:
 test_fixtures = []
 
@@ -20,9 +17,6 @@ zainod = { path = "../zainod" }
 
 # ZingoLib
 zingolib = { workspace = true }
-# zingolib = { git = "https://github.com/idky137/zingolib.git", branch = "zaino_temp_dep", features = ["zaino-test"] }
-# zingolib = { path = "../../zingolib/zingolib", features = ["zaino-test"] }
-
 
 # Miscellaneous Workspace
 tokio = { workspace = true }
