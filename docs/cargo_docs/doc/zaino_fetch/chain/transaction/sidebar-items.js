@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"struct":["Action","FullTransaction","JoinSplit","Output","Spend","TransactionData","TxIn","TxOut"]};

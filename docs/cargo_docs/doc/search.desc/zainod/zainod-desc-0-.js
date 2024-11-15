@@ -1,1 +1,0 @@
-searchState.loadedDescShard("zainod", 0, "Zingo-Indexer daemon\nPath to the configuration file\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.")

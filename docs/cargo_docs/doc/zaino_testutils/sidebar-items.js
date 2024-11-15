@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["drop_test_manager"],"mod":["zingo_lightclient"],"struct":["TestManager"]};

@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["StatusType"],"mod":["director","error","request"],"struct":["AtomicStatus"]};

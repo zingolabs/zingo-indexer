@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["block","error","mempool","transaction","utils"]};

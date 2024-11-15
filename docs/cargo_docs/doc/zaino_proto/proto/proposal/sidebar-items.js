@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["FeeRule","ValuePool"],"mod":["proposed_input"],"struct":["ChangeValue","MemoBytes","PaymentOutputPool","PriorStepChange","PriorStepOutput","Proposal","ProposalStep","ProposedInput","ReceivedOutput","TransactionBalance"]};

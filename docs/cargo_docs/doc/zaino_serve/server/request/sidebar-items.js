@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["ZingoIndexerRequest"],"struct":["TcpRequest","TcpServerRequest"]};

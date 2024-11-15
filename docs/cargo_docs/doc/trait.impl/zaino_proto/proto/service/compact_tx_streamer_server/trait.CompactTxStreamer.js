@@ -1,3 +1,0 @@
-(function() {var implementors = {
-"zaino_serve":[["impl <a class=\"trait\" href=\"zaino_proto/proto/service/compact_tx_streamer_server/trait.CompactTxStreamer.html\" title=\"trait zaino_proto::proto::service::compact_tx_streamer_server::CompactTxStreamer\">CompactTxStreamer</a> for <a class=\"struct\" href=\"zaino_serve/rpc/struct.GrpcClient.html\" title=\"struct zaino_serve::rpc::GrpcClient\">GrpcClient</a>"]]
-};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
