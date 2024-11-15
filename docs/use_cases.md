@@ -17,12 +17,17 @@
 
 - Example Config files for running Zebra and Zaino on testnet are given in `zaino/zainod/*`
 
+A system architecture diagram for this service can be seen at [Live Service System Architecture](./live_system_architecture.pdf).
+
 
 # Local Library
 **Currently Unimplemented, documentation will be added here as this functionality becomes available.**
+
+A system architecture diagram for this service can be seen at [Library System Architecture](./lib_system_architecture.pdf).
 
 
 # Remote Library
 **Currently Unimplemented, documentation will be added here as this functionality becomes available.**
 
+A system architecture diagram for this service can be seen at [Library System Architecture](./lib_system_architecture.pdf).
 

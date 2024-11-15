@@ -20,7 +20,7 @@ Our primary goal with Zaino is to serve all non-miner clients, such as wallets a
 To facilitate a smooth transition for existing users and developers, Zaino is designed, where possible, to maintain full backward compatibility with Lightwalletd and Zcashd. This means that applications and services currently relying on these platforms can switch to Zaino with minimal adjustments. By providing compatible APIs and interfaces, we aim to reduce friction in adoption and ensure that the broader Zcash ecosystem can benefit from Zaino's enhancements without significant rewrites or learning curves.
 
 ### Scope
-Zaino will implement a comprehensive RPC API to serve all non-miner client requests effectively. This API will encompass all functionality currently in the LightWallet gRPC service ([CompactTxStreamer](https://github.com/zcash/librustzcash/blob/main/zcash_client_backend/proto/service.proto)), currently served by Lightwalletd, and a subset of the [Zcash RPC](https://zcash.github.io/rpc/)s required by wallets and block explorers, currently served by Zcashd. Zaino will unify these two RPC services and provide a single, straightforward interface for Zcash clients and service providers to access the data and services they require.
+Zaino will implement a comprehensive RPC API to serve all non-miner client requests effectively. This API will encompass all functionality currently in the LightWallet gRPC service ([CompactTxStreamer](https://github.com/zcash/librustzcash/blob/main/zcash_client_backend/proto/service.proto)), currently served by Lightwalletd, and a subset of the [Zcash RPCs](https://zcash.github.io/rpc/) required by wallets and block explorers, currently served by Zcashd. Zaino will unify these two RPC services and provide a single, straightforward interface for Zcash clients and service providers to access the data and services they require.
 
 In addition to the RPC API, Zaino will offer a client library allowing developers to integrate Zaino's functionality directly into their Rust applications. Along with the RemoteReadStateService mentioned below, this will allow both local and remote access to the data and services provided by Zaino without the overhead of using an RPC protocol, and also allows Zebra to stay insulated from directly interfacing with client software.
 
@@ -30,8 +30,9 @@ Zaino will extend the functionality of Zebra's ReadStateService, using a Hyper w
 ## Documentation
 - [Use Cases](./docs/use_cases.md): Holds instructions and example use cases.
 - [Testing](./docs/testing.md): Hold intructions fo running tests.
-- [System Architecture](./docs/system_architecture.pdf): Holds the Zcash system architecture diagrams.
-- [Internal Architecture](./docs/internal_architecture.pdf): Holds the internal Zaino system architecture diagrams.
+- [Live Service System Architecture](./docs/live_system_architecture.pdf): Holds the Zcash system architecture diagram for the Zaino live service.
+- [Library System Architecture](./docs/lib_system_architecture.pdf): Holds the Zcash system architecture diagram for the Zaino client library.
+- [Internal Architecture](./docs/internal_architecture.pdf): Holds an internal Zaino system architecture diagram.
 - [Internal Specification](./docs/internal_spec.md): Holds a specification for Zaino and its crates, detailing and their functionality, interfaces and dependencies.
 - [RPC API Spec](./docs/rpc_api.md): Holds a full specification of all of the RPC services served by Zaino.
 - [Cargo Docs](https://zingolabs.github.io/zaino/): Holds a full code specification for Zaino.

@@ -142,7 +142,7 @@ Full documentation for `Zaino-State` can be found [here](https://zingolabs.githu
 
 
 ## Zaino-Fetch
-`zaino-fetch` is a library that provides access to the mempool and blockchain data using Zebra's RPC interface. It is primarily used as a backup and for backward compatibility with systems that rely on RPC communication such as `Zcashd`.
+`Zaino-Fetch` is a library that provides access to the mempool and blockchain data using Zebra's RPC interface. It is primarily used as a backup and for backward compatibility with systems that rely on RPC communication such as `Zcashd`.
 
 ### Functionality
 - RPC Client Implementation:
