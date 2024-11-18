@@ -10,8 +10,10 @@ struct QueueData {
     // / Exclusive request id.
     // request_id: u64, // TODO: implement with request queue (implement exlusive request_id generator in queue object).
     /// Time which the request was received.
+    #[allow(dead_code)]
     time_received: SystemTime,
     /// Number of times the request has been requeued.
+    #[allow(dead_code)]
     requeue_attempts: u32,
 }
 
@@ -25,16 +27,19 @@ impl QueueData {
     }
 
     /// Increases the requeue attempts for the request.
-    pub fn increase_requeues(&mut self) {
+    #[allow(dead_code)]
+    pub(crate) fn increase_requeues(&mut self) {
         self.requeue_attempts += 1;
     }
 
     /// Returns the duration sunce the request was received.
+    #[allow(dead_code)]
     fn duration(&self) -> Result<std::time::Duration, RequestError> {
         self.time_received.elapsed().map_err(RequestError::from)
     }
 
     /// Returns the number of times the request has been requeued.
+    #[allow(dead_code)]
     fn requeues(&self) -> u32 {
         self.requeue_attempts
     }
@@ -42,11 +47,11 @@ impl QueueData {
 
 /// TcpStream holing an incoming gRPC request.
 #[derive(Debug)]
-pub struct TcpRequest(TcpStream);
+pub(crate) struct TcpRequest(TcpStream);
 
 impl TcpRequest {
     /// Returns the underlying TcpStream help by the request
-    pub fn get_stream(self) -> TcpStream {
+    pub(crate) fn get_stream(self) -> TcpStream {
         self.0
     }
 }
@@ -54,13 +59,14 @@ impl TcpRequest {
 /// Requests originating from the Tcp server.
 #[derive(Debug)]
 pub struct TcpServerRequest {
+    #[allow(dead_code)]
     queuedata: QueueData,
     request: TcpRequest,
 }
 
 impl TcpServerRequest {
     /// Returns the underlying request.
-    pub fn get_request(self) -> TcpRequest {
+    pub(crate) fn get_request(self) -> TcpRequest {
         self.request
     }
 }
@@ -76,7 +82,7 @@ impl ZingoIndexerRequest {
     /// Creates a ZingoIndexerRequest from a gRPC service call, recieved by the gRPC server.
     ///
     /// TODO: implement proper functionality along with queue.
-    pub fn new_from_grpc(stream: TcpStream) -> Self {
+    pub(crate) fn new_from_grpc(stream: TcpStream) -> Self {
         ZingoIndexerRequest::TcpServerRequest(TcpServerRequest {
             queuedata: QueueData::new(),
             request: TcpRequest(stream),
@@ -84,21 +90,24 @@ impl ZingoIndexerRequest {
     }
 
     /// Increases the requeue attempts for the request.
-    pub fn increase_requeues(&mut self) {
+    #[allow(dead_code)]
+    pub(crate) fn increase_requeues(&mut self) {
         match self {
             ZingoIndexerRequest::TcpServerRequest(ref mut req) => req.queuedata.increase_requeues(),
         }
     }
 
     /// Returns the duration sunce the request was received.
-    pub fn duration(&self) -> Result<std::time::Duration, RequestError> {
+    #[allow(dead_code)]
+    pub(crate) fn duration(&self) -> Result<std::time::Duration, RequestError> {
         match self {
             ZingoIndexerRequest::TcpServerRequest(ref req) => req.queuedata.duration(),
         }
     }
 
     /// Returns the number of times the request has been requeued.
-    pub fn requeues(&self) -> u32 {
+    #[allow(dead_code)]
+    pub(crate) fn requeues(&self) -> u32 {
         match self {
             ZingoIndexerRequest::TcpServerRequest(ref req) => req.queuedata.requeues(),
         }
