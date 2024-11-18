@@ -215,7 +215,7 @@ Full documentation for `Zaino-Fetch` can be found [here](https://zingolabs.githu
   - `tonic-build`
   - `which`
 
-* We plan to eventually rely on `LibRustZcash`'s versions but hold our our here for development purposes.
+* We plan to eventually rely on `LibRustZcash`'s versions but hold our own here for development purposes.
 
 
 ## Zaino-Testutils and Integration-Tests
