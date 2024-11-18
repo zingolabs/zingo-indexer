@@ -31,7 +31,7 @@ impl IndexerConfig {
     ///
     /// - Checks that at least 1 ingestor is active.
     /// - Checks listen port is given is tcp is active.
-    pub fn check_config(&self) -> Result<(), IndexerError> {
+    pub(crate) fn check_config(&self) -> Result<(), IndexerError> {
         if !self.tcp_active {
             return Err(IndexerError::ConfigError(
                 "Cannot start server with no ingestors selected.".to_string(),

@@ -83,7 +83,6 @@ Full documentation for `ZainoD` can be found [here](https://zingolabs.github.io/
 
 - Internal Library:
   - The `server::director` module provides the following gRPC server management functions: `ServerStatus::new`, `ServerStatus::load`, `Server::spawn`, `Server::serve`, `Server::check_for_shutdown`, `Server::shutdown`, `Server::status`, `Server::statustype`, `Server::statuses`, `Server::check_statuses`.
-  - The `server::request` module provides the following request creation and management functions: `TcpRequest::get_stream`, `TcpServerRequest::get_request`, `ZingoIndexerRequest::new_from_grpc`, `ZingoIndexerRequest::increase_requeues`, `ZingoIndexerRequest::duration`, `ZingoIndexerRequest::requeues`.
 
 ### Dependencies
   - `zaino-proto`
@@ -165,7 +164,8 @@ Full documentation for `Zaino-State` can be found [here](https://zingolabs.githu
 - Internal API:
   - The `jsonrpc::connector` module provides the following JSON-RPC client management functions: `new`, `uri`, `url`, `test_node_and_return_uri`.
   - The `jsonrpc::connector` module provides the following data retrieval and submission functions: `get_info`, `get_blockchain_info`, `get_address_balance`, `send_raw_transaction`, `get_block`, `get_raw_mempool`, `get_treestate`, `get_subtrees_by_index`, `get_raw_transaction`, `get_address_txids`, `get_address_utxos`. (This may be expanded to match the set of Zcash RPC's that Zaino is taking over from Zcashd.)
-  - The `chain::block` and `chain::transaction` modules provide the following block and transaction parsing functions: `get_block_from_node`, `get_nullifiers_from_node`, `parse_full_block`, `parse_to_compact`, `FullBlock::to_compact`, `FullTransaction::to_compact`.
+  - The `chain::block` module provides the following block parsing and fetching functions: `get_block_from_node`, `get_nullifiers_from_node`, `FullBlock::parse_from_hex`, `FullBlock::to_compact`, FullBlock::header, FullBlock::transactions, FullBlock::Height, FullBlockHeader::version, FullBlockHeader::hash_prev_block, FullBlockHeader::hash_merkle_root, FullBlockHeader::time, FullBlockHeader::n_bits_bytes, FullBlockHeader::nonce, FullBlockHeader::solution, FullBlockHeader::cached_hash.
+  The `chain::transaction` module provides the following transaction parsing and fetching functions: `FullTransaction::f_overwintered`, `FullTransaction::version`, `FullTransaction::n_version_group_id`, `FullTransaction::consensus_branch_id`, `FullTransaction::transparent_inputs`, `FullTransaction::transparent_outputs`, `FullTransaction::shielded_spends`, `FullTransaction::shielded_outputs`, `FullTransaction::join_splits`, `FullTransaction::orchard_actions`, `FullTransaction::raw_bytes`, `FullTransaction::tx_id`, `FullTransaction::to_compact`.
   - The `chain::mempool` module provides the following mempool management and fetching functions: `new`, `update`, `get_mempool_txids`, `get_filtered_mempool_txids`, `get_best_block_hash`. (This is due to be refactored and possibly moved with the development of `Zaino-State`.)
   - Designed to be used by `zaino-serve` transparently.
 
