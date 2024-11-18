@@ -22,13 +22,13 @@ http = { workspace = true }
 thiserror = { workspace = true }
 
 # Miscellaneous Crate
-prost = "0.13"
-hex = { version = "0.4.3", features = ["serde"] }
-tokio-stream = "0.1"
-futures = "0.3.30"
-async-stream = "0.3"
-crossbeam-channel = "0.5"
-lazy-regex = "3.3"
+prost = { workspace = true }
+hex = { workspace = true, features = ["serde"] }
+tokio-stream = { workspace = true }
+futures = { workspace = true }
+async-stream = { workspace = true }
+crossbeam-channel = { workspace = true }
+lazy-regex = { workspace = true }
 
 [build-dependencies]
-whoami = "1.5"
+whoami = { workspace = true }
