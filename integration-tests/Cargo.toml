@@ -9,9 +9,6 @@ repository = { workspace = true }
 
 
 [features]
-# NOTE: Deprecated
-nym_poc = []
-
 # Used by zcash-local-net:
 test_fixtures = []
 

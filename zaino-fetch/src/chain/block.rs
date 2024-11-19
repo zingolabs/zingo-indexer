@@ -23,8 +23,8 @@ use zaino_proto::proto::compact_formats::{
 /// backwards reference (previous header hash) present in the block
 /// header. Each block points backwards to its parent, all the way
 /// back to the genesis block (the first block in the blockchain).
-#[derive(Debug)]
-pub struct BlockHeaderData {
+#[derive(Debug, Clone)]
+struct BlockHeaderData {
     /// The block's version field. This is supposed to be `4`:
     ///
     /// > The current and only defined block version number for Zcash is 4.
@@ -35,7 +35,7 @@ pub struct BlockHeaderData {
     /// interpreted as an `i32`.
     ///
     /// Size [bytes]: 4
-    pub version: i32,
+    version: i32,
 
     /// The hash of the previous block, used to create a chain of blocks back to
     /// the genesis block.
@@ -44,7 +44,7 @@ pub struct BlockHeaderData {
     /// block's header.
     ///
     /// Size [bytes]: 32
-    pub hash_prev_block: Vec<u8>,
+    hash_prev_block: Vec<u8>,
 
     /// The root of the Bitcoin-inherited transaction Merkle tree, binding the
     /// block header to the transactions in the block.
@@ -56,7 +56,7 @@ pub struct BlockHeaderData {
     /// valid.
     ///
     /// Size [bytes]: 32
-    pub hash_merkle_root: Vec<u8>,
+    hash_merkle_root: Vec<u8>,
 
     /// [Pre-Sapling] A reserved field which should be ignored.
     /// [Sapling onward] The root LEBS2OSP_256(rt) of the Sapling note
@@ -64,13 +64,13 @@ pub struct BlockHeaderData {
     /// block.
     ///
     /// Size [bytes]: 32
-    pub hash_final_sapling_root: Vec<u8>,
+    hash_final_sapling_root: Vec<u8>,
 
     /// The block timestamp is a Unix epoch time (UTC) when the miner
     /// started hashing the header (according to the miner).
     ///
     /// Size [bytes]: 4
-    pub time: u32,
+    time: u32,
 
     /// An encoded version of the target threshold this block's header
     /// hash must be less than or equal to, in the same nBits format
@@ -82,19 +82,19 @@ pub struct BlockHeaderData {
     /// [Bitcoin-nBits](https://bitcoin.org/en/developer-reference#target-nbits)
     ///
     /// Size [bytes]: 4
-    pub n_bits_bytes: Vec<u8>,
+    n_bits_bytes: Vec<u8>,
 
     /// An arbitrary field that miners can change to modify the header
     /// hash in order to produce a hash less than or equal to the
     /// target threshold.
     ///
     /// Size [bytes]: 32
-    pub nonce: Vec<u8>,
+    nonce: Vec<u8>,
 
     /// The Equihash solution.
     ///
     /// Size [bytes]: CompactLength
-    pub solution: Vec<u8>,
+    solution: Vec<u8>,
 }
 
 impl ParseFromSlice for BlockHeaderData {
@@ -166,7 +166,7 @@ impl ParseFromSlice for BlockHeaderData {
 
 impl BlockHeaderData {
     /// Serializes the block header into a byte vector.
-    pub fn to_binary(&self) -> Result<Vec<u8>, ParseError> {
+    fn to_binary(&self) -> Result<Vec<u8>, ParseError> {
         let mut buffer = Vec::new();
 
         buffer.extend(&self.version.to_le_bytes());
@@ -185,7 +185,7 @@ impl BlockHeaderData {
     }
 
     /// Extracts the block hash from the block header.
-    pub fn get_hash(&self) -> Result<Vec<u8>, ParseError> {
+    fn get_hash(&self) -> Result<Vec<u8>, ParseError> {
         let serialized_header = self.to_binary()?;
 
         let mut hasher = Sha256::new();
@@ -199,28 +199,70 @@ impl BlockHeaderData {
 }
 
 /// Complete block header.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FullBlockHeader {
     /// Block header data.
-    pub raw_block_header: BlockHeaderData,
+    raw_block_header: BlockHeaderData,
 
     /// Hash of the current block.
-    pub cached_hash: Vec<u8>,
+    cached_hash: Vec<u8>,
+}
+
+impl FullBlockHeader {
+    /// Returns the Zcash block version.
+    pub fn version(&self) -> i32 {
+        self.raw_block_header.version
+    }
+
+    /// Returns The hash of the previous block.
+    pub fn hash_prev_block(&self) -> Vec<u8> {
+        self.raw_block_header.hash_prev_block.clone()
+    }
+
+    /// Returns the root of the Bitcoin-inherited transaction Merkle tree.
+    pub fn hash_merkle_root(&self) -> Vec<u8> {
+        self.raw_block_header.hash_merkle_root.clone()
+    }
+
+    /// Returns the time when the miner started hashing the header (according to the miner).
+    pub fn time(&self) -> u32 {
+        self.raw_block_header.time
+    }
+
+    /// Returns an encoded version of the target threshold.
+    pub fn n_bits_bytes(&self) -> Vec<u8> {
+        self.raw_block_header.n_bits_bytes.clone()
+    }
+
+    /// Returns the block's nonce.
+    pub fn nonce(&self) -> Vec<u8> {
+        self.raw_block_header.nonce.clone()
+    }
+
+    /// Returns the block's Equihash solution.
+    pub fn solution(&self) -> Vec<u8> {
+        self.raw_block_header.solution.clone()
+    }
+
+    /// Returns the Hash of the current block.
+    pub fn cached_hash(&self) -> Vec<u8> {
+        self.cached_hash.clone()
+    }
 }
 
 /// Zingo-Indexer Block.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FullBlock {
     /// The block header, containing block metadata.
     ///
     /// Size [bytes]: 140+CompactLength
-    pub hdr: FullBlockHeader,
+    hdr: FullBlockHeader,
 
     /// The block transactions.
-    pub vtx: Vec<super::transaction::FullTransaction>,
+    vtx: Vec<super::transaction::FullTransaction>,
 
     /// Block height.
-    pub height: i32,
+    height: i32,
 }
 
 impl ParseFromSlice for FullBlock {
@@ -291,42 +333,36 @@ impl ParseFromSlice for FullBlock {
 const GENESIS_TARGET_DIFFICULTY: u32 = 520617983;
 
 impl FullBlock {
-    /// Extracts the block height from the coinbase transaction.
-    pub fn get_block_height(transactions: &[FullTransaction]) -> Result<i32, ParseError> {
-        let coinbase_script = transactions[0].raw_transaction.transparent_inputs[0]
-            .script_sig
-            .as_slice();
-        let mut cursor = Cursor::new(coinbase_script);
+    /// Returns the full block header.
+    pub fn header(&self) -> FullBlockHeader {
+        self.hdr.clone()
+    }
 
-        let height_num: i64 = read_zcash_script_i64(&mut cursor)?;
-        if height_num < 0 {
-            return Ok(-1);
-        }
-        if height_num > i64::from(u32::MAX) {
-            return Ok(-1);
-        }
-        if (height_num as u32) == GENESIS_TARGET_DIFFICULTY {
-            return Ok(0);
-        }
+    /// Returns the transactions held in  the block.
+    pub fn transactions(&self) -> Vec<super::transaction::FullTransaction> {
+        self.vtx.clone()
+    }
 
-        Ok(height_num as i32)
+    /// Returns the block height.
+    pub fn height(&self) -> i32 {
+        self.height
     }
 
     /// Decodes a hex encoded zcash full block into a FullBlock struct.
-    pub fn parse_full_block(data: &[u8], txid: Option<Vec<Vec<u8>>>) -> Result<Self, ParseError> {
+    pub fn parse_from_hex(data: &[u8], txid: Option<Vec<Vec<u8>>>) -> Result<Self, ParseError> {
         let (remaining_data, full_block) = Self::parse_from_slice(data, txid, None)?;
         if !remaining_data.is_empty() {
             return Err(ParseError::InvalidData(format!(
                 "Error decoding full block - {} bytes of Remaining data. Compact Block Created: ({:?})",
                 remaining_data.len(),
-                full_block.to_compact(0, 0)
+                full_block.into_compact(0, 0)
             )));
         }
         Ok(full_block)
     }
 
     /// Converts a zcash full block into a compact block.
-    pub fn to_compact(
+    pub fn into_compact(
         self,
         sapling_commitment_tree_size: u32,
         orchard_commitment_tree_size: u32,
@@ -365,15 +401,25 @@ impl FullBlock {
         Ok(compact_block)
     }
 
-    /// Decodes a hex encoded zcash full block into a CompactBlock struct.
-    pub fn parse_to_compact(
-        data: &[u8],
-        txid: Option<Vec<Vec<u8>>>,
-        sapling_commitment_tree_size: u32,
-        orchard_commitment_tree_size: u32,
-    ) -> Result<CompactBlock, ParseError> {
-        Self::parse_full_block(data, txid)?
-            .to_compact(sapling_commitment_tree_size, orchard_commitment_tree_size)
+    /// Extracts the block height from the coinbase transaction.
+    fn get_block_height(transactions: &[FullTransaction]) -> Result<i32, ParseError> {
+        let transparent_inputs = transactions[0].transparent_inputs();
+        let coinbase_script = transparent_inputs[0].as_slice();
+
+        let mut cursor = Cursor::new(coinbase_script);
+
+        let height_num: i64 = read_zcash_script_i64(&mut cursor)?;
+        if height_num < 0 {
+            return Ok(-1);
+        }
+        if height_num > i64::from(u32::MAX) {
+            return Ok(-1);
+        }
+        if (height_num as u32) == GENESIS_TARGET_DIFFICULTY {
+            return Ok(0);
+        }
+
+        Ok(height_num as i32)
     }
 }
 
@@ -415,11 +461,13 @@ pub async fn get_block_from_node(
                 }) => Err(BlockCacheError::ParseError(ParseError::InvalidData(
                     "Received object block type, this should not be possible here.".to_string(),
                 ))),
-                Ok(GetBlockResponse::Raw(block_hex)) => Ok(FullBlock::parse_to_compact(
+                Ok(GetBlockResponse::Raw(block_hex)) => Ok(FullBlock::parse_from_hex(
                     block_hex.as_ref(),
                     Some(display_txids_to_server(tx)?),
-                    trees.sapling() as u32,
-                    trees.orchard() as u32,
+                )?
+                .into_compact(
+                    u32::try_from(trees.sapling()).map_err(ParseError::from)?,
+                    u32::try_from(trees.orchard()).map_err(ParseError::from)?,
                 )?),
                 Err(e) => Err(e.into()),
             }
@@ -475,6 +523,6 @@ pub async fn get_nullifiers_from_node(
                 orchard_commitment_tree_size: 0,
             }),
         }),
-        Err(e) => Err(e.into()),
+        Err(e) => Err(e),
     }
 }

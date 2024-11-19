@@ -80,9 +80,6 @@ impl Indexer {
     ) -> Result<tokio::task::JoinHandle<Result<(), IndexerError>>, IndexerError> {
         // NOTE: This interval may need to be reduced or removed / moved once scale testing begins.
         let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(50));
-        // if config.nym_active {
-        //     nym_bin_common::logging::setup_logging();
-        // }
         println!("Launching Zingdexer!");
         let mut indexer: Indexer = Indexer::new(config, online.clone()).await?;
         Ok(tokio::task::spawn(async move {
@@ -135,8 +132,6 @@ impl Indexer {
             Server::spawn(
                 config.tcp_active,
                 tcp_ingestor_listen_addr,
-                config.nym_active,
-                config.nym_conf_path.clone(),
                 lightwalletd_uri,
                 zebrad_uri,
                 config.max_queue_size,
@@ -241,7 +236,7 @@ fn startup_message() {
        - Donate to us at https://free2z.cash/zingolabs.
        - Submit any security conserns to us at zingodisclosure@proton.me.
 
-****** Please note Zingdexer is currently in development and should not be used to run mainnet nodes. ******
+****** Please note Zaino is currently in development and should not be used to run mainnet nodes. ******
     "#;
     println!("{}", welcome_message);
 }

@@ -6,7 +6,6 @@ use std::sync::{
 };
 
 use http::Uri;
-// use nym_sphinx_anonymous_replies::requests::AnonymousSenderTag;
 use tonic::transport::Server;
 
 use crate::{
@@ -19,11 +18,7 @@ use crate::{
     },
 };
 
-#[cfg(not(feature = "nym_poc"))]
 use zaino_proto::proto::service::compact_tx_streamer_server::CompactTxStreamerServer;
-
-#[cfg(feature = "nym_poc")]
-use zcash_client_backend::proto::service::compact_tx_streamer_server::CompactTxStreamerServer;
 
 /// A queue working is the entity that takes requests from the queue and processes them.
 ///
@@ -37,8 +32,6 @@ pub(crate) struct Worker {
     queue: QueueReceiver<ZingoIndexerRequest>,
     /// Used to requeue requests.
     requeue: QueueSender<ZingoIndexerRequest>,
-    // /// Used to send responses to the nym_dispatcher.
-    // nym_response_queue: QueueSender<(Vec<u8>, AnonymousSenderTag)>,
     /// gRPC client used for processing requests received over http.
     grpc_client: GrpcClient,
     /// Thread safe worker status.
@@ -54,7 +47,6 @@ impl Worker {
         _worker_id: usize,
         queue: QueueReceiver<ZingoIndexerRequest>,
         requeue: QueueSender<ZingoIndexerRequest>,
-        // nym_response_queue: QueueSender<(Vec<u8>, AnonymousSenderTag)>,
         lightwalletd_uri: Uri,
         zebrad_uri: Uri,
         atomic_status: AtomicStatus,
@@ -69,7 +61,6 @@ impl Worker {
             _worker_id,
             queue,
             requeue,
-            // nym_response_queue,
             grpc_client,
             atomic_status,
             online,
@@ -108,33 +99,6 @@ impl Worker {
                                             )
                                             .await?;
                                         }
-                                        // ZingoIndexerRequest::NymServerRequest(request) => {
-                                        //     match self.grpc_client
-                                        //         .process_nym_request(&request)
-                                        //         .await {
-                                        //         Ok(response) => {
-                                        //             match self.nym_response_queue.try_send((response, request.get_request().metadata())) {
-                                        //                 Ok(_) => {}
-                                        //                 Err(QueueError::QueueFull(_request)) => {
-                                        //                     eprintln!("Response Queue Full.");
-                                        //                     // TODO: Handle this error! (open second nym responder?).
-                                        //                 }
-                                        //                 Err(e) => {
-                                        //                     self.atomic_status.store(5);
-                                        //                     eprintln!("Response Queue Closed. Failed to send response to queue: {}\nWorker shutting down.", e);
-                                        //                     // TODO: Handle queue closed error here. (return correct error?)
-                                        //                     return Ok(());
-                                        //                 }
-                                        //             }
-                                        //         }
-                                        //         Err(e) => {
-                                        //             eprintln!("Failed to process nym received request: {}", e);
-                                        //             // TODO:: Handle this error!
-
-                                        //         }
-
-                                        //     }
-                                        // }
                                     }
                                 // NOTE: This may need to be removed for scale use.
                                 if self.check_for_shutdown().await {
@@ -241,7 +205,6 @@ impl WorkerPool {
         idle_size: u16,
         queue: QueueReceiver<ZingoIndexerRequest>,
         _requeue: QueueSender<ZingoIndexerRequest>,
-        // nym_response_queue: QueueSender<(Vec<u8>, AnonymousSenderTag)>,
         lightwalletd_uri: Uri,
         zebrad_uri: Uri,
         status: WorkerPoolStatus,
@@ -254,7 +217,6 @@ impl WorkerPool {
                     workers.len(),
                     queue.clone(),
                     _requeue.clone(),
-                    // nym_response_queue.clone(),
                     lightwalletd_uri.clone(),
                     zebrad_uri.clone(),
                     status.statuses[workers.len()].clone(),
@@ -295,7 +257,6 @@ impl WorkerPool {
                     worker_index,
                     self.workers[0].queue.clone(),
                     self.workers[0].requeue.clone(),
-                    // self.workers[0].nym_response_queue.clone(),
                     self.workers[0].grpc_client.lightwalletd_uri.clone(),
                     self.workers[0].grpc_client.zebrad_uri.clone(),
                     self.status.statuses[worker_index].clone(),

@@ -18,7 +18,11 @@ use zaino_fetch::{
 use zaino_proto::proto::{
     compact_formats::{CompactBlock, CompactTx},
     service::{
-        compact_tx_streamer_server::CompactTxStreamer, Address, AddressList, Balance, BlockId, BlockRange, ChainSpec, Duration, Empty, Exclude, GetAddressUtxosArg, GetAddressUtxosReply, GetAddressUtxosReplyList, GetSubtreeRootsArg, LightdInfo, PingResponse, RawTransaction, SendResponse, ShieldedProtocol, SubtreeRoot, TransparentAddressBlockFilter, TreeState, TxFilter
+        compact_tx_streamer_server::CompactTxStreamer, Address, AddressList, Balance, BlockId, 
+        BlockRange, ChainSpec, Duration, Empty, Exclude, GetAddressUtxosArg, GetAddressUtxosReply, 
+        GetAddressUtxosReplyList, GetSubtreeRootsArg, LightdInfo, PingResponse, RawTransaction, 
+        SendResponse, ShieldedProtocol, SubtreeRoot, TransparentAddressBlockFilter, TreeState, 
+        TxFilter
     },
 };
 
@@ -283,19 +287,19 @@ impl CompactTxStreamer for GrpcClient {
                     .blocks
                     .0;
                     if height >= chain_height {
-                        return Err(tonic::Status::out_of_range(
+                        Err(tonic::Status::out_of_range(
                             format!(
                                 "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
                                 height, chain_height,
                             )
-                        ));
+                        ))
                     } else {
                         // TODO: Hide server error from clients before release. Currently useful for dev purposes.
-                        return Err(tonic::Status::unknown(format!(
+                        Err(tonic::Status::unknown(format!(
                             "Error: Failed to retrieve block from node. Server Error: {}",
-                            e.to_string(),
-                        )));
-                    };
+                            e,
+                        )))
+                    }
                 }
             }
         })
@@ -346,19 +350,19 @@ impl CompactTxStreamer for GrpcClient {
                     .blocks
                     .0;
                     if height >= chain_height {
-                        return Err(tonic::Status::out_of_range(
+                        Err(tonic::Status::out_of_range(
                             format!(
                                 "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
                                 height, chain_height,
                             )
-                        ));
+                        ))
                     } else {
                         // TODO: Hide server error from clients before release. Currently useful for dev purposes.
-                        return Err(tonic::Status::unknown(format!(
+                        Err(tonic::Status::unknown(format!(
                             "Error: Failed to retrieve nullifiers from node. Server Error: {}",
-                            e.to_string(),
-                        )));
-                    };
+                            e,
+                        )))
+                    }
                 }
             }
         })
@@ -473,7 +477,7 @@ impl CompactTxStreamer for GrpcClient {
                                     {
                                         Ok(_) => break,
                                         Err(e) => {
-                                            eprintln!("Error: Channel closed unexpectedly: {}", e.to_string());
+                                            eprintln!("Error: Channel closed unexpectedly: {}", e);
                                             break;
                                         }
                                     }
@@ -617,7 +621,7 @@ impl CompactTxStreamer for GrpcClient {
                                     {
                                         Ok(_) => break,
                                         Err(e) => {
-                                            eprintln!("Error: Channel closed unexpectedly: {}", e.to_string());
+                                            eprintln!("Error: Channel closed unexpectedly: {}", e);
                                             break;
                                         }
                                     }
@@ -1139,7 +1143,7 @@ impl CompactTxStreamer for GrpcClient {
                                         };
                                         match FullTransaction::parse_from_slice(raw.as_ref(), Some(vec!(txid_bytes)), None) {
                                             Ok(transaction) => {
-                                                if transaction.0.len() > 0 {
+                                                if !transaction.0.is_empty() {
                                                     // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                                                     if channel_tx
                                                         .send(Err(tonic::Status::unknown("Error: ")))
@@ -1204,7 +1208,6 @@ impl CompactTxStreamer for GrpcClient {
                             .await
                             .is_err()
                             {
-                                return;
                             }
                         }
                     }
@@ -1212,7 +1215,6 @@ impl CompactTxStreamer for GrpcClient {
                 .await;
                 match timeout {
                     Ok(_) => {
-                        return;
                     }
                     Err(_) => {
                         channel_tx
@@ -1221,7 +1223,6 @@ impl CompactTxStreamer for GrpcClient {
                             )))
                             .await
                             .ok();
-                        return;
                     }
                 }
             });
@@ -1354,7 +1355,6 @@ impl CompactTxStreamer for GrpcClient {
                 .await;
                 match timeout {
                     Ok(_) => {
-                        return;
                     }
                     Err(_) => {
                         channel_tx
@@ -1363,7 +1363,6 @@ impl CompactTxStreamer for GrpcClient {
                             )))
                             .await
                             .ok();
-                        return;
                     }
                 }
             });
@@ -1441,10 +1440,10 @@ impl CompactTxStreamer for GrpcClient {
                 })),
                 Err(e) => {
                     // TODO: Hide server error from clients before release. Currently useful for dev purposes.
-                    return Err(tonic::Status::unknown(format!(
+                    Err(tonic::Status::unknown(format!(
                         "Error: Failed to retrieve treestate from node. Server Error: {}",
-                        e.to_string(),
-                    )));
+                        e,
+                    )))
                 }
             }
         })
@@ -1494,10 +1493,10 @@ impl CompactTxStreamer for GrpcClient {
                 })),
                 Err(e) => {
                     // TODO: Hide server error from clients before release. Currently useful for dev purposes.
-                    return Err(tonic::Status::unknown(format!(
+                    Err(tonic::Status::unknown(format!(
                         "Error: Failed to retrieve treestate from node. Server Error: {}",
-                        e.to_string(),
-                    )));
+                        e,
+                    )))
                 }
             }
         })
@@ -1579,7 +1578,7 @@ impl CompactTxStreamer for GrpcClient {
                                         {
                                             Ok(_) => break,
                                             Err(e) => {
-                                                eprintln!("Error: Channel closed unexpectedly: {}", e.to_string());
+                                                eprintln!("Error: Channel closed unexpectedly: {}", e);
                                                 break;
                                             }
                                         }
@@ -1590,13 +1589,13 @@ impl CompactTxStreamer for GrpcClient {
                                     Err(e) => {
                                         match channel_tx
                                             .send(Err(tonic::Status::unknown(format!("Error: Failed to hex decode root hash: {}.", 
-                                                e.to_string()
+                                                e
                                             ))))
                                             .await
                                         {
                                             Ok(_) => break,
                                             Err(e) => {
-                                                eprintln!("Error: Channel closed unexpectedly: {}", e.to_string());
+                                                eprintln!("Error: Channel closed unexpectedly: {}", e);
                                                 break;
                                             }
                                         }
@@ -1627,8 +1626,8 @@ impl CompactTxStreamer for GrpcClient {
                                 // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                                 if channel_tx
                                     .send(Err(tonic::Status::unknown(format!("Error: Could not fetch block at height [{}] from node: {}", 
-                                        subtree.end_height.0.to_string(), 
-                                        e.to_string()
+                                        subtree.end_height.0, 
+                                        e
                                     ))))
                                     .await
                                     .is_err()
@@ -1642,7 +1641,6 @@ impl CompactTxStreamer for GrpcClient {
                 .await;
                 match timeout {
                     Ok(_) => {
-                        return;
                     }
                     Err(_) => {
                         channel_tx
@@ -1651,7 +1649,6 @@ impl CompactTxStreamer for GrpcClient {
                             )))
                             .await
                             .ok();
-                        return;
                     }
                 }
             });
@@ -1843,7 +1840,6 @@ impl CompactTxStreamer for GrpcClient {
                 .await;
                 match timeout {
                     Ok(_) => {
-                        return;
                     }
                     Err(_) => {
                         channel_tx
@@ -1852,7 +1848,6 @@ impl CompactTxStreamer for GrpcClient {
                             )))
                             .await
                             .ok();
-                        return;
                     }
                 }
             });
@@ -1880,7 +1875,6 @@ impl CompactTxStreamer for GrpcClient {
     {
         println!("[TEST] Received call of get_lightd_info.");
         // TODO: Add user and password as fields of GrpcClient and use here.
-        // TODO: Return Nym_Address in get_lightd_info response, for use by wallets.
         Box::pin(async {
             let zebrad_client = JsonRpcConnector::new(
                 self.zebrad_uri.clone(),

@@ -9,17 +9,14 @@ static CTRL_C_ONCE: std::sync::Once = std::sync::Once::new();
 
 /// Configuration data for Zingo-Indexer Tests.
 pub struct TestManager {
-    /// Temporary Directory for nym, zcashd and lightwalletd configuration and regtest data.
+    /// Temporary Directory for zcashd and lightwalletd configuration and regtest data.
     pub temp_conf_dir: tempfile::TempDir,
-    // std::path::PathBuf,
     /// Zingolib regtest manager.
     pub regtest_manager: zingolib::testutils::regtest::RegtestManager,
     /// Zingolib regtest network.
     pub regtest_network: zingolib::config::RegtestNetwork,
     /// Zingo-Indexer gRPC listen port.
     pub indexer_port: u16,
-    /// Zingo-Indexer Nym listen address.
-    pub nym_addr: Option<String>,
     /// Zebrad/Zcashd JsonRpc listen port.
     pub zebrad_port: u16,
     /// Online status of Zingo-Indexer.
@@ -41,7 +38,6 @@ impl TestManager {
 
         let temp_conf_dir = create_temp_conf_files(lwd_port, zebrad_port).unwrap();
         let temp_conf_path = temp_conf_dir.path().to_path_buf();
-        let _nym_conf_path = temp_conf_path.join("nym");
 
         set_custom_drops(online.clone(), Some(temp_conf_path.clone()));
 
@@ -53,13 +49,10 @@ impl TestManager {
             .launch(true)
             .expect("Failed to start regtest services");
 
-        // TODO: This turns nym functionality off. for nym tests we will need to add option to include nym in test manager.
-        // - queue and workerpool sizes may need to be changed here.
+        // NOTE: queue and workerpool sizes may need to be changed here.
         let indexer_config = zainodlib::config::IndexerConfig {
             tcp_active: true,
             listen_port: Some(indexer_port),
-            nym_active: false,
-            nym_conf_path: None,
             lightwalletd_port: lwd_port,
             zebrad_port,
             node_user: Some("xxxxxx".to_string()),
@@ -80,7 +73,6 @@ impl TestManager {
                 regtest_manager,
                 regtest_network,
                 indexer_port,
-                nym_addr: None,
                 zebrad_port,
                 online,
             },
