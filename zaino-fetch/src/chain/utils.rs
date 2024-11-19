@@ -22,7 +22,11 @@ pub trait ParseFromSlice {
 }
 
 /// Skips the next n bytes in cursor, returns error message given if eof is reached.
-pub fn skip_bytes(cursor: &mut Cursor<&[u8]>, n: usize, error_msg: &str) -> Result<(), ParseError> {
+pub(crate) fn skip_bytes(
+    cursor: &mut Cursor<&[u8]>,
+    n: usize,
+    error_msg: &str,
+) -> Result<(), ParseError> {
     if cursor.get_ref().len() < (cursor.position() + n as u64) as usize {
         return Err(ParseError::InvalidData(error_msg.to_string()));
     }
@@ -30,8 +34,8 @@ pub fn skip_bytes(cursor: &mut Cursor<&[u8]>, n: usize, error_msg: &str) -> Resu
     Ok(())
 }
 
-/// Reads the next n bytes from cursor into a vec<u8>, returns error message given if eof is reached..
-pub fn read_bytes(
+/// Reads the next n bytes from cursor into a vec<u8>, returns error message given if eof is reached.
+pub(crate) fn read_bytes(
     cursor: &mut Cursor<&[u8]>,
     n: usize,
     error_msg: &str,
@@ -43,32 +47,33 @@ pub fn read_bytes(
     Ok(buf)
 }
 
-/// Reads the next 8 bytes from cursor into a u64, returns error message given if eof is reached..
-pub fn read_u64(cursor: &mut Cursor<&[u8]>, error_msg: &str) -> Result<u64, ParseError> {
+/// Reads the next 8 bytes from cursor into a u64, returns error message given if eof is reached.
+pub(crate) fn read_u64(cursor: &mut Cursor<&[u8]>, error_msg: &str) -> Result<u64, ParseError> {
     cursor
         .read_u64::<LittleEndian>()
         .map_err(ParseError::from)
         .map_err(|_| ParseError::InvalidData(error_msg.to_string()))
 }
 
-/// Reads the next 4 bytes from cursor into a u32, returns error message given if eof is reached..
-pub fn read_u32(cursor: &mut Cursor<&[u8]>, error_msg: &str) -> Result<u32, ParseError> {
+/// Reads the next 4 bytes from cursor into a u32, returns error message given if eof is reached.
+pub(crate) fn read_u32(cursor: &mut Cursor<&[u8]>, error_msg: &str) -> Result<u32, ParseError> {
     cursor
         .read_u32::<LittleEndian>()
         .map_err(ParseError::from)
         .map_err(|_| ParseError::InvalidData(error_msg.to_string()))
 }
 
-/// Reads the next 4 bytes from cursor into an i32, returns error message given if eof is reached..
-pub fn read_i32(cursor: &mut Cursor<&[u8]>, error_msg: &str) -> Result<i32, ParseError> {
+/// Reads the next 4 bytes from cursor into an i32, returns error message given if eof is reached.
+pub(crate) fn read_i32(cursor: &mut Cursor<&[u8]>, error_msg: &str) -> Result<i32, ParseError> {
     cursor
         .read_i32::<LittleEndian>()
         .map_err(ParseError::from)
         .map_err(|_| ParseError::InvalidData(error_msg.to_string()))
 }
 
-/// Reads the next byte from cursor into a bool, returns error message given if eof is reached..
-pub fn read_bool(cursor: &mut Cursor<&[u8]>, error_msg: &str) -> Result<bool, ParseError> {
+/// Reads the next byte from cursor into a bool, returns error message given if eof is reached.
+#[allow(dead_code)]
+pub(crate) fn read_bool(cursor: &mut Cursor<&[u8]>, error_msg: &str) -> Result<bool, ParseError> {
     let byte = cursor
         .read_u8()
         .map_err(ParseError::from)
@@ -87,7 +92,7 @@ const OP_1: u8 = 0x51;
 const OP_16: u8 = 0x60;
 
 /// Reads and interprets a Zcash (Bitcoin) custom compact integer encoding used for int64 numbers in scripts.
-pub fn read_zcash_script_i64(cursor: &mut Cursor<&[u8]>) -> Result<i64, ParseError> {
+pub(crate) fn read_zcash_script_i64(cursor: &mut Cursor<&[u8]>) -> Result<i64, ParseError> {
     let first_byte = read_bytes(cursor, 1, "Error reading first byte in i64 script hash")?[0];
 
     match first_byte {
@@ -112,14 +117,14 @@ pub fn read_zcash_script_i64(cursor: &mut Cursor<&[u8]>) -> Result<i64, ParseErr
 ///
 /// This codec requires integers to be in the range `0x0..=0x02000000`, for compatibility
 /// with Zcash consensus rules.
-pub struct CompactSize;
+pub(crate) struct CompactSize;
 
 /// The maximum allowed value representable as a `[CompactSize]`
-pub const MAX_COMPACT_SIZE: u32 = 0x02000000;
+pub(crate) const MAX_COMPACT_SIZE: u32 = 0x02000000;
 
 impl CompactSize {
     /// Reads an integer encoded in compact form.
-    pub fn read<R: Read>(mut reader: R) -> io::Result<u64> {
+    pub(crate) fn read<R: Read>(mut reader: R) -> io::Result<u64> {
         let flag = reader.read_u8()?;
         let result = if flag < 253 {
             Ok(flag as u64)
@@ -160,7 +165,8 @@ impl CompactSize {
 
     /// Reads an integer encoded in contact form and performs checked conversion
     /// to the target type.
-    pub fn read_t<R: Read, T: TryFrom<u64>>(mut reader: R) -> io::Result<T> {
+    #[allow(dead_code)]
+    pub(crate) fn read_t<R: Read, T: TryFrom<u64>>(mut reader: R) -> io::Result<T> {
         let n = Self::read(&mut reader)?;
         <T>::try_from(n).map_err(|_| {
             io::Error::new(
@@ -171,7 +177,7 @@ impl CompactSize {
     }
 
     /// Writes the provided `usize` value to the provided Writer in compact form.
-    pub fn write<W: Write>(mut writer: W, size: usize) -> io::Result<()> {
+    pub(crate) fn write<W: Write>(mut writer: W, size: usize) -> io::Result<()> {
         match size {
             s if s < 253 => writer.write_u8(s as u8),
             s if s <= 0xFFFF => {
@@ -191,7 +197,7 @@ impl CompactSize {
 }
 
 /// Takes a vec of big endian hex encoded txids and returns them as a vec of little endian raw bytes.
-pub fn display_txids_to_server(txids: Vec<String>) -> Result<Vec<Vec<u8>>, ParseError> {
+pub(crate) fn display_txids_to_server(txids: Vec<String>) -> Result<Vec<Vec<u8>>, ParseError> {
     txids
         .iter()
         .map(|txid| {

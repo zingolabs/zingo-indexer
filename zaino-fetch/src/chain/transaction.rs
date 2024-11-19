@@ -10,15 +10,21 @@ use zaino_proto::proto::compact_formats::{
 };
 
 /// Txin format as described in https://en.bitcoin.it/wiki/Transaction
-#[derive(Debug)]
-pub struct TxIn {
+#[derive(Debug, Clone)]
+struct TxIn {
     // PrevTxHash [IGNORED] - Size[bytes]: 32
     // PrevTxOutIndex [IGNORED] - Size[bytes]: 4
     /// CompactSize-prefixed, could be a pubkey or a script
     ///
     /// Size[bytes]: CompactSize
-    pub script_sig: Vec<u8>,
+    script_sig: Vec<u8>,
     // SequenceNumber [IGNORED] - Size[bytes]: 4
+}
+
+impl TxIn {
+    fn into_inner(self) -> Vec<u8> {
+        self.script_sig
+    }
 }
 
 impl ParseFromSlice for TxIn {
@@ -56,13 +62,19 @@ impl ParseFromSlice for TxIn {
 }
 
 /// Txout format as described in https://en.bitcoin.it/wiki/Transaction
-#[derive(Debug)]
-pub struct TxOut {
+#[derive(Debug, Clone)]
+struct TxOut {
     /// Non-negative int giving the number of zatoshis to be transferred
     ///
     /// Size[bytes]: 8
-    pub value: u64,
+    value: u64,
     // Script [IGNORED] - Size[bytes]: CompactSize
+}
+
+impl TxOut {
+    fn into_inner(self) -> u64 {
+        self.value
+    }
 }
 
 impl ParseFromSlice for TxOut {
@@ -121,17 +133,23 @@ fn parse_transparent(data: &[u8]) -> Result<(&[u8], Vec<TxIn>, Vec<TxOut>), Pars
 
 /// spend is a Sapling Spend Description as described in 7.3 of the Zcash
 /// protocol specification.
-#[derive(Debug)]
-pub struct Spend {
+#[derive(Debug, Clone)]
+struct Spend {
     // Cv [IGNORED] - Size[bytes]: 32
     // Anchor [IGNORED] - Size[bytes]: 32
     /// A nullifier to a sapling note.
     ///
     /// Size[bytes]: 32
-    pub nullifier: Vec<u8>,
+    nullifier: Vec<u8>,
     // Rk [IGNORED] - Size[bytes]: 32
     // Zkproof [IGNORED] - Size[bytes]: 192
     // SpendAuthSig [IGNORED] - Size[bytes]: 64
+}
+
+impl Spend {
+    fn into_inner(self) -> Vec<u8> {
+        self.nullifier
+    }
 }
 
 impl ParseFromSlice for Spend {
@@ -169,24 +187,30 @@ impl ParseFromSlice for Spend {
 
 /// output is a Sapling Output Description as described in section 7.4 of the
 /// Zcash protocol spec.
-#[derive(Debug)]
-pub struct Output {
+#[derive(Debug, Clone)]
+struct Output {
     // Cv [IGNORED] - Size[bytes]: 32
     /// U-coordinate of the note commitment, derived from the note's value, recipient, and a
     /// random value.
     ///
     /// Size[bytes]: 32
-    pub cmu: Vec<u8>,
+    cmu: Vec<u8>,
     /// Ephemeral public key for Diffie-Hellman key exchange.
     ///
     /// Size[bytes]: 32
-    pub ephemeral_key: Vec<u8>,
+    ephemeral_key: Vec<u8>,
     /// Encrypted transaction details including value transferred and an optional memo.
     ///
     /// Size[bytes]: 580
-    pub enc_ciphertext: Vec<u8>,
+    enc_ciphertext: Vec<u8>,
     // OutCiphertext [IGNORED] - Size[bytes]: 80
     // Zkproof [IGNORED] - Size[bytes]: 192
+}
+
+impl Output {
+    fn into_parts(self) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+        (self.cmu, self.ephemeral_key, self.enc_ciphertext)
+    }
 }
 
 impl ParseFromSlice for Output {
@@ -232,8 +256,8 @@ impl ParseFromSlice for Output {
 /// upgrade level. Only version 4 is supported, no need for proofPHGR13.
 ///
 /// NOTE: Legacy, no longer used but included for consistency.
-#[derive(Debug)]
-pub struct JoinSplit {
+#[derive(Debug, Clone)]
+struct JoinSplit {
     //vpubOld [IGNORED] - Size[bytes]: 8
     //vpubNew [IGNORED] - Size[bytes]: 8
     //anchor [IGNORED] - Size[bytes]: 32
@@ -284,27 +308,38 @@ impl ParseFromSlice for JoinSplit {
 }
 
 /// An Orchard action.
-#[derive(Debug)]
-pub struct Action {
+#[derive(Debug, Clone)]
+struct Action {
     // Cv [IGNORED] - Size[bytes]: 32
     /// A nullifier to a orchard note.
     ///
     /// Size[bytes]: 32
-    pub nullifier: Vec<u8>,
+    nullifier: Vec<u8>,
     // Rk [IGNORED] - Size[bytes]: 32
     /// X-coordinate of the commitment to the note.
     ///
     /// Size[bytes]: 32
-    pub cmx: Vec<u8>,
+    cmx: Vec<u8>,
     /// Ephemeral public key.
     ///
     /// Size[bytes]: 32
-    pub ephemeral_key: Vec<u8>,
+    ephemeral_key: Vec<u8>,
     /// Encrypted details of the new note, including its value and recipient's data.
     ///
     /// Size[bytes]: 580
-    pub enc_ciphertext: Vec<u8>,
+    enc_ciphertext: Vec<u8>,
     // OutCiphertext [IGNORED] - Size[bytes]: 80
+}
+
+impl Action {
+    fn into_parts(self) -> (Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) {
+        (
+            self.nullifier,
+            self.cmx,
+            self.ephemeral_key,
+            self.enc_ciphertext,
+        )
+    }
 }
 
 impl ParseFromSlice for Action {
@@ -346,54 +381,55 @@ impl ParseFromSlice for Action {
 }
 
 /// Full Zcash Transactrion data.
-#[derive(Debug)]
-pub struct TransactionData {
+#[derive(Debug, Clone)]
+struct TransactionData {
     /// Indicates if the transaction is an Overwinter-enabled transaction.
     ///
     /// Size[bytes]: [in 4 byte header]
-    pub f_overwintered: bool,
+    f_overwintered: bool,
     /// The transaction format version.
     ///
     /// Size[bytes]: [in 4 byte header]
-    pub version: u32,
+    version: u32,
     /// Version group ID, used to specify transaction type and validate its components.
     ///
     /// Size[bytes]: 4
-    pub n_version_group_id: u32,
+    n_version_group_id: u32,
     /// Consensus branch ID, used to identify the network upgrade that the transaction is valid for.
     ///
     /// Size[bytes]: 4
-    pub consensus_branch_id: u32,
+    consensus_branch_id: u32,
     /// List of transparent inputs in a transaction.
     ///
     /// Size[bytes]: Vec<40+CompactSize>
-    pub transparent_inputs: Vec<TxIn>,
+    transparent_inputs: Vec<TxIn>,
     /// List of transparent outputs in a transaction.
     ///
     /// Size[bytes]: Vec<8+CompactSize>
-    pub transparent_outputs: Vec<TxOut>,
+    transparent_outputs: Vec<TxOut>,
     // NLockTime [IGNORED] - Size[bytes]: 4
     // NExpiryHeight [IGNORED] - Size[bytes]: 4
     // ValueBalanceSapling [IGNORED] - Size[bytes]: 8
     /// List of shielded spends from the Sapling pool
     ///
     /// Size[bytes]: Vec<384>
-    pub shielded_spends: Vec<Spend>,
+    shielded_spends: Vec<Spend>,
     /// List of shielded outputs from the Sapling pool
     ///
     /// Size[bytes]: Vec<948>
-    pub shielded_outputs: Vec<Output>,
+    shielded_outputs: Vec<Output>,
     /// List of JoinSplit descriptions in a transaction, no longer supported.
     ///
     /// Size[bytes]: Vec<1602-1698>
-    pub join_splits: Vec<JoinSplit>,
+    #[allow(dead_code)]
+    join_splits: Vec<JoinSplit>,
     //joinSplitPubKey [IGNORED] - Size[bytes]: 32
     //joinSplitSig [IGNORED] - Size[bytes]: 64
     //bindingSigSapling [IGNORED] - Size[bytes]: 64
     ///List of Orchard actions.
     ///
     /// Size[bytes]: Vec<820>
-    pub orchard_actions: Vec<Action>,
+    orchard_actions: Vec<Action>,
 }
 
 impl TransactionData {
@@ -654,16 +690,16 @@ impl TransactionData {
 }
 
 /// Zingo-Indexer struct for a full zcash transaction.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FullTransaction {
     /// Full transaction data.
-    pub raw_transaction: TransactionData,
+    raw_transaction: TransactionData,
 
     /// Raw transaction bytes.
-    pub raw_bytes: Vec<u8>,
+    raw_bytes: Vec<u8>,
 
     /// Transaction Id, fetched using get_block JsonRPC with verbose = 1.
-    pub tx_id: Vec<u8>,
+    tx_id: Vec<u8>,
 }
 
 impl ParseFromSlice for FullTransaction {
@@ -728,6 +764,87 @@ impl ParseFromSlice for FullTransaction {
 }
 
 impl FullTransaction {
+    /// Returns overwintered bool
+    pub fn f_overwintered(&self) -> bool {
+        self.raw_transaction.f_overwintered
+    }
+
+    /// Returns the transaction version.
+    pub fn version(&self) -> u32 {
+        self.raw_transaction.version
+    }
+
+    /// Returns the transaction version group id.
+    pub fn n_version_group_id(&self) -> u32 {
+        self.raw_transaction.n_version_group_id
+    }
+
+    /// returns the consensus branch id of the transaction.
+    pub fn consensus_branch_id(&self) -> u32 {
+        self.raw_transaction.consensus_branch_id
+    }
+
+    /// Returns a vec of transparent input script_sigs for the transaction.
+    pub fn transparent_inputs(&self) -> Vec<Vec<u8>> {
+        self.raw_transaction
+            .transparent_inputs
+            .iter()
+            .map(|input| input.clone().into_inner())
+            .collect()
+    }
+
+    /// Returns a vec of transparent output values for the transaction.
+    pub fn transparent_outputs(&self) -> Vec<u64> {
+        self.raw_transaction
+            .transparent_outputs
+            .iter()
+            .map(|input| input.clone().into_inner())
+            .collect()
+    }
+
+    /// Returns a vec of sapling nullifiers for the transaction.
+    pub fn shielded_spends(&self) -> Vec<Vec<u8>> {
+        self.raw_transaction
+            .shielded_spends
+            .iter()
+            .map(|input| input.clone().into_inner())
+            .collect()
+    }
+
+    /// Returns a vec of sapling outputs (cmu, ephemeral_key, enc_ciphertext) for the transaction.
+    pub fn shielded_outputs(&self) -> Vec<(Vec<u8>, Vec<u8>, Vec<u8>)> {
+        self.raw_transaction
+            .shielded_outputs
+            .iter()
+            .map(|input| input.clone().into_parts())
+            .collect()
+    }
+
+    /// Returns None as joinsplits are not supported in Zaino.
+    pub fn join_splits(&self) -> Option<()> {
+        None
+    }
+
+    /// Returns a vec of orchard actions (nullifier, cmx, ephemeral_key, enc_ciphertext) for the transaction.
+    #[allow(clippy::complexity)]
+    pub fn orchard_actions(&self) -> Vec<(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>)> {
+        self.raw_transaction
+            .orchard_actions
+            .iter()
+            .map(|input| input.clone().into_parts())
+            .collect()
+    }
+
+    /// Returns the transaction as raw bytes.
+    pub fn raw_bytes(&self) -> Vec<u8> {
+        self.raw_bytes.clone()
+    }
+
+    /// returns the TxId of the transaction.
+    pub fn tx_id(&self) -> Vec<u8> {
+        self.tx_id.clone()
+    }
+
     /// Converts a zcash full transaction into a compact transaction.
     pub fn to_compact(self, index: u64) -> Result<CompactTx, ParseError> {
         let hash = self.tx_id;
@@ -778,7 +895,7 @@ impl FullTransaction {
     }
 
     /// Returns true if the transaction contains either sapling spends or outputs.
-    pub fn has_shielded_elements(&self) -> bool {
+    pub(crate) fn has_shielded_elements(&self) -> bool {
         !self.raw_transaction.shielded_spends.is_empty()
             || !self.raw_transaction.shielded_outputs.is_empty()
             || !self.raw_transaction.orchard_actions.is_empty()

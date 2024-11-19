@@ -29,10 +29,11 @@ zingolib = { git = "https://github.com/zingolabs/zingolib.git", tag = "zaino_dep
 zcash_protocol = { git = "https://github.com/zingolabs/librustzcash.git", tag = "zcash_client_sqlite-0.11.2_plus_zingolabs_changes-1-g7ad60b5d5-2-g121371a08" }
 
 # Zebra
-#
-# TODO: Update to release tag once zaino changes PR enters release.
 zebra-chain = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "4eb285de50848f1a4dcebd0fbe353e4f150fd371" }
 zebra-rpc = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "4eb285de50848f1a4dcebd0fbe353e4f150fd371" }
+
+# Zcash-Local-Net
+zcash_local_net = { git = "https://github.com/zingolabs/zcash-local-net.git", branch = "dev", features = [ "test_fixtures" ] }
 
 # Miscellaneous
 tokio = { version = "1.38", features = ["full"] }
@@ -64,5 +65,4 @@ tracing-subscriber = "0.3.15"
 url = "2.5"
 which = "4"
 whoami = "1.5"
-zcash_local_net = { git = "https://github.com/Oscar-Pepper/zcash-local-net.git", branch = "testnet_framework" }
 

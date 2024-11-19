@@ -13,9 +13,6 @@ pub enum ParseError {
     #[error("Invalid Data Error: {0}")]
     InvalidData(String),
 
-    // /// Errors from the JsonRPC client.
-    // #[error("JsonRPC Connector Error: {0}")]
-    // JsonRpcError(#[from] JsonRpcConnectorError),
     /// UTF-8 conversion error.
     #[error("UTF-8 Error: {0}")]
     Utf8Error(#[from] std::str::Utf8Error),
@@ -31,6 +28,10 @@ pub enum ParseError {
     /// Errors originating from prost decodings.
     #[error("Prost Decode Error: {0}")]
     ProstDecodeError(#[from] prost::DecodeError),
+
+    /// Integer conversion error.
+    #[error("Integer conversion error: {0}")]
+    TryFromIntError(#[from] std::num::TryFromIntError),
 }
 
 /// Parser Error Type.
