@@ -1,10 +1,13 @@
 //! Tests Zainod release binary against the `zcash_local_net` client RPC test fixtures.
 //!
+//! Ensure the release binary is up-to-date with `cargo build --release` before running this test-suite.
+//!
 //! See `Testing` section of README.md for more details.
 
 use std::path::PathBuf;
 
 use once_cell::sync::Lazy;
+use zcash_local_net::network::Network;
 
 static ZCASHD_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
     let mut workspace_root_path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
@@ -372,7 +375,7 @@ async fn get_latest_tree_state() {
 }
 
 /// This test requires Zebrad testnet to be already synced to at least 2 sapling shards with the cache at
-/// `zaino/chain_cache/testnet_get_subtree_roots`
+/// `zaino/chain_cache/get_subtree_roots_sapling`
 ///
 /// See doc comments of test_fixture for more details.
 #[tokio::test]
@@ -383,12 +386,13 @@ async fn get_subtree_roots_sapling() {
         ZEBRAD_BIN.clone(),
         ZAINOD_BIN.clone(),
         LIGHTWALLETD_BIN.clone(),
+        Network::Testnet,
     )
     .await;
 }
 
 /// This test requires Zebrad testnet to be already synced to at least 2 orchard shards with the cache at
-/// `zaino/chain_cache/testnet_get_subtree_roots`
+/// `zaino/chain_cache/get_subtree_roots_orchard`
 ///
 /// See doc comments of test_fixture for more details.
 #[tokio::test]
@@ -399,6 +403,7 @@ async fn get_subtree_roots_orchard() {
         ZEBRAD_BIN.clone(),
         ZAINOD_BIN.clone(),
         LIGHTWALLETD_BIN.clone(),
+        Network::Mainnet,
     )
     .await;
 }
