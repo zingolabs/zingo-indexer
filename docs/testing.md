@@ -13,7 +13,7 @@
 - To run client rpc tests:
 1) Simlink or copy compiled `zebrad`, zcashd` and `zcash-cli` binaries to `$ zaino/test_binaries/bins/*`
 2) Build release binary `cargo build --release` WARNING: these tests do not use the binary built by cargo nextest
-3) Generate the chain cache `cargo nextest run generate_zcashd_chain_cach --run-ignored ignored-only`
+3) Generate the chain cache `cargo nextest run generate_zcashd_chain_cache --run-ignored ignored-only`
 4) Run `cargo nextest run --test client_rpcs`
 
 - To run client rpc test `get_subtree_roots_sapling`:
