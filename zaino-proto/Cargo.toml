@@ -1,6 +1,5 @@
 [package]
 name = "zaino-proto"
-version = "0.1.1"
 description = "Holds tonic files and build logic for the lightwallet and darkside RPCs."
 edition = { workspace = true }
 authors = { workspace = true }

@@ -2094,7 +2094,7 @@ dependencies = [
 
 [[package]]
 name = "integration-tests"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "once_cell",
  "tokio",
@@ -5481,7 +5481,7 @@ dependencies = [
 
 [[package]]
 name = "zaino-fetch"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "base64 0.22.1",
  "byteorder",
@@ -5505,7 +5505,7 @@ dependencies = [
 
 [[package]]
 name = "zaino-proto"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "prost",
  "tonic",
@@ -5515,7 +5515,7 @@ dependencies = [
 
 [[package]]
 name = "zaino-serve"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "async-stream",
  "crossbeam-channel",
@@ -5537,7 +5537,7 @@ dependencies = [
 
 [[package]]
 name = "zaino-state"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "thiserror",
  "tokio",
@@ -5545,7 +5545,7 @@ dependencies = [
 
 [[package]]
 name = "zaino-testutils"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "ctrlc",
  "http 1.1.0",
@@ -5560,7 +5560,7 @@ dependencies = [
 
 [[package]]
 name = "zainod"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "clap",
  "ctrlc",

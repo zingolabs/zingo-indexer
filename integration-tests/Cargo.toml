@@ -1,6 +1,5 @@
 [package]
 name = "integration-tests"
-version = "0.1.1"
 description = "Crate containing Zaino 'Wallet-to-Node' tests."
 edition = { workspace = true }
 authors = { workspace = true }
