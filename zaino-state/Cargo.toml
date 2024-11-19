@@ -1,6 +1,5 @@
 [package]
 name = "zaino-state"
-version = "0.1.1"
 description = "A mempool and chain-fetching service built on top of zebra's ReadStateService and TrustedChainSync."
 edition = { workspace = true }
 authors = { workspace = true }

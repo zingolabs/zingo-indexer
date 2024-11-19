@@ -1,6 +1,5 @@
 [package]
 name = "zaino-fetch"
-version = "0.1.1"
 description = "A mempool-fetching, chain-fetching and transaction submission service that uses zebra's RPC interface."
 edition = { workspace = true }
 authors = { workspace = true }
