@@ -12,8 +12,8 @@ repository = { workspace = true }
 tonic = { workspace = true }
 
 # Miscellaneous Crate
-prost = "0.13"
+prost = { workspace = true }
 
 [build-dependencies]
-tonic-build = { version = "0.12", features = ["prost"] }
-which = "4"
+tonic-build = { workspace = true, features = ["prost"] }
+which = { workspace = true }
