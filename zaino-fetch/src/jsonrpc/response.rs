@@ -176,9 +176,9 @@ impl GetBlockTrees {
     }
 }
 
-impl Into<zebra_rpc::methods::GetBlockTrees> for GetBlockTrees {
-    fn into(self) -> zebra_rpc::methods::GetBlockTrees {
-        zebra_rpc::methods::GetBlockTrees::new(self.sapling(), self.orchard())
+impl From<GetBlockTrees> for zebra_rpc::methods::GetBlockTrees {
+    fn from(val: GetBlockTrees) -> Self {
+        zebra_rpc::methods::GetBlockTrees::new(val.sapling(), val.orchard())
     }
 }
 

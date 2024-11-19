@@ -36,7 +36,7 @@ impl JsonRpcConnectorError {
     ///       however propagating the server error is useful durin development.
     pub fn to_grpc_status(&self) -> tonic::Status {
         // TODO: Hide server error from clients before release. Currently useful for dev purposes.
-        tonic::Status::internal(format!("Error: JsonRPC Client Error: {}", self.to_string()))
+        tonic::Status::internal(format!("Error: JsonRPC Client Error: {}", self))
     }
 }
 
