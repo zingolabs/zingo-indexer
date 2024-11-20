@@ -12,6 +12,8 @@ pub struct IndexerConfig {
     /// LightWalletD listen port [DEPRECATED].
     /// Used by zingo-testutils.
     pub lightwalletd_port: u16,
+    /// Full node / validator listen hostname.
+    pub zebrad_hostname: Option<String>,
     /// Full node / validator listen port.
     pub zebrad_port: u16,
     /// Full node Username.
@@ -52,6 +54,7 @@ impl Default for IndexerConfig {
             tcp_active: true,
             listen_port: Some(8080),
             lightwalletd_port: 9067,
+            zebrad_hostname: Some("127.0.0.1".to_string()),
             zebrad_port: 18232,
             node_user: Some("xxxxxx".to_string()),
             node_password: Some("xxxxxx".to_string()),
@@ -65,22 +68,36 @@ impl Default for IndexerConfig {
 /// Attempts to load config data from a toml file at the specified path.
 pub fn load_config(file_path: &std::path::PathBuf) -> IndexerConfig {
     let mut config = IndexerConfig::default();
+    println!("Loading config: {:?}", file_path);
 
-    if let Ok(contents) = std::fs::read_to_string(file_path) {
-        if let Ok(parsed_config) = toml::from_str::<IndexerConfig>(&contents) {
-            config = IndexerConfig {
-                tcp_active: parsed_config.tcp_active,
-                listen_port: parsed_config.listen_port.or(config.listen_port),
-                lightwalletd_port: parsed_config.lightwalletd_port,
-                zebrad_port: parsed_config.zebrad_port,
-                node_user: parsed_config.node_user.or(config.node_user),
-                node_password: parsed_config.node_password.or(config.node_password),
-                max_queue_size: parsed_config.max_queue_size,
-                max_worker_pool_size: parsed_config.max_worker_pool_size,
-                idle_worker_pool_size: parsed_config.idle_worker_pool_size,
-            };
+    if !file_path.exists() {
+        eprintln!("File does not exist: {:?}", file_path);
+        return config;
+    }
+
+    match std::fs::read_to_string(file_path) {
+        Ok(contents) => {
+            match toml::from_str::<IndexerConfig>(&contents) {
+                Ok(parsed_config) => {
+                    config = IndexerConfig {
+                        tcp_active: parsed_config.tcp_active,
+                        listen_port: parsed_config.listen_port.or(config.listen_port),
+                        lightwalletd_port: parsed_config.lightwalletd_port,
+                        zebrad_hostname: parsed_config.zebrad_hostname.or(config.zebrad_hostname),
+                        zebrad_port: parsed_config.zebrad_port,
+                        node_user: parsed_config.node_user.or(config.node_user),
+                        node_password: parsed_config.node_password.or(config.node_password),
+                        max_queue_size: parsed_config.max_queue_size,
+                        max_worker_pool_size: parsed_config.max_worker_pool_size,
+                        idle_worker_pool_size: parsed_config.idle_worker_pool_size,
+                    };
+                }
+                Err(e) => eprintln!("Error parsing TOML: {}", e),
+            }
         }
+        Err(e) => eprintln!("Error reading file: {}", e),
     }
 
     config
 }
+

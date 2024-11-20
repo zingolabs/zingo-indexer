@@ -17,6 +17,8 @@ pub struct TestManager {
     pub regtest_network: zingolib::config::RegtestNetwork,
     /// Zingo-Indexer gRPC listen port.
     pub indexer_port: u16,
+    /// Zebrad/Zcashd JsonRpc listen hostname.
+    pub zebrad_hostname: Option<String>,
     /// Zebrad/Zcashd JsonRpc listen port.
     pub zebrad_port: u16,
     /// Online status of Zingo-Indexer.
@@ -33,6 +35,7 @@ impl TestManager {
         tokio::task::JoinHandle<Result<(), zainodlib::error::IndexerError>>,
     ) {
         let lwd_port = portpicker::pick_unused_port().expect("No ports free");
+        let zebrad_hostname = Some("127.0.0.1".to_string());
         let zebrad_port = portpicker::pick_unused_port().expect("No ports free");
         let indexer_port = portpicker::pick_unused_port().expect("No ports free");
 
@@ -54,6 +57,7 @@ impl TestManager {
             tcp_active: true,
             listen_port: Some(indexer_port),
             lightwalletd_port: lwd_port,
+            zebrad_hostname: zebrad_hostname.clone(),
             zebrad_port,
             node_user: Some("xxxxxx".to_string()),
             node_password: Some("xxxxxx".to_string()),
@@ -73,6 +77,7 @@ impl TestManager {
                 regtest_manager,
                 regtest_network,
                 indexer_port,
+                zebrad_hostname: zebrad_hostname.clone(),
                 zebrad_port,
                 online,
             },
@@ -94,6 +99,7 @@ impl TestManager {
     /// Returns zebrad listen address.
     pub async fn test_and_return_zebrad_uri(&self) -> http::Uri {
         zaino_fetch::jsonrpc::connector::test_node_and_return_uri(
+            self.zebrad_hostname.clone(),
             &self.zebrad_port,
             Some("xxxxxx".to_string()),
             Some("xxxxxx".to_string()),

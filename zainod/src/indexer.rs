@@ -120,8 +120,9 @@ impl Indexer {
             .authority(format!("localhost:{}", config.lightwalletd_port))
             .path_and_query("/")
             .build()?;
-        println!("Checking connection with node..");
+        println!("Checking connection with node {}:{}", config.zebrad_hostname.clone().unwrap(), &config.zebrad_port);
         let zebrad_uri = test_node_and_return_uri(
+            config.zebrad_hostname.clone(),
             &config.zebrad_port,
             config.node_user.clone(),
             config.node_password.clone(),
