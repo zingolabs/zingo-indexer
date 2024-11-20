@@ -9,6 +9,9 @@ listen_port = 8137
 # LightWalletD listen port [DEPRECATED]
 lightwalletd_port = 9067
 
+# Full node / validator listen hostname
+zebrad_hostname = "localhost"
+
 # Full node / validator listen port
 zebrad_port = 18232
 

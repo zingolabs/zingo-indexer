@@ -402,12 +402,14 @@ async fn test_node_connection(
 
 /// Tries to connect to zebrad/zcashd using IPv4 and IPv6 and returns the correct uri type, exits program with error message if connection cannot be established.
 pub async fn test_node_and_return_uri(
+    hostname: Option<String>,
     port: &u16,
     user: Option<String>,
     password: Option<String>,
 ) -> Result<Uri, JsonRpcConnectorError> {
-    let ipv4_uri: Url = format!("http://127.0.0.1:{}", port).parse()?;
-    let ipv6_uri: Url = format!("http://[::1]:{}", port).parse()?;
+    let hostname = hostname.unwrap_or_else(|| "localhost".to_string());
+    let ipv4_uri: Url = format!("http://{}:{}", hostname, port).parse()?;
+    let ipv6_uri: Url = format!("http://{}:{}", hostname, port).parse()?;
     let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(500));
     for _ in 0..3 {
         match test_node_connection(ipv4_uri.clone(), user.clone(), password.clone()).await {
