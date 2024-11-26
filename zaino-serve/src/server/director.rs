@@ -69,7 +69,6 @@ impl Server {
     pub async fn spawn(
         tcp_active: bool,
         tcp_ingestor_listen_addr: Option<SocketAddr>,
-        lightwalletd_uri: Uri,
         zebrad_uri: Uri,
         max_queue_size: u16,
         max_worker_pool_size: u16,
@@ -113,7 +112,6 @@ impl Server {
             idle_worker_pool_size,
             request_queue.rx().clone(),
             request_queue.tx().clone(),
-            lightwalletd_uri,
             zebrad_uri,
             status.workerpool_status.clone(),
             online.clone(),

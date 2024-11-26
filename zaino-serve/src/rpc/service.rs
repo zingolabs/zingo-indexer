@@ -220,7 +220,7 @@ impl CompactTxStreamer for GrpcClient {
         println!("[TEST] Received call of get_latest_block.");
         Box::pin(async {
             let blockchain_info = JsonRpcConnector::new(
-                self.zebrad_uri.clone(),
+                self.zebrad_rpc_uri.clone(),
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )
@@ -263,7 +263,7 @@ impl CompactTxStreamer for GrpcClient {
     {
         println!("[TEST] Received call of get_block.");
         Box::pin(async {
-            let zebrad_uri = self.zebrad_uri.clone();
+            let zebrad_uri = self.zebrad_rpc_uri.clone();
             let height: u32 = match request.into_inner().height.try_into() {
                 Ok(height) => height,
                 Err(_) => {
@@ -276,7 +276,7 @@ impl CompactTxStreamer for GrpcClient {
                 Ok(block) => Ok(tonic::Response::new(block)),
                 Err(e) => {
                     let chain_height = JsonRpcConnector::new(
-                        self.zebrad_uri.clone(),
+                        self.zebrad_rpc_uri.clone(),
                         Some("xxxxxx".to_string()),
                         Some("xxxxxx".to_string()),
                     )
@@ -326,7 +326,7 @@ impl CompactTxStreamer for GrpcClient {
     {
         println!("[TEST] Received call of get_block_nullifiers.");
         Box::pin(async {
-            let zebrad_uri = self.zebrad_uri.clone();
+            let zebrad_uri = self.zebrad_rpc_uri.clone();
             let height: u32 = match request.into_inner().height.try_into() {
                 Ok(height) => height,
                 Err(_) => {
@@ -339,7 +339,7 @@ impl CompactTxStreamer for GrpcClient {
                 Ok(block) => Ok(tonic::Response::new(block)),
                 Err(e) => {
                     let chain_height = JsonRpcConnector::new(
-                        self.zebrad_uri.clone(),
+                        self.zebrad_rpc_uri.clone(),
                         Some("xxxxxx".to_string()),
                         Some("xxxxxx".to_string()),
                     )
@@ -396,7 +396,7 @@ impl CompactTxStreamer for GrpcClient {
         Self: 'async_trait,
     {
         println!("[TEST] Received call of get_block_range.");
-        let zebrad_uri = self.zebrad_uri.clone();
+        let zebrad_uri = self.zebrad_rpc_uri.clone();
         Box::pin(async move {
             let blockrange = request.into_inner();
             let mut start: u32 = match blockrange.start {
@@ -436,7 +436,7 @@ impl CompactTxStreamer for GrpcClient {
                 false
             };
             let chain_height = JsonRpcConnector::new(
-                self.zebrad_uri.clone(),
+                self.zebrad_rpc_uri.clone(),
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )
@@ -541,7 +541,7 @@ impl CompactTxStreamer for GrpcClient {
         Self: 'async_trait,
     {
         println!("[TEST] Received call of get_block_range_nullifiers.");
-        let zebrad_uri = self.zebrad_uri.clone();
+        let zebrad_uri = self.zebrad_rpc_uri.clone();
         Box::pin(async move {
             let blockrange = request.into_inner();
             let mut start: u32 = match blockrange.start {
@@ -581,7 +581,7 @@ impl CompactTxStreamer for GrpcClient {
                 false
             };
             let chain_height = JsonRpcConnector::new(
-                self.zebrad_uri.clone(),
+                self.zebrad_rpc_uri.clone(),
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )
@@ -681,7 +681,7 @@ impl CompactTxStreamer for GrpcClient {
                 let reversed_hash = hash.iter().rev().copied().collect::<Vec<u8>>();
                 let hash_hex = hex::encode(reversed_hash);
                 let tx = JsonRpcConnector::new(
-                    self.zebrad_uri.clone(),
+                    self.zebrad_rpc_uri.clone(),
                     Some("xxxxxx".to_string()),
                     Some("xxxxxx".to_string()),
                 )
@@ -733,7 +733,7 @@ impl CompactTxStreamer for GrpcClient {
         Box::pin(async {
             let hex_tx = hex::encode(request.into_inner().data);
             let tx_output = JsonRpcConnector::new(
-                self.zebrad_uri.clone(),
+                self.zebrad_rpc_uri.clone(),
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )
@@ -775,7 +775,7 @@ impl CompactTxStreamer for GrpcClient {
         println!("[TEST] Received call of get_taddress_txids.");
         Box::pin(async move {
             let zebrad_client = JsonRpcConnector::new(
-                self.zebrad_uri.clone(),
+                self.zebrad_rpc_uri.clone(),
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )
@@ -903,7 +903,7 @@ impl CompactTxStreamer for GrpcClient {
         println!("[TEST] Received call of get_taddress_balance.");
         Box::pin(async {
             let zebrad_client = JsonRpcConnector::new(
-                self.zebrad_uri.clone(),
+                self.zebrad_rpc_uri.clone(),
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )
@@ -949,7 +949,7 @@ impl CompactTxStreamer for GrpcClient {
         println!("[TEST] Received call of get_taddress_balance_stream.");
         Box::pin(async {
             let zebrad_client = JsonRpcConnector::new(
-                self.zebrad_uri.clone(),
+                self.zebrad_rpc_uri.clone(),
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )
@@ -1080,9 +1080,9 @@ impl CompactTxStreamer for GrpcClient {
     {
         println!("[TEST] Received call of get_mempool_tx.");
         Box::pin(async {
-            let zebrad_uri = self.zebrad_uri.clone();
+            let zebrad_uri = self.zebrad_rpc_uri.clone();
             let zebrad_client = JsonRpcConnector::new(
-                self.zebrad_uri.clone(),
+                self.zebrad_rpc_uri.clone(),
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )
@@ -1261,9 +1261,9 @@ impl CompactTxStreamer for GrpcClient {
     {
         println!("[TEST] Received call of get_mempool_stream.");
         Box::pin(async {
-            let zebrad_uri = self.zebrad_uri.clone();
+            let zebrad_uri = self.zebrad_rpc_uri.clone();
             let zebrad_client = JsonRpcConnector::new(
-                self.zebrad_uri.clone(),
+                self.zebrad_rpc_uri.clone(),
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )
@@ -1396,7 +1396,7 @@ impl CompactTxStreamer for GrpcClient {
         println!("[TEST] Received call of get_tree_state.");
         Box::pin(async {
             let zebrad_client = JsonRpcConnector::new(
-                self.zebrad_uri.clone(),
+                self.zebrad_rpc_uri.clone(),
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )
@@ -1470,7 +1470,7 @@ impl CompactTxStreamer for GrpcClient {
         println!("[TEST] Received call of get_latest_tree_state.");
         Box::pin(async {
             let zebrad_client = JsonRpcConnector::new(
-                self.zebrad_uri.clone(),
+                self.zebrad_rpc_uri.clone(),
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )
@@ -1529,7 +1529,7 @@ impl CompactTxStreamer for GrpcClient {
     {
         println!("[TEST] Received call of get_subtree_roots.");
         Box::pin(async move {
-            let zebrad_uri  =self.zebrad_uri.clone();
+            let zebrad_uri  =self.zebrad_rpc_uri.clone();
             let zebrad_client = JsonRpcConnector::new(
                 zebrad_uri.clone(),
                 Some("xxxxxx".to_string()),
@@ -1684,7 +1684,7 @@ impl CompactTxStreamer for GrpcClient {
         println!("[TEST] Received call of get_address_utxos.");
         Box::pin(async {
             let zebrad_client = JsonRpcConnector::new(
-                self.zebrad_uri.clone(),
+                self.zebrad_rpc_uri.clone(),
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )
@@ -1772,7 +1772,7 @@ impl CompactTxStreamer for GrpcClient {
         println!("[TEST] Received call of get_address_utxos_stream.");
         Box::pin(async {
             let zebrad_client = JsonRpcConnector::new(
-                self.zebrad_uri.clone(),
+                self.zebrad_rpc_uri.clone(),
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )
@@ -1877,7 +1877,7 @@ impl CompactTxStreamer for GrpcClient {
         // TODO: Add user and password as fields of GrpcClient and use here.
         Box::pin(async {
             let zebrad_client = JsonRpcConnector::new(
-                self.zebrad_uri.clone(),
+                self.zebrad_rpc_uri.clone(),
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )

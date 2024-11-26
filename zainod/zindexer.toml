@@ -6,9 +6,6 @@ tcp_active = true
 # Optional TcpIngestors listen port (use None or specify a port number)
 listen_port = 8137
 
-# LightWalletD listen port [DEPRECATED]
-lightwalletd_port = 9067
-
 # Full node / validator listen port
 zebrad_port = 18232
 

@@ -9,7 +9,6 @@ use std::{
     },
 };
 
-use http::Uri;
 use zaino_fetch::jsonrpc::connector::test_node_and_return_uri;
 use zaino_serve::server::{
     director::{Server, ServerStatus},
@@ -80,11 +79,6 @@ impl Indexer {
         let tcp_ingestor_listen_addr: Option<SocketAddr> = config
             .listen_port
             .map(|port| SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST), port));
-        let lightwalletd_uri = Uri::builder()
-            .scheme("http")
-            .authority(format!("localhost:{}", config.lightwalletd_port))
-            .path_and_query("/")
-            .build()?;
         println!("Checking connection with node..");
         let zebrad_uri = test_node_and_return_uri(
             &config.zebrad_port,
@@ -97,7 +91,6 @@ impl Indexer {
             Server::spawn(
                 config.tcp_active,
                 tcp_ingestor_listen_addr,
-                lightwalletd_uri,
                 zebrad_uri,
                 config.max_queue_size,
                 config.max_worker_pool_size,
