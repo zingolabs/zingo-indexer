@@ -4,14 +4,21 @@
 2) [Lightwalletd](https://github.com/zcash/lightwalletd.git)
 3) [Zcashd, Zcash-Cli](https://github.com/zcash/zcash)
 
-### Wallet to Node Tests
-- To run tests:
-1) Simlink or copy compiled `zcashd`, `zcash-cli`, `zebrad` and `lightwalletd` binaries to `$ zaino/test_binaries/bins/*`
-2) Run `$ cargo nextest run --test integrations`
+### Unit Tests
+- To run Unit tests:
+1) Simlink or copy compiled `zebrad`, zcashd` and `zcash-cli` binaries to `$ zaino/test_binaries/bins/*`
+2) Generate the zcashd chain cache `cargo nextest run generate_zcashd_chain_cache --run-ignored ignored-only`
+3) Generate the zebrad chain cache `cargo nextest run generate_zebrad_large_chain_cache --run-ignored ignored-only`
+4) Run `$ cargo nextest run tests`
+
+### Wallet-to-Validator Tests
+- To run Wallet-to-Validator tests:
+1) Simlink or copy compiled `zcashd`, `zcash-cli` and `zebrad` binaries to `$ zaino/test_binaries/bins/*`
+2) Run `$ cargo nextest run --test wallet_to_validator`
 
 ### Client RPC Tests
 - To run client rpc tests:
-1) Simlink or copy compiled `zebrad`, zcashd` and `zcash-cli` binaries to `$ zaino/test_binaries/bins/*`
+1) Simlink or copy compiled `zebrad`, zcashd`, `zcash-cli` and `lightwalletd` binaries to `$ zaino/test_binaries/bins/*`
 2) Build release binary `cargo build --release` WARNING: these tests do not use the binary built by cargo nextest
 3) Generate the chain cache `cargo nextest run generate_zcashd_chain_cache --run-ignored ignored-only`
 4) Run `cargo nextest run --test client_rpcs`
