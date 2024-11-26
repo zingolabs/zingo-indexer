@@ -212,24 +212,29 @@ impl zcash_local_net::validator::Validator for LocalNet {
         }
     }
 
+    /// Chain_Cache PathBuf must contain validator bin name for this function to function.
     fn load_chain(
-        chain_cache: PathBuf,
-        validator_data_dir: PathBuf,
-        validator_network: zcash_local_net::network::Network,
+    chain_cache: PathBuf,
+    validator_data_dir: PathBuf,
+    validator_network: zcash_local_net::network::Network,
     ) -> PathBuf {
-        match validator_network {
-            zcash_local_net::network::Network::Regtest => {
-                zcash_local_net::validator::Zcashd::load_chain(
-                    chain_cache,
-                    validator_data_dir,
-                    validator_network,
-                )
-            }
-            _ => zcash_local_net::validator::Zebrad::load_chain(
+        if chain_cache.to_string_lossy().contains("zcashd") {
+            zcash_local_net::validator::Zcashd::load_chain(
                 chain_cache,
                 validator_data_dir,
                 validator_network,
-            ),
+            )
+        } else if chain_cache.to_string_lossy().contains("zebrad") {
+            zcash_local_net::validator::Zebrad::load_chain(
+                chain_cache,
+                validator_data_dir,
+                validator_network,
+            )
+        } else {
+            panic!(
+                "Invalid chain_cache path: expected to contain 'zcashd' or 'zebrad', but got: {}",
+                chain_cache.display()
+            );
         }
     }
 }
