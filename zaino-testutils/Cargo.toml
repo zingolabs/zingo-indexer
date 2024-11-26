@@ -16,6 +16,7 @@ zainod = { path = "../zainod" }
 
 # Librustzcash
 zcash_protocol = { workspace = true }
+zcash_client_backend = { workspace = true }
 
 # ZingoLib
 zingolib = { workspace = true }
@@ -30,6 +31,5 @@ http = { workspace = true }
 ctrlc = { workspace = true }
 tempfile = { workspace = true }
 portpicker = { workspace = true }
-tracing-subscriber = { workspace = true }
 once_cell = { workspace = true }
 

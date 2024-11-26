@@ -278,36 +278,49 @@ pub mod zingo_lightclient {
 
 // *** New testutils code below - Code above will be replaced and integration tests rewritten in separate PR ***
 
+/// Path for zcashd binary.
 pub static ZCASHD_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
     let mut workspace_root_path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     workspace_root_path.pop();
     Some(workspace_root_path.join("test_binaries/bins/zcashd"))
 });
+
+/// Path for zcash-cli binary.
 pub static ZCASH_CLI_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
     let mut workspace_root_path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     workspace_root_path.pop();
     Some(workspace_root_path.join("test_binaries/bins/zcash-cli"))
 });
+
+/// Path for zebrad binary.
 pub static ZEBRAD_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
     let mut workspace_root_path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     workspace_root_path.pop();
     Some(workspace_root_path.join("test_binaries/bins/zebrad"))
 });
+
+/// Path for lightwalletd binary.
 pub static LIGHTWALLETD_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
     let mut workspace_root_path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     workspace_root_path.pop();
     Some(workspace_root_path.join("test_binaries/bins/lightwalletd"))
 });
+
+/// Path for zainod binary.
 pub static ZAINOD_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
     let mut workspace_root_path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     workspace_root_path.pop();
     Some(workspace_root_path.join("target/release/zainod"))
 });
+
+/// Path for zcashd chain cache.
 pub static ZCASHD_CHAIN_CACHE_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
     let mut workspace_root_path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     workspace_root_path.pop();
     Some(workspace_root_path.join("integration-tests/chain_cache/client_rpc_tests"))
 });
+
+/// Path for zebrad chain cache.
 pub static ZEBRAD_CHAIN_CACHE_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
     let mut workspace_root_path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     workspace_root_path.pop();
@@ -559,8 +572,8 @@ impl TestManager2 {
         let validator_config = match validator_kind {
             ValidatorKind::Zcashd => {
                 let cfg = zcash_local_net::validator::ZcashdConfig {
-                    zcashd_bin: None,
-                    zcash_cli_bin: None,
+                    zcashd_bin: ZCASHD_BIN.clone(),
+                    zcash_cli_bin: ZCASH_CLI_BIN.clone(),
                     rpc_port: Some(zebrad_rpc_listen_port),
                     activation_heights: zcash_local_net::network::ActivationHeights::default(),
                     miner_address: Some(zingolib::testvectors::REG_O_ADDR_FROM_ABANDONART),
@@ -570,7 +583,7 @@ impl TestManager2 {
             }
             ValidatorKind::Zebrad => {
                 let cfg = zcash_local_net::validator::ZebradConfig {
-                    zebrad_bin: None,
+                    zebrad_bin: ZEBRAD_BIN.clone(),
                     network_listen_port: None,
                     rpc_listen_port: Some(zebrad_rpc_listen_port),
                     activation_heights: zcash_local_net::network::ActivationHeights::default(),
@@ -661,8 +674,6 @@ impl Drop for TestManager2 {
 
 #[cfg(test)]
 mod tests {
-    use zcash_local_net::validator::Validator;
-
     use super::*;
 
     #[tokio::test]
@@ -708,7 +719,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zcashd_generate_blocks() {
-        let mut test_manager = TestManager2::launch("zebrad", None, false, false)
+        let mut test_manager = TestManager2::launch("zcashd", None, false, false)
             .await
             .unwrap();
         assert_eq!(
@@ -746,6 +757,78 @@ mod tests {
             10,
             u32::from(test_manager.local_net.get_chain_height().await)
         );
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn launch_testmanager_zebrad_zaino() {
+        let mut test_manager = TestManager2::launch("zebrad", None, true, false)
+            .await
+            .unwrap();
+        let mut grpc_client =
+            zcash_local_net::client::build_client(zcash_local_net::network::localhost_uri(
+                test_manager
+                    .zaino_grpc_listen_port
+                    .expect("Zaino listen port not available but zaino is active."),
+            ))
+            .await
+            .unwrap();
+        grpc_client
+            .get_lightd_info(tonic::Request::new(
+                zcash_client_backend::proto::service::Empty {},
+            ))
+            .await
+            .unwrap();
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn launch_testmanager_zcashd_zaino() {
+        let mut test_manager = TestManager2::launch("zcashd", None, true, false)
+            .await
+            .unwrap();
+        let mut grpc_client =
+            zcash_local_net::client::build_client(zcash_local_net::network::localhost_uri(
+                test_manager
+                    .zaino_grpc_listen_port
+                    .expect("Zaino listen port is not available but zaino is active."),
+            ))
+            .await
+            .unwrap();
+        grpc_client
+            .get_lightd_info(tonic::Request::new(
+                zcash_client_backend::proto::service::Empty {},
+            ))
+            .await
+            .unwrap();
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn launch_testmanager_zebrad_zaino_clients() {
+        let mut test_manager = TestManager2::launch("zebrad", None, true, true)
+            .await
+            .unwrap();
+        let clients = test_manager
+            .clients
+            .as_ref()
+            .expect("Clients are not initialized");
+        clients.faucet.do_info().await;
+        clients.recipient.do_info().await;
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn launch_testmanager_zcashd_zaino_clients() {
+        let mut test_manager = TestManager2::launch("zcashd", None, true, true)
+            .await
+            .unwrap();
+        let clients = test_manager
+            .clients
+            .as_ref()
+            .expect("Clients are not initialized");
+        clients.faucet.do_info().await;
+        clients.recipient.do_info().await;
         test_manager.close().await;
     }
 }
