@@ -20,6 +20,18 @@ async fn generate_zcashd_chain_cache() {
     .await;
 }
 
+#[ignore = "not a test. generates chain cache for client_rpc tests."]
+#[tokio::test]
+async fn generate_zebrad_large_chain_cache() {
+    tracing_subscriber::fmt().init();
+
+    zcash_local_net::test_fixtures::generate_zebrad_large_chain_cache(
+        ZEBRAD_BIN.clone(),
+        LIGHTWALLETD_BIN.clone(),
+    )
+    .await;
+}
+
 #[tokio::test]
 async fn get_lightd_info() {
     tracing_subscriber::fmt().init();

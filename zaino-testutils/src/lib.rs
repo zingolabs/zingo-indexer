@@ -303,10 +303,15 @@ pub static ZAINOD_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
     workspace_root_path.pop();
     Some(workspace_root_path.join("target/release/zainod"))
 });
-pub static CHAIN_CACHE_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
+pub static ZCASHD_CHAIN_CACHE_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
     let mut workspace_root_path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     workspace_root_path.pop();
     Some(workspace_root_path.join("integration-tests/chain_cache/client_rpc_tests"))
+});
+pub static ZEBRAD_CHAIN_CACHE_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
+    let mut workspace_root_path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    workspace_root_path.pop();
+    Some(workspace_root_path.join("integration-tests/chain_cache/client_rpc_tests_large"))
 });
 
 /// Represents the type of validator to launch.
@@ -721,11 +726,11 @@ mod tests {
     #[tokio::test]
     async fn launch_testmanager_zebrad_with_chain() {
         let mut test_manager =
-            TestManager2::launch("zebrad", CHAIN_CACHE_BIN.clone(), false, false)
+            TestManager2::launch("zebrad", ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
                 .await
                 .unwrap();
         assert_eq!(
-            10,
+            52,
             u32::from(test_manager.local_net.get_chain_height().await)
         );
         test_manager.close().await;
@@ -734,7 +739,7 @@ mod tests {
     #[tokio::test]
     async fn launch_testmanager_zcashd_with_chain() {
         let mut test_manager =
-            TestManager2::launch("zcashd", CHAIN_CACHE_BIN.clone(), false, false)
+            TestManager2::launch("zcashd", ZCASHD_CHAIN_CACHE_BIN.clone(), false, false)
                 .await
                 .unwrap();
         assert_eq!(
