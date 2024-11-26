@@ -21,6 +21,3 @@ tokio = { workspace = true }
 
 # Logging
 tracing-subscriber = { workspace = true }
-
-# Lazy
-once_cell = { workspace = true }

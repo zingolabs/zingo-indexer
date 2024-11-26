@@ -4,36 +4,8 @@
 //!
 //! See `Testing` section of README.md for more details.
 
-use std::path::PathBuf;
-
-use once_cell::sync::Lazy;
+use zaino_testutils::{LIGHTWALLETD_BIN, ZAINOD_BIN, ZCASHD_BIN, ZCASH_CLI_BIN, ZEBRAD_BIN};
 use zcash_local_net::network::Network;
-
-static ZCASHD_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
-    let mut workspace_root_path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    workspace_root_path.pop();
-    Some(workspace_root_path.join("test_binaries/bins/zcashd"))
-});
-static ZCASH_CLI_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
-    let mut workspace_root_path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    workspace_root_path.pop();
-    Some(workspace_root_path.join("test_binaries/bins/zcash-cli"))
-});
-static ZEBRAD_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
-    let mut workspace_root_path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    workspace_root_path.pop();
-    Some(workspace_root_path.join("test_binaries/bins/zebrad"))
-});
-static LIGHTWALLETD_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
-    let mut workspace_root_path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    workspace_root_path.pop();
-    Some(workspace_root_path.join("test_binaries/bins/lightwalletd"))
-});
-static ZAINOD_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
-    let mut workspace_root_path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    workspace_root_path.pop();
-    Some(workspace_root_path.join("target/release/zainod"))
-});
 
 #[ignore = "not a test. generates chain cache for client_rpc tests."]
 #[tokio::test]
