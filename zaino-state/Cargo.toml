@@ -7,6 +7,12 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
+# Zebra
+zebra-chain = { workspace = true }
+zebra-state = { workspace = true }
+zebra-rpc = { workspace = true }
+
+
 # Miscellaneous Workspace
 tokio = { workspace = true, features = ["full"] }
 thiserror = { workspace = true }

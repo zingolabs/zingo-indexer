@@ -33,6 +33,7 @@ zcash_client_backend = { git = "https://github.com/zingolabs/librustzcash.git", 
 
 # Zebra
 zebra-chain = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "4eb285de50848f1a4dcebd0fbe353e4f150fd371" }
+zebra-state = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "4eb285de50848f1a4dcebd0fbe353e4f150fd371" }
 zebra-rpc = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "4eb285de50848f1a4dcebd0fbe353e4f150fd371" }
 
 # Zcash-Local-Net

@@ -13,8 +13,8 @@ use crate::server::{
     error::{IngestorError, QueueError},
     queue::QueueSender,
     request::ZingoIndexerRequest,
-    AtomicStatus, StatusType,
 };
+use zaino_state::status::{AtomicStatus, StatusType};
 
 /// Listens for incoming gRPC requests over HTTP.
 pub(crate) struct TcpIngestor {
@@ -36,7 +36,7 @@ impl TcpIngestor {
         status: AtomicStatus,
         online: Arc<AtomicBool>,
     ) -> Result<Self, IngestorError> {
-        status.store(0);
+        status.store(StatusType::Spawning.into());
         let listener = TcpListener::bind(listen_addr).await?;
         println!("TcpIngestor listening at: {}.", listen_addr);
         Ok(TcpIngestor {
@@ -53,19 +53,19 @@ impl TcpIngestor {
             // NOTE: This interval may need to be changed or removed / moved once scale testing begins.
             let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(50));
             // TODO Check blockcache sync status and wait on server / node if on hold.
-            self.status.store(1);
+            self.status.store(StatusType::Ready.into());
             loop {
                 tokio::select! {
                     _ = interval.tick() => {
                         if self.check_for_shutdown().await {
-                            self.status.store(5);
+                            self.status.store(StatusType::Offline.into());
                             return Ok(());
                         }
                     }
                     incoming = self.ingestor.accept() => {
                         // NOTE: This may need to be removed / moved for scale use.
                         if self.check_for_shutdown().await {
-                            self.status.store(5);
+                            self.status.store(StatusType::Offline.into());
                             return Ok(());
                         }
                         match incoming {
@@ -107,8 +107,8 @@ impl TcpIngestor {
     }
 
     /// Sets the ingestor to close gracefully.
-    pub(crate) async fn _shutdown(&mut self) {
-        self.status.store(4)
+    pub(crate) async fn shutdown(&mut self) {
+        self.status.store(StatusType::Closing.into())
     }
 
     /// Returns the ingestor current status usize.

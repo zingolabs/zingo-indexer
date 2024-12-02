@@ -1,11 +1,10 @@
 //! Holds the server worker implementation.
 
+use http::Uri;
 use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc,
 };
-
-use http::Uri;
 use tonic::transport::Server;
 
 use crate::{
@@ -14,11 +13,10 @@ use crate::{
         error::WorkerError,
         queue::{QueueReceiver, QueueSender},
         request::ZingoIndexerRequest,
-        AtomicStatus,
     },
 };
-
 use zaino_proto::proto::service::compact_tx_streamer_server::CompactTxStreamerServer;
+use zaino_state::status::{AtomicStatus, StatusType};
 
 /// A queue working is the entity that takes requests from the queue and processes them.
 ///
@@ -74,7 +72,7 @@ impl Worker {
             let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(100));
             let svc = CompactTxStreamerServer::new(self.grpc_client.clone());
             // TODO: create tonic server here for use within loop.
-            self.atomic_status.store(1);
+            self.atomic_status.store(StatusType::Ready.into());
             loop {
                 tokio::select! {
                     _ = interval.tick() => {
@@ -85,7 +83,7 @@ impl Worker {
                     incoming = self.queue.listen() => {
                         match incoming {
                             Ok(request) => {
-                                self.atomic_status.store(2);
+                                self.atomic_status.store(StatusType::Busy.into());
                                     match request {
                                         ZingoIndexerRequest::TcpServerRequest(request) => {
                                             Server::builder().add_service(svc.clone())
@@ -100,14 +98,14 @@ impl Worker {
                                     }
                                 // NOTE: This may need to be removed for scale use.
                                 if self.check_for_shutdown().await {
-                                    self.atomic_status.store(5);
+                                    self.atomic_status.store(StatusType::Offline.into());
                                     return Ok(());
                                 } else {
-                                    self.atomic_status.store(1);
+                                    self.atomic_status.store(StatusType::Ready.into());
                                 }
                             }
                             Err(_e) => {
-                                self.atomic_status.store(5);
+                                self.atomic_status.store(StatusType::Offline.into());
                                 eprintln!("Queue closed, worker shutting down.");
                                 // TODO: Handle queue closed error here. (return correct error / undate status to correct err code.)
                                 return Ok(());
@@ -135,7 +133,7 @@ impl Worker {
 
     /// Sets the worker to close gracefully.
     pub(crate) async fn shutdown(&mut self) {
-        self.atomic_status.store(4)
+        self.atomic_status.store(StatusType::Closing.into())
     }
 
     /// Returns the worker's ID.
@@ -166,7 +164,7 @@ impl WorkerPoolStatus {
     pub(crate) fn new(max_workers: u16) -> Self {
         WorkerPoolStatus {
             workers: Arc::new(AtomicUsize::new(0)),
-            statuses: vec![AtomicStatus::new(5); max_workers as usize],
+            statuses: vec![AtomicStatus::new(StatusType::Offline.into()); max_workers as usize],
         }
     }
 

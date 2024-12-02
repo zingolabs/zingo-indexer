@@ -16,6 +16,7 @@ path = "src/lib.rs"
 
 [dependencies]
 zaino-fetch = { path = "../zaino-fetch" }
+zaino-state = { path = "../zaino-state" }
 zaino-serve = { path = "../zaino-serve" }
 
 # Miscellaneous Workspace
