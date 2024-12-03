@@ -16,3 +16,8 @@ zebra-rpc = { workspace = true }
 # Miscellaneous Workspace
 tokio = { workspace = true, features = ["full"] }
 thiserror = { workspace = true }
+tower = { workspace = true, features = ["buffer", "util"] }
+async-trait = { workspace = true }
+
+[build-dependencies]
+whoami = { workspace = true }

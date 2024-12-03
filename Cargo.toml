@@ -69,3 +69,5 @@ tracing-subscriber = "0.3.15"
 url = "2.5"
 which = "4"
 whoami = "1.5"
+tower = { version = "0.4", features = ["buffer", "util"] }
+async-trait = "0.1"
