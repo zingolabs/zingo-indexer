@@ -198,7 +198,7 @@ impl zcash_local_net::validator::Validator for LocalNet {
         }
     }
 
-    fn data_dir(&self) -> &TempDir {
+    fn data_dir(&self) -> &PathBuf {
         match self {
             LocalNet::Zcashd(net) => net.validator().data_dir(),
             LocalNet::Zebrad(net) => net.validator().data_dir(),
@@ -267,6 +267,10 @@ impl Clients {
 pub struct TestManager {
     /// Zcash-local-net.
     pub local_net: LocalNet,
+    /// Data directory for the validator.
+    pub data_dir: PathBuf,
+    /// Network (chain) type:
+    pub network: zcash_local_net::network::Network,
     /// Zebrad/Zcashd JsonRpc listen port.
     pub zebrad_rpc_listen_port: u16,
     /// Zaino Indexer JoinHandle.
@@ -300,6 +304,10 @@ impl TestManager {
                 "Cannot enable clients when zaino is not enabled.",
             ));
         }
+        let data_dir = match chain_cache.clone() {
+            Some(dir) => dir,
+            None => TempDir::new().unwrap().into_path(),
+        };
         let online = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
 
         // Launch LocalNet:
@@ -313,6 +321,7 @@ impl TestManager {
                     activation_heights: zcash_local_net::network::ActivationHeights::default(),
                     miner_address: Some(zingolib::testvectors::REG_O_ADDR_FROM_ABANDONART),
                     chain_cache,
+                    data_dir: Some(data_dir.clone()),
                 };
                 ValidatorConfig::ZcashdConfig(cfg)
             }
@@ -324,6 +333,7 @@ impl TestManager {
                     activation_heights: zcash_local_net::network::ActivationHeights::default(),
                     miner_address: zcash_local_net::validator::ZEBRAD_DEFAULT_MINER,
                     chain_cache,
+                    data_dir: Some(data_dir.clone()),
                     network: zcash_local_net::network::Network::Regtest,
                 };
                 ValidatorConfig::ZebradConfig(cfg)
@@ -378,6 +388,8 @@ impl TestManager {
 
         Ok(Self {
             local_net,
+            data_dir,
+            network: zcash_local_net::network::Network::Regtest,
             zebrad_rpc_listen_port,
             zaino_handle,
             zaino_grpc_listen_port,

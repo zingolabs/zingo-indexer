@@ -32,6 +32,10 @@ pub struct GetBlockchainInfoResponse {
     #[serde(rename = "estimatedheight")]
     pub estimated_height: zebra_chain::block::Height,
 
+    /// Value pool balances
+    #[serde(rename = "valuePools")]
+    pub value_pools: [zebra_rpc::methods::types::ValuePoolBalance; 5],
+
     /// Status of network upgrades
     pub upgrades: indexmap::IndexMap<
         zebra_rpc::methods::ConsensusBranchIdHex,
@@ -40,6 +44,20 @@ pub struct GetBlockchainInfoResponse {
 
     /// Branch IDs of the current and upcoming consensus rules
     pub consensus: zebra_rpc::methods::TipConsensusBranch,
+}
+
+impl From<GetBlockchainInfoResponse> for zebra_rpc::methods::GetBlockChainInfo {
+    fn from(response: GetBlockchainInfoResponse) -> Self {
+        zebra_rpc::methods::GetBlockChainInfo::new(
+            response.chain,
+            response.blocks,
+            response.best_block_hash,
+            response.estimated_height,
+            response.value_pools,
+            response.upgrades,
+            response.consensus,
+        )
+    }
 }
 
 /// The transparent balance of a set of addresses.
