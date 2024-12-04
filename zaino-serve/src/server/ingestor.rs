@@ -107,7 +107,7 @@ impl TcpIngestor {
     }
 
     /// Sets the ingestor to close gracefully.
-    pub(crate) async fn shutdown(&mut self) {
+    pub(crate) fn shutdown(&mut self) {
         self.status.store(StatusType::Closing.into())
     }
 
@@ -123,5 +123,11 @@ impl TcpIngestor {
 
     fn check_online(&self) -> bool {
         self.online.load(Ordering::SeqCst)
+    }
+}
+
+impl Drop for TcpIngestor {
+    fn drop(&mut self) {
+        self.shutdown()
     }
 }

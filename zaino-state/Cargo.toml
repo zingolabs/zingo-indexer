@@ -23,10 +23,15 @@ async-trait = { workspace = true }
 chrono = { workspace = true }
 indexmap = { workspace = true }
 url = { workspace = true }
+hex = { workspace = true, features = ["serde"] }
+jsonrpc-core = { workspace = true }
 
 
 [dev-dependencies]
 zaino-testutils = { path = "../zaino-testutils" }
+
+# Test Utilities
+zcash_local_net = { workspace = true, features = ["test_fixtures"] }
 
 
 [build-dependencies]

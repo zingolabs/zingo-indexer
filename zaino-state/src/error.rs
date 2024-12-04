@@ -11,6 +11,18 @@ pub enum StateServiceError {
     #[error("Join error: {0}")]
     JoinError(#[from] tokio::task::JoinError),
 
+    /// Error from JsonRpcConnector.
+    #[error("JsonRpcConnector error: {0}")]
+    JsonRpcConnectorError(#[from] zaino_fetch::jsonrpc::error::JsonRpcConnectorError),
+
+    /// Serialization error.
+    #[error("Serialization error: {0}")]
+    SerializationError(#[from] zebra_chain::serialization::SerializationError),
+
+    /// RPC error in compatibility with zcashd.
+    #[error("RPC error: {0:?}")]
+    RpcError(#[from] zaino_fetch::jsonrpc::connector::RpcError),
+
     /// A generic boxed error.
     #[error("Generic error: {0}")]
     Generic(#[from] Box<dyn std::error::Error + Send + Sync>),

@@ -7,7 +7,10 @@ use http::Uri;
 use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::{
+    fmt,
+    sync::atomic::{AtomicI32, Ordering},
+};
 
 use crate::jsonrpc::{
     error::JsonRpcConnectorError,
@@ -28,18 +31,30 @@ struct RpcRequest<T> {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct RpcResponse<T> {
-    id: i32,
+    id: i64,
     jsonrpc: Option<String>,
     result: T,
     error: Option<RpcError>,
 }
 
+/// Json RPC Error type.
 #[derive(Serialize, Deserialize, Debug)]
-struct RpcError {
-    code: i32,
-    message: String,
-    data: Option<Value>,
+pub struct RpcError {
+    /// Error Code.
+    pub code: i64,
+    /// Error Message.
+    pub message: String,
+    /// Error Data.
+    pub data: Option<Value>,
 }
+
+impl fmt::Display for RpcError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "RPC Error (code: {}): {}", self.code, self.message)
+    }
+}
+
+impl std::error::Error for RpcError {}
 
 /// JsonRPC Client config data.
 #[derive(Debug)]

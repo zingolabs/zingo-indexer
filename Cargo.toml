@@ -76,3 +76,4 @@ whoami = "1.5"
 tower = { version = "0.4", features = ["buffer", "util"] }
 async-trait = "0.1"
 chrono = "0.4"
+jsonrpc-core = "18.0.0"

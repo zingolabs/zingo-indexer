@@ -25,6 +25,7 @@ pub(crate) struct BuildInfo {
     version: String,
 }
 
+#[allow(dead_code)]
 impl BuildInfo {
     pub(crate) fn commit_hash(&self) -> String {
         self.commit_hash.clone()
@@ -62,14 +63,25 @@ pub(crate) fn get_build_info() -> BuildInfo {
 pub(crate) struct ServiceMetadata {
     build_info: BuildInfo,
     network: Network,
+    zebra_build: String,
+    zebra_subversion: String,
 }
 
 impl ServiceMetadata {
+    #[allow(dead_code)]
     pub(crate) fn build_info(&self) -> BuildInfo {
         self.build_info.clone()
     }
 
     pub(crate) fn network(&self) -> Network {
         self.network.clone()
+    }
+
+    pub(crate) fn zebra_build(&self) -> String {
+        self.zebra_build.clone()
+    }
+
+    pub(crate) fn zebra_subversion(&self) -> String {
+        self.zebra_subversion.clone()
     }
 }
