@@ -11,6 +11,8 @@
 3) Generate the zebrad chain cache `cargo nextest run generate_zebrad_large_chain_cache --run-ignored ignored-only`
 4) Run `$ cargo nextest run tests`
 
+*NOTE: As we currently have several bugs using Zebra's regtest mode for our tests, we are having to rely on loading cached chain-data instead of creating chain data dynamically. Due to this, and the fact that Zebra requires a lock on its chain cache, all unit tests in zaino-state (and any others relying on loading cached chain data) must be run sequentially. This can be done by running tests with the `--no-capture` flag. Eg. `cargo nextest run -p zaino-state --no-capture`.
+
 ### Wallet-to-Validator Tests
 - To run Wallet-to-Validator tests:
 1) Simlink or copy compiled `zcashd`, `zcash-cli` and `zebrad` binaries to `$ zaino/test_binaries/bins/*`

@@ -156,11 +156,11 @@ impl Drop for StateService {
     }
 }
 
-/// Zcash RPC method implementations.
+/// This impl will hold the Zcash RPC method implementations for StateService.
 ///
-/// Doc comments taken from Zebra for consistency.
+/// Doc comments are taken from Zebra for consistency.
 ///
-/// TODO: Update this to be `impl Indexer for StateService` once rpc methods are implemented and tested (or implement separately).
+/// TODO: Update this to be `impl ZcashIndexer for StateService` once rpc methods are implemented and tested (or implement separately).
 impl StateService {
     /// Returns software information from the RPC server, as a [`GetInfo`] JSON struct.
     ///
@@ -611,6 +611,11 @@ impl StateService {
         Ok(response)
     }
 }
+
+/// This impl will hold the Lightwallet RPC method implementations for StateService.
+///
+/// TODO: Update this to be `impl LightWalletIndexer for StateService` once rpc methods are implemented and tested (or implement separately).
+impl StateService {}
 
 #[cfg(test)]
 mod tests {
