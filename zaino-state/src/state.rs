@@ -787,10 +787,27 @@ mod tests {
         let fetch_start = tokio::time::Instant::now();
         let fetch_service_get_blockchain_info = fetch_service.get_blockchain_info().await.unwrap();
         let fetch_service_duration = fetch_start.elapsed();
+        let fetch_service_get_blockchain_info: GetBlockChainInfo =
+            fetch_service_get_blockchain_info.into();
 
+        // Zaino-Fetch does not return value_pools, ingnore this field.
         assert_eq!(
-            state_service_get_blockchain_info,
-            fetch_service_get_blockchain_info.into()
+            (
+                state_service_get_blockchain_info.chain(),
+                state_service_get_blockchain_info.blocks(),
+                state_service_get_blockchain_info.best_block_hash(),
+                state_service_get_blockchain_info.estimated_height(),
+                state_service_get_blockchain_info.upgrades(),
+                state_service_get_blockchain_info.consensus(),
+            ),
+            (
+                fetch_service_get_blockchain_info.chain(),
+                fetch_service_get_blockchain_info.blocks(),
+                fetch_service_get_blockchain_info.best_block_hash(),
+                fetch_service_get_blockchain_info.estimated_height(),
+                fetch_service_get_blockchain_info.upgrades(),
+                fetch_service_get_blockchain_info.consensus(),
+            )
         );
 
         println!("GetBlockChainInfo responses correct. State-Service processing time: {:?} - fetch-Service processing time: {:?}.", state_service_duration, fetch_service_duration);
