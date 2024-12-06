@@ -14,15 +14,22 @@ test_fixtures = []
 zaino-fetch = { path = "../zaino-fetch" }
 zainod = { path = "../zainod" }
 
+# Librustzcash
+zcash_protocol = { workspace = true }
+zcash_client_backend = { workspace = true }
+
 # ZingoLib
 zingolib = { workspace = true }
 
-# Miscellaneous Workspace
+# Test Utilities
+zcash_local_net = { workspace = true, features = ["test_fixtures"] }
+
+# Miscellaneous
 tokio = { workspace = true }
 tonic = { workspace = true }
 http = { workspace = true }
-
-# Miscellaneous Crate
 ctrlc = { workspace = true }
 tempfile = { workspace = true }
 portpicker = { workspace = true }
+once_cell = { workspace = true }
+

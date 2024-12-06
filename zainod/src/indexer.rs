@@ -47,7 +47,7 @@ impl IndexerStatus {
 /// Zingo-Indexer.
 pub struct Indexer {
     /// Indexer configuration data.
-    _config: IndexerConfig,
+    config: IndexerConfig,
     /// GRPC server.
     server: Option<Server>,
     // /// Internal block cache.
@@ -66,50 +66,15 @@ impl Indexer {
         let online = Arc::new(AtomicBool::new(true));
         set_ctrlc(online.clone());
         startup_message();
-        self::Indexer::start_indexer_service(config, online)
-            .await?
-            .await?
-    }
-
-    /// Launches an Indexer service.
-    ///
-    /// Spawns an indexer service in a new task.
-    pub async fn start_indexer_service(
-        config: IndexerConfig,
-        online: Arc<AtomicBool>,
-    ) -> Result<tokio::task::JoinHandle<Result<(), IndexerError>>, IndexerError> {
-        // NOTE: This interval may need to be reduced or removed / moved once scale testing begins.
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(50));
-        println!("Launching Zingdexer!");
-        let mut indexer: Indexer = Indexer::new(config, online.clone()).await?;
-        Ok(tokio::task::spawn(async move {
-            let server_handle = if let Some(server) = indexer.server.take() {
-                Some(server.serve().await)
-            } else {
-                return Err(IndexerError::MiscIndexerError(
-                    "Server Missing! Fatal Error!.".to_string(),
-                ));
-            };
-
-            indexer.status.indexer_status.store(2);
-            loop {
-                indexer.status.load();
-                // indexer.log_status();
-                if indexer.check_for_shutdown() {
-                    indexer.status.indexer_status.store(4);
-                    indexer.shutdown_components(server_handle).await;
-                    indexer.status.indexer_status.store(5);
-                    return Ok(());
-                }
-                interval.tick().await;
-            }
-        }))
+        println!("Launching Zaino..");
+        let indexer: Indexer = Indexer::new(config, online.clone()).await?;
+        indexer.serve().await?.await?
     }
 
     /// Creates a new Indexer.
     ///
     /// Currently only takes an IndexerConfig.
-    async fn new(config: IndexerConfig, online: Arc<AtomicBool>) -> Result<Self, IndexerError> {
+    pub async fn new(config: IndexerConfig, online: Arc<AtomicBool>) -> Result<Self, IndexerError> {
         config.check_config()?;
         let status = IndexerStatus::new(config.max_worker_pool_size);
         let tcp_ingestor_listen_addr: Option<SocketAddr> = config
@@ -144,11 +109,42 @@ impl Indexer {
         );
         println!("Server Ready.");
         Ok(Indexer {
-            _config: config,
+            config,
             server,
             status,
             online,
         })
+    }
+
+    /// Starts Indexer Service and returns its JoinHandle
+    pub async fn serve(
+        mut self,
+    ) -> Result<tokio::task::JoinHandle<Result<(), IndexerError>>, IndexerError> {
+        Ok(tokio::task::spawn(async move {
+            // NOTE: This interval may need to be reduced or removed / moved once scale testing begins.
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(50));
+            let server_handle = if let Some(server) = self.server.take() {
+                Some(server.serve().await)
+            } else {
+                return Err(IndexerError::MiscIndexerError(
+                    "Server Missing! Fatal Error!.".to_string(),
+                ));
+            };
+
+            self.status.indexer_status.store(2);
+            println!("Zaino listening on port {:?}.", self.config.listen_port);
+            loop {
+                self.status.load();
+                // indexer.log_status();
+                if self.check_for_shutdown() {
+                    self.status.indexer_status.store(4);
+                    self.shutdown_components(server_handle).await;
+                    self.status.indexer_status.store(5);
+                    return Ok(());
+                }
+                interval.tick().await;
+            }
+        }))
     }
 
     /// Checks indexers online status and servers internal status for closure signal.

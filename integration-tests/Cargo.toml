@@ -1,6 +1,6 @@
 [package]
 name = "integration-tests"
-description = "Crate containing Zaino 'Wallet-to-Node' tests."
+description = "Crate containing Zaino's integration-tests."
 edition = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -21,6 +21,3 @@ tokio = { workspace = true }
 
 # Logging
 tracing-subscriber = { workspace = true }
-
-# Lazy
-once_cell = { workspace = true }
