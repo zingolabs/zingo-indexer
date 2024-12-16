@@ -9,6 +9,7 @@ repository = { workspace = true }
 
 [dependencies]
 zaino-fetch = { path = "../zaino-fetch" }
+zaino-proto = { path = "../zaino-proto" }
 
 # Zebra
 zebra-chain = { workspace = true }
@@ -25,7 +26,9 @@ indexmap = { workspace = true }
 url = { workspace = true }
 hex = { workspace = true, features = ["serde"] }
 jsonrpc-core = { workspace = true }
-
+tokio-stream = { workspace = true }
+futures = { workspace = true }
+tonic = { workspace = true }
 
 [dev-dependencies]
 zaino-testutils = { path = "../zaino-testutils" }

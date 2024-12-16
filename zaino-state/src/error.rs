@@ -15,13 +15,21 @@ pub enum StateServiceError {
     #[error("JsonRpcConnector error: {0}")]
     JsonRpcConnectorError(#[from] zaino_fetch::jsonrpc::error::JsonRpcConnectorError),
 
+    /// RPC error in compatibility with zcashd.
+    #[error("RPC error: {0:?}")]
+    RpcError(#[from] zaino_fetch::jsonrpc::connector::RpcError),
+
+    /// Tonic gRPC error.
+    #[error("Tonic status error: {0}")]
+    TonicStatusError(#[from] tonic::Status),
+
     /// Serialization error.
     #[error("Serialization error: {0}")]
     SerializationError(#[from] zebra_chain::serialization::SerializationError),
 
-    /// RPC error in compatibility with zcashd.
-    #[error("RPC error: {0:?}")]
-    RpcError(#[from] zaino_fetch::jsonrpc::connector::RpcError),
+    /// Integer conversion error.
+    #[error("Integer conversion error: {0}")]
+    TryFromIntError(#[from] std::num::TryFromIntError),
 
     /// A generic boxed error.
     #[error("Generic error: {0}")]

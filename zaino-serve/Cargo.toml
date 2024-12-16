@@ -24,7 +24,6 @@ thiserror = { workspace = true }
 # Miscellaneous Crate
 prost = { workspace = true }
 hex = { workspace = true, features = ["serde"] }
-tokio-stream = { workspace = true }
 futures = { workspace = true }
 async-stream = { workspace = true }
 crossbeam-channel = { workspace = true }
