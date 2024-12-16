@@ -385,7 +385,7 @@ impl FullBlock {
         let header = Vec::new();
 
         let compact_block = CompactBlock {
-            proto_version: 0,
+            proto_version: 4,
             height: self.height as u64,
             hash: self.hdr.cached_hash.clone(),
             prev_hash: self.hdr.raw_block_header.hash_prev_block.clone(),
