@@ -6,6 +6,9 @@ authors = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
 
+[features]
+state_service = []
+
 [dependencies]
 zaino-proto = { path = "../zaino-proto" }
 zaino-fetch = { path = "../zaino-fetch" }
@@ -13,6 +16,7 @@ zaino-state = { path = "../zaino-state" }
 
 # Zebra
 zebra-chain = { workspace = true }
+zebra-state = { workspace = true }
 zebra-rpc = { workspace = true }
 
 # Miscellaneous Workspace

@@ -57,6 +57,12 @@ pub static ZEBRAD_CHAIN_CACHE_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
     Some(workspace_root_path.join("integration-tests/chain_cache/client_rpc_tests_large"))
 });
 
+/// Path for the Zebra chain cache in the user's home directory.
+pub static ZEBRAD_TESTNET_CACHE_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
+    let home_path = PathBuf::from(std::env::var("HOME").unwrap());
+    Some(home_path.join(".cache/zebra"))
+});
+
 /// Represents the type of validator to launch.
 pub enum ValidatorKind {
     /// Zcashd.
@@ -293,11 +299,13 @@ impl TestManager {
     /// If clients is set to active zingolib lightclients will be created for test use.
     pub async fn launch(
         validator: &str,
+        network: Option<zcash_local_net::network::Network>,
         chain_cache: Option<PathBuf>,
         enable_zaino: bool,
         enable_clients: bool,
     ) -> Result<Self, std::io::Error> {
         let validator_kind = ValidatorKind::from_str(validator).unwrap();
+        let network = network.unwrap_or(zcash_local_net::network::Network::Regtest);
         if enable_clients && !enable_zaino {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
@@ -334,7 +342,7 @@ impl TestManager {
                     miner_address: zcash_local_net::validator::ZEBRAD_DEFAULT_MINER,
                     chain_cache,
                     data_dir: Some(data_dir.clone()),
-                    network: zcash_local_net::network::Network::Regtest,
+                    network,
                 };
                 ValidatorConfig::ZebradConfig(cfg)
             }
@@ -389,7 +397,7 @@ impl TestManager {
         Ok(Self {
             local_net,
             data_dir,
-            network: zcash_local_net::network::Network::Regtest,
+            network,
             zebrad_rpc_listen_port,
             zaino_handle,
             zaino_grpc_listen_port,
@@ -423,7 +431,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zebrad() {
-        let mut test_manager = TestManager::launch("zebrad", None, false, false)
+        let mut test_manager = TestManager::launch("zebrad", None, None, false, false)
             .await
             .unwrap();
         assert_eq!(
@@ -435,7 +443,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zcashd() {
-        let mut test_manager = TestManager::launch("zcashd", None, false, false)
+        let mut test_manager = TestManager::launch("zcashd", None, None, false, false)
             .await
             .unwrap();
         assert_eq!(
@@ -447,7 +455,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zebrad_generate_blocks() {
-        let mut test_manager = TestManager::launch("zebrad", None, false, false)
+        let mut test_manager = TestManager::launch("zebrad", None, None, false, false)
             .await
             .unwrap();
         assert_eq!(
@@ -464,7 +472,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zcashd_generate_blocks() {
-        let mut test_manager = TestManager::launch("zcashd", None, false, false)
+        let mut test_manager = TestManager::launch("zcashd", None, None, false, false)
             .await
             .unwrap();
         assert_eq!(
@@ -482,7 +490,7 @@ mod tests {
     #[tokio::test]
     async fn launch_testmanager_zebrad_with_chain() {
         let mut test_manager =
-            TestManager::launch("zebrad", ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
+            TestManager::launch("zebrad", None, ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
                 .await
                 .unwrap();
         assert_eq!(
@@ -495,7 +503,7 @@ mod tests {
     #[tokio::test]
     async fn launch_testmanager_zcashd_with_chain() {
         let mut test_manager =
-            TestManager::launch("zcashd", ZCASHD_CHAIN_CACHE_BIN.clone(), false, false)
+            TestManager::launch("zcashd", None, ZCASHD_CHAIN_CACHE_BIN.clone(), false, false)
                 .await
                 .unwrap();
         assert_eq!(
@@ -507,7 +515,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zebrad_zaino() {
-        let mut test_manager = TestManager::launch("zebrad", None, true, false)
+        let mut test_manager = TestManager::launch("zebrad", None, None, true, false)
             .await
             .unwrap();
         let mut grpc_client =
@@ -529,7 +537,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zcashd_zaino() {
-        let mut test_manager = TestManager::launch("zcashd", None, true, false)
+        let mut test_manager = TestManager::launch("zcashd", None, None, true, false)
             .await
             .unwrap();
         let mut grpc_client =
@@ -551,7 +559,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zebrad_zaino_clients() {
-        let mut test_manager = TestManager::launch("zebrad", None, true, true)
+        let mut test_manager = TestManager::launch("zebrad", None, None, true, true)
             .await
             .unwrap();
         let clients = test_manager
@@ -565,7 +573,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zcashd_zaino_clients() {
-        let mut test_manager = TestManager::launch("zcashd", None, true, true)
+        let mut test_manager = TestManager::launch("zcashd", None, None, true, true)
             .await
             .unwrap();
         let clients = test_manager
@@ -582,7 +590,7 @@ mod tests {
     /// Even if rewards need 100 confirmations these blocks should not have to be mined at the same time.
     #[tokio::test]
     async fn launch_testmanager_zebrad_zaino_clients_receive_mining_reward() {
-        let mut test_manager = TestManager::launch("zebrad", None, true, true)
+        let mut test_manager = TestManager::launch("zebrad", None, None, true, true)
             .await
             .unwrap();
         let clients = test_manager
@@ -618,7 +626,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zcashd_zaino_clients_receive_mining_reward() {
-        let mut test_manager = TestManager::launch("zcashd", None, true, true)
+        let mut test_manager = TestManager::launch("zcashd", None, None, true, true)
             .await
             .unwrap();
         let clients = test_manager
@@ -642,7 +650,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zebrad_zaino_clients_receive_mining_reward_and_send() {
-        let mut test_manager = TestManager::launch("zebrad", None, true, true)
+        let mut test_manager = TestManager::launch("zebrad", None, None, true, true)
             .await
             .unwrap();
         let clients = test_manager
@@ -699,7 +707,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zcashd_zaino_clients_receive_mining_reward_and_send() {
-        let mut test_manager = TestManager::launch("zcashd", None, true, true)
+        let mut test_manager = TestManager::launch("zcashd", None, None, true, true)
             .await
             .unwrap();
         let clients = test_manager
@@ -736,6 +744,20 @@ mod tests {
             250_000
         );
 
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn launch_testmanager_zebrad_zaino_testnet() {
+        let mut test_manager = TestManager::launch("zebrad", Some(zcash_local_net::network::Network::Testnet), ZEBRAD_TESTNET_CACHE_BIN.clone(), true, true)
+            .await
+            .unwrap();
+        let clients = test_manager
+            .clients
+            .as_ref()
+            .expect("Clients are not initialized");
+        dbg!(clients.faucet.do_info().await);
+        dbg!(clients.recipient.do_info().await);
         test_manager.close().await;
     }
 }

@@ -13,7 +13,7 @@ mod wallet_basic {
     #[tokio::test]
     async fn connect_to_node_get_info() {
         for validator in ["zebrad", "zcashd"] {
-            let mut test_manager = TestManager::launch(validator, None, true, true)
+            let mut test_manager = TestManager::launch(validator, None, None, true, true)
                 .await
                 .unwrap();
             let clients = test_manager
@@ -31,7 +31,7 @@ mod wallet_basic {
     #[tokio::test]
     async fn send_to_orchard() {
         for validator in ["zcashd"] {
-            let mut test_manager = TestManager::launch(validator, None, true, true)
+            let mut test_manager = TestManager::launch(validator, None, None, true, true)
                 .await
                 .unwrap();
             let clients = test_manager
@@ -71,7 +71,7 @@ mod wallet_basic {
     #[tokio::test]
     async fn send_to_sapling() {
         for validator in ["zcashd"] {
-            let mut test_manager = TestManager::launch(validator, None, true, true)
+            let mut test_manager = TestManager::launch(validator, None, None, true, true)
                 .await
                 .unwrap();
             let clients = test_manager
@@ -111,7 +111,7 @@ mod wallet_basic {
     #[tokio::test]
     async fn send_to_transparent() {
         for validator in ["zcashd"] {
-            let mut test_manager = TestManager::launch(validator, None, true, true)
+            let mut test_manager = TestManager::launch(validator, None, None, true, true)
                 .await
                 .unwrap();
             let clients = test_manager
@@ -152,7 +152,7 @@ mod wallet_basic {
     #[tokio::test]
     async fn send_to_all() {
         for validator in ["zcashd"] {
-            let mut test_manager = TestManager::launch(validator, None, true, true)
+            let mut test_manager = TestManager::launch(validator, None, None, true, true)
                 .await
                 .unwrap();
             let clients = test_manager
@@ -232,7 +232,7 @@ mod wallet_basic {
     #[tokio::test]
     async fn shield() {
         for validator in ["zcashd"] {
-            let mut test_manager = TestManager::launch(validator, None, true, true)
+            let mut test_manager = TestManager::launch(validator, None, None, true, true)
                 .await
                 .unwrap();
             let clients = test_manager
@@ -287,7 +287,7 @@ mod wallet_basic {
     #[tokio::test]
     async fn sync_full_batch() {
         for validator in ["zcashd"] {
-            let mut test_manager = TestManager::launch(validator, None, true, true)
+            let mut test_manager = TestManager::launch(validator, None, None, true, true)
                 .await
                 .unwrap();
             let clients = test_manager
@@ -370,7 +370,7 @@ mod wallet_basic {
     #[tokio::test]
     async fn monitor_unverified_mempool() {
         for validator in ["zcashd"] {
-            let mut test_manager = TestManager::launch(validator, None, true, true)
+            let mut test_manager = TestManager::launch(validator, None, None, true, true)
                 .await
                 .unwrap();
             let clients = test_manager

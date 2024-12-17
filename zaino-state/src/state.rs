@@ -1027,12 +1027,12 @@ mod tests {
     use super::*;
     use futures::stream::StreamExt;
     use zaino_proto::proto::service::{compact_tx_streamer_server::CompactTxStreamer, BlockId};
-    use zaino_testutils::{TestManager, ZEBRAD_CHAIN_CACHE_BIN};
+    use zaino_testutils::{TestManager, ZEBRAD_CHAIN_CACHE_BIN, ZEBRAD_TESTNET_CACHE_BIN};
     use zebra_chain::parameters::Network;
 
     #[tokio::test]
-    async fn launch_state_service_no_cache() {
-        let mut test_manager = TestManager::launch("zebrad", None, false, false)
+    async fn launch_state_regtest_service_no_cache() {
+        let mut test_manager = TestManager::launch("zebrad", None, None, false, false)
             .await
             .unwrap();
 
@@ -1066,9 +1066,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn launch_state_service_with_cache() {
+    async fn launch_state_regtest_service_with_cache() {
         let mut test_manager =
-            TestManager::launch("zebrad", ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
+            TestManager::launch("zebrad", None, ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
                 .await
                 .unwrap();
 
@@ -1102,9 +1102,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn state_service_get_info() {
+    async fn state_service_regtest_get_info() {
         let mut test_manager =
-            TestManager::launch("zebrad", ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
+            TestManager::launch("zebrad", None, ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
                 .await
                 .unwrap();
 
@@ -1159,9 +1159,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn state_service_get_blockchain_info() {
+    async fn state_service_regtest_get_blockchain_info() {
         let mut test_manager =
-            TestManager::launch("zebrad", ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
+            TestManager::launch("zebrad", None, ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
                 .await
                 .unwrap();
 
@@ -1236,9 +1236,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn state_service_get_block_raw() {
+    async fn state_service_regtest_get_block_raw() {
         let mut test_manager =
-            TestManager::launch("zebrad", ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
+            TestManager::launch("zebrad", None, ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
                 .await
                 .unwrap();
 
@@ -1302,9 +1302,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn state_service_get_block_object() {
+    async fn state_service_regtest_get_block_object() {
         let mut test_manager =
-            TestManager::launch("zebrad", ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
+            TestManager::launch("zebrad", None, ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
                 .await
                 .unwrap();
 
@@ -1398,9 +1398,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn state_service_get_block_compact() {
+    async fn state_service_regtest_get_block_compact() {
         let mut test_manager =
-            TestManager::launch("zebrad", ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
+            TestManager::launch("zebrad", None, ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
                 .await
                 .unwrap();
         let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
@@ -1439,10 +1439,14 @@ mod tests {
         let state_service_duration = state_start.elapsed();
 
         let fetch_start = tokio::time::Instant::now();
-        let fetch_service_get_compact_block =
-            zaino_fetch::chain::block::get_block_from_node(&zebra_uri, &1)
-                .await
-                .unwrap();
+        let fetch_service_get_compact_block = zaino_fetch::chain::block::get_block_from_node(
+            &zebra_uri,
+            &1,
+            Some("xxxxxx".to_string()),
+            Some("xxxxxx".to_string()),
+        )
+        .await
+        .unwrap();
         let fetch_service_duration = fetch_start.elapsed();
 
         assert_eq!(
@@ -1450,15 +1454,15 @@ mod tests {
             fetch_service_get_compact_block,
         );
 
-        println!("GetBlock(raw) responses correct. State-Service processing time: {:?} - fetch-Service processing time: {:?}.", state_service_duration, fetch_service_duration);
+        println!("GetCompactBlock responses correct. State-Service processing time: {:?} - fetch-Service processing time: {:?}.", state_service_duration, fetch_service_duration);
 
         test_manager.close().await;
     }
 
     #[tokio::test]
-    async fn state_service_get_block_range() {
+    async fn state_service_regtest_get_block_range() {
         let mut test_manager =
-            TestManager::launch("zebrad", ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
+            TestManager::launch("zebrad", None, ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
                 .await
                 .unwrap();
         let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
@@ -1530,6 +1534,328 @@ mod tests {
         assert_eq!(state_blocks, fetch_blocks);
 
         println!("GetBlockRange responses correct. State-Service processing time: {:?} - fetch-Service processing time: {:?}.", state_service_duration, fetch_service_duration);
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn state_service_testnet_get_block_object() {
+        let mut test_manager = TestManager::launch(
+            "zebrad",
+            Some(zcash_local_net::network::Network::Testnet),
+            ZEBRAD_TESTNET_CACHE_BIN.clone(),
+            false,
+            false,
+        )
+        .await
+        .unwrap();
+
+        let state_service = StateService::spawn(StateServiceConfig::new(
+            zebra_state::Config {
+                cache_dir: test_manager.data_dir.clone(),
+                ephemeral: false,
+                delete_old_database: true,
+                debug_stop_at_height: None,
+                debug_validity_check_interval: None,
+            },
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_default_testnet(),
+        ))
+        .await
+        .unwrap();
+        let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new(
+            url::Url::parse(&format!(
+                "http://127.0.0.1:{}",
+                test_manager.zebrad_rpc_listen_port
+            ))
+            .expect("Failed to construct URL")
+            .as_str()
+            .try_into()
+            .expect("Failed to convert URL to URI"),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let state_start = tokio::time::Instant::now();
+        let state_service_get_block = state_service
+            .get_block("3000000".to_string(), Some(1))
+            .await
+            .unwrap();
+        let state_service_duration = state_start.elapsed();
+        dbg!(state_service_get_block.clone());
+
+        let fetch_start = tokio::time::Instant::now();
+        let fetch_service_get_blockchain_info = fetch_service
+            .get_block("3000000".to_string(), Some(1))
+            .await
+            .unwrap();
+        let fetch_service_duration = fetch_start.elapsed();
+
+        // Zaino-fetch only returns fields that are required by the lightwallet services. Check those fields match and ignore the others.
+        match (
+            state_service_get_block,
+            fetch_service_get_blockchain_info.into(),
+        ) {
+            (
+                zebra_rpc::methods::GetBlock::Object {
+                    hash: state_hash,
+                    confirmations: state_confirmations,
+                    height: state_height,
+                    time: state_time,
+                    tx: state_tx,
+                    trees: state_trees,
+                    ..
+                },
+                zebra_rpc::methods::GetBlock::Object {
+                    hash: fetch_hash,
+                    confirmations: fetch_confirmations,
+                    height: fetch_height,
+                    time: fetch_time,
+                    tx: fetch_tx,
+                    trees: fetch_trees,
+                    ..
+                },
+            ) => {
+                assert_eq!(state_hash, fetch_hash);
+                assert_eq!(state_confirmations, fetch_confirmations);
+                assert_eq!(state_height, fetch_height);
+                assert_eq!(state_time, fetch_time);
+                assert_eq!(state_tx, fetch_tx);
+                assert_eq!(state_trees, fetch_trees);
+            }
+            _ => panic!("Mismatched variants or unexpected types in block response"),
+        }
+
+        println!("GetBlock(object) responses correct. State-Service processing time: {:?} - fetch-Service processing time: {:?}.", state_service_duration, fetch_service_duration);
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn state_service_testnet_get_block_compact() {
+        let mut test_manager = TestManager::launch(
+            "zebrad",
+            Some(zcash_local_net::network::Network::Testnet),
+            ZEBRAD_TESTNET_CACHE_BIN.clone(),
+            false,
+            false,
+        )
+        .await
+        .unwrap();
+        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
+            .parse::<http::Uri>()
+            .expect("Failed to convert URL to URI");
+
+        let state_service = StateService::spawn(StateServiceConfig::new(
+            zebra_state::Config {
+                cache_dir: test_manager.data_dir.clone(),
+                ephemeral: false,
+                delete_old_database: true,
+                debug_stop_at_height: None,
+                debug_validity_check_interval: None,
+            },
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_default_testnet(),
+        ))
+        .await
+        .unwrap();
+
+        let state_start = tokio::time::Instant::now();
+        let state_service_get_compact_block = StateService::get_compact_block(
+            &state_service.read_state_service,
+            "135000".to_string(),
+            &state_service.config.network,
+        )
+        .await
+        .unwrap();
+        let state_service_duration = state_start.elapsed();
+
+        let fetch_start = tokio::time::Instant::now();
+        let fetch_service_get_compact_block =
+            zaino_fetch::chain::block::get_block_from_node(&zebra_uri, &135000, None, None)
+                .await
+                .unwrap();
+        let fetch_service_duration = fetch_start.elapsed();
+
+        dbg!(state_service_get_compact_block.clone());
+        dbg!(fetch_service_get_compact_block.clone());
+
+        assert_eq!(
+            state_service_get_compact_block,
+            fetch_service_get_compact_block,
+        );
+
+        println!("GetCompactBlock responses correct. State-Service processing time: {:?} - fetch-Service processing time: {:?}.", state_service_duration, fetch_service_duration);
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn state_service_testnet_get_block_range() {
+        let mut test_manager = TestManager::launch(
+            "zebrad",
+            Some(zcash_local_net::network::Network::Testnet),
+            ZEBRAD_TESTNET_CACHE_BIN.clone(),
+            false,
+            false,
+        )
+        .await
+        .unwrap();
+        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
+            .parse::<http::Uri>()
+            .expect("Failed to convert URL to URI");
+
+        let block_range = BlockRange {
+            start: Some(BlockId {
+                height: 3135003,
+                hash: Vec::new(),
+            }),
+            end: Some(BlockId {
+                height: 3134993,
+                hash: Vec::new(),
+            }),
+        };
+        let state_service = StateService::spawn(StateServiceConfig::new(
+            zebra_state::Config {
+                cache_dir: test_manager.data_dir.clone(),
+                ephemeral: false,
+                delete_old_database: true,
+                debug_stop_at_height: None,
+                debug_validity_check_interval: None,
+            },
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_default_testnet(),
+        ))
+        .await
+        .unwrap();
+        let grpc_service = zaino_serve::rpc::GrpcClient {
+            zebrad_rpc_uri: zebra_uri,
+            online: test_manager.online.clone(),
+        };
+
+        let state_start = tokio::time::Instant::now();
+        let state_service_stream = state_service
+            .get_block_range(block_range.clone())
+            .await
+            .unwrap();
+        let state_service_compact_blocks: Vec<_> = state_service_stream.collect().await;
+        let state_service_duration = state_start.elapsed();
+
+        let fetch_start = tokio::time::Instant::now();
+        let fetch_service_stream = grpc_service
+            .get_block_range(tonic::Request::new(block_range))
+            .await
+            .unwrap()
+            .into_inner();
+        let fetch_service_compact_blocks: Vec<_> = fetch_service_stream.collect().await;
+        let fetch_service_duration = fetch_start.elapsed();
+
+        // Extract only the successful `CompactBlock` results
+        let state_blocks: Vec<_> = state_service_compact_blocks
+            .into_iter()
+            .filter_map(|result| result.ok())
+            .collect();
+        println!("StateService blocks: {:?}", state_blocks);
+        let fetch_blocks: Vec<_> = fetch_service_compact_blocks
+            .into_iter()
+            .filter_map(|result| result.ok())
+            .collect();
+        println!("FetchService Blocks: {:?}", fetch_blocks);
+
+        assert_eq!(state_blocks, fetch_blocks);
+
+        println!("GetBlockRange responses correct. State-Service processing time: {:?} - fetch-Service processing time: {:?}.", state_service_duration, fetch_service_duration);
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn state_service_testnet_get_block_range_large() {
+        let mut test_manager = TestManager::launch(
+            "zebrad",
+            Some(zcash_local_net::network::Network::Testnet),
+            ZEBRAD_TESTNET_CACHE_BIN.clone(),
+            false,
+            false,
+        )
+        .await
+        .unwrap();
+
+        let block_range = BlockRange {
+            start: Some(BlockId {
+                height: 2000000,
+                hash: Vec::new(),
+            }),
+            end: Some(BlockId {
+                height: 3000000,
+                hash: Vec::new(),
+            }),
+        };
+
+        let state_service = StateService::spawn(StateServiceConfig::new(
+            zebra_state::Config {
+                cache_dir: test_manager.data_dir.clone(),
+                ephemeral: false,
+                delete_old_database: true,
+                debug_stop_at_height: None,
+                debug_validity_check_interval: None,
+            },
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_default_testnet(),
+        ))
+        .await
+        .unwrap();
+
+        let num_blocks =
+            block_range.clone().end.unwrap().height - block_range.clone().start.unwrap().height;
+        println!("Fetching {} blocks in range: {:?}", num_blocks, block_range);
+
+        let state_start = tokio::time::Instant::now();
+        let state_service_stream = state_service
+            .get_block_range(block_range.clone())
+            .await
+            .unwrap();
+        let state_service_compact_blocks: Vec<_> = state_service_stream.collect().await;
+        let state_service_duration = state_start.elapsed();
+
+        let state_blocks: Vec<_> = state_service_compact_blocks
+            .into_iter()
+            .filter_map(|result| result.ok())
+            .collect();
+
+        println!("First block in range: {:?}", state_blocks.first());
+        println!("Last block in range: {:?}", state_blocks.last());
+        println!("GetBlockRange response received. State-Service fetch 1,000,000 blocks in processing time: {:?}.", state_service_duration);
 
         test_manager.close().await;
     }

@@ -5543,6 +5543,7 @@ dependencies = [
  "zaino-state",
  "zebra-chain 1.0.0-beta.42 (git+https://github.com/idky137/zebra.git?branch=add_public_func_for_zaino_pt2)",
  "zebra-rpc 1.0.0-beta.42 (git+https://github.com/idky137/zebra.git?branch=add_public_func_for_zaino_pt2)",
+ "zebra-state 1.0.0-beta.42 (git+https://github.com/idky137/zebra.git?branch=add_public_func_for_zaino_pt2)",
 ]
 
 [[package]]
