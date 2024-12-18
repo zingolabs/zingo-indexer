@@ -593,14 +593,6 @@ mod tests {
         clients.faucet.do_sync(true).await.unwrap();
         dbg!(clients.faucet.do_balance().await);
 
-        test_manager.local_net.generate_blocks(99).await.unwrap();
-        clients.faucet.do_sync(true).await.unwrap();
-        dbg!(clients.faucet.do_balance().await);
-
-        test_manager.local_net.generate_blocks(99).await.unwrap();
-        clients.faucet.do_sync(true).await.unwrap();
-        dbg!(clients.faucet.do_balance().await);
-
         test_manager.local_net.generate_blocks(100).await.unwrap();
         clients.faucet.do_sync(true).await.unwrap();
         dbg!(clients.faucet.do_balance().await);
@@ -662,7 +654,6 @@ mod tests {
 
         // *Send all transparent funds to own orchard address.
         clients.faucet.quick_shield().await.unwrap();
-
         test_manager.local_net.generate_blocks(1).await.unwrap();
         clients.faucet.do_sync(true).await.unwrap();
         dbg!(clients.faucet.do_balance().await);
