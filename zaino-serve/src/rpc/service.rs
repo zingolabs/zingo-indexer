@@ -223,7 +223,7 @@ impl CompactTxStreamer for GrpcClient {
     /// TODO: This implementation is slow. An internal block cache should be implemented that this rpc, along with the get_block rpc, can rely on.
     ///       - add get_block function that queries the block cache for block and calls get_block_from_node to fetch block if not present.
     ///       - use chain height held in internal state to validate block height being requested.
-    #[cfg(not(feature = "state_service"))]
+    // #[cfg(not(feature = "state_service"))]
     fn get_block_range<'life0, 'async_trait>(
         &'life0 self,
         request: tonic::Request<BlockRange>,
@@ -365,83 +365,83 @@ impl CompactTxStreamer for GrpcClient {
             Ok(tonic::Response::new(stream_boxed))
         })
     }
-    /// Return a list of consecutive compact blocks.
-    ///
-    /// TODO: This implementation is slow. An internal block cache should be implemented that this rpc, along with the get_block rpc, can rely on.
-    ///       - add get_block function that queries the block cache for block and calls get_block_from_node to fetch block if not present.
-    ///       - use chain height held in internal state to validate block height being requested.
-    #[cfg(feature = "state_service")]
-    fn get_block_range<'life0, 'async_trait>(
-        &'life0 self,
-        request: tonic::Request<BlockRange>,
-    ) -> core::pin::Pin<
-        Box<
-            dyn core::future::Future<
-                    Output = std::result::Result<
-                        tonic::Response<Self::GetBlockRangeStream>,
-                        tonic::Status,
-                    >,
-                > + core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        println!("[TEST] Received call of get_block_range.");
-        let blockrange = request.into_inner();
-        let zebrad_addr: std::net::SocketAddr = match self
-            .zebrad_rpc_uri
-            .clone()
-            .authority()
-            .and_then(|auth| auth.as_str().parse().ok())
-        {
-            Some(addr) => addr,
-            None => {
-                eprintln!("Invalid zebrad_uri, missing SocketAddr.");
-                return Box::pin(async { Err(tonic::Status::internal("Invalid zebrad_uri")) });
-            }
-        };
-        Box::pin(async move {
-            let state_service = match zaino_state::state::StateService::spawn(zaino_state::config::StateServiceConfig::new(
-                zebra_state::Config {
-                    cache_dir: std::env::var("HOME")
-                    .map(|home| std::path::PathBuf::from(home).join(".cache/zebra"))
-                    .unwrap_or_else(|_| std::path::PathBuf::from("/tmp/zebra-cache")),
-                    ephemeral: false,
-                    delete_old_database: true,
-                    debug_stop_at_height: None,
-                    debug_validity_check_interval: None,
-                },
-                zebrad_addr,
-                None,
-                None,
-                None,
-                None,
-                zebra_chain::parameters::Network::new_default_testnet(),
-            ))
-            .await {
-                Ok(service) => service,
-                Err(e) => {
-                    eprintln!("Failed to spawn StateService: {:?}", e);
-                    return Err(tonic::Status::internal("Failed to initialize StateService"));
-                }
-            };
-            match state_service.get_block_range(blockrange).await {
-                Ok(compact_block_stream) => {
-                    let stream_boxed = Box::pin(compact_block_stream);
-                    Ok(tonic::Response::new(stream_boxed))
-                }
-                Err(e) => {
-                    Err(match e {
-                        zaino_state::error::StateServiceError::TonicStatusError(status) => status,
-                        other => tonic::Status::internal(other.to_string()),
-                    })
-                }
-            }
-        })
-    }
+    // /// Return a list of consecutive compact blocks.
+    // ///
+    // /// TODO: This implementation is slow. An internal block cache should be implemented that this rpc, along with the get_block rpc, can rely on.
+    // ///       - add get_block function that queries the block cache for block and calls get_block_from_node to fetch block if not present.
+    // ///       - use chain height held in internal state to validate block height being requested.
+    // #[cfg(feature = "state_service")]
+    // fn get_block_range<'life0, 'async_trait>(
+    //     &'life0 self,
+    //     request: tonic::Request<BlockRange>,
+    // ) -> core::pin::Pin<
+    //     Box<
+    //         dyn core::future::Future<
+    //                 Output = std::result::Result<
+    //                     tonic::Response<Self::GetBlockRangeStream>,
+    //                     tonic::Status,
+    //                 >,
+    //             > + core::marker::Send
+    //             + 'async_trait,
+    //     >,
+    // >
+    // where
+    //     'life0: 'async_trait,
+    //     Self: 'async_trait,
+    // {
+    //     println!("[TEST] Received call of get_block_range.");
+    //     let blockrange = request.into_inner();
+    //     let zebrad_addr: std::net::SocketAddr = match self
+    //         .zebrad_rpc_uri
+    //         .clone()
+    //         .authority()
+    //         .and_then(|auth| auth.as_str().parse().ok())
+    //     {
+    //         Some(addr) => addr,
+    //         None => {
+    //             eprintln!("Invalid zebrad_uri, missing SocketAddr.");
+    //             return Box::pin(async { Err(tonic::Status::internal("Invalid zebrad_uri")) });
+    //         }
+    //     };
+    //     Box::pin(async move {
+    //         let state_service = match zaino_state::state::StateService::spawn(zaino_state::config::StateServiceConfig::new(
+    //             zebra_state::Config {
+    //                 cache_dir: std::env::var("HOME")
+    //                 .map(|home| std::path::PathBuf::from(home).join(".cache/zebra"))
+    //                 .unwrap_or_else(|_| std::path::PathBuf::from("/tmp/zebra-cache")),
+    //                 ephemeral: false,
+    //                 delete_old_database: true,
+    //                 debug_stop_at_height: None,
+    //                 debug_validity_check_interval: None,
+    //             },
+    //             zebrad_addr,
+    //             None,
+    //             None,
+    //             None,
+    //             None,
+    //             zebra_chain::parameters::Network::new_default_testnet(),
+    //         ))
+    //         .await {
+    //             Ok(service) => service,
+    //             Err(e) => {
+    //                 eprintln!("Failed to spawn StateService: {:?}", e);
+    //                 return Err(tonic::Status::internal("Failed to initialize StateService"));
+    //             }
+    //         };
+    //         match state_service.get_block_range(blockrange).await {
+    //             Ok(compact_block_stream) => {
+    //                 let stream_boxed = Box::pin(compact_block_stream);
+    //                 Ok(tonic::Response::new(stream_boxed))
+    //             }
+    //             Err(e) => {
+    //                 Err(match e {
+    //                     zaino_state::error::StateServiceError::TonicStatusError(status) => status,
+    //                     other => tonic::Status::internal(other.to_string()),
+    //                 })
+    //             }
+    //         }
+    //     })
+    // }
 
 
     /// Server streaming response type for the GetBlockRangeNullifiers method.
