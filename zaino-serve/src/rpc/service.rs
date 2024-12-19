@@ -18,10 +18,10 @@ use zaino_fetch::{
 use zaino_proto::proto::{
     compact_formats::{CompactBlock, CompactTx},
     service::{
-        compact_tx_streamer_server::CompactTxStreamer, Address, AddressList, Balance, BlockId, 
-        BlockRange, ChainSpec, Duration, Empty, Exclude, GetAddressUtxosArg, GetAddressUtxosReply, 
-        GetAddressUtxosReplyList, GetSubtreeRootsArg, LightdInfo, PingResponse, RawTransaction, 
-        SendResponse, ShieldedProtocol, SubtreeRoot, TransparentAddressBlockFilter, TreeState, 
+        compact_tx_streamer_server::CompactTxStreamer, Address, AddressList, Balance, BlockId,
+        BlockRange, ChainSpec, Duration, Empty, Exclude, GetAddressUtxosArg, GetAddressUtxosReply,
+        GetAddressUtxosReplyList, GetSubtreeRootsArg, LightdInfo, PingResponse, RawTransaction,
+        SendResponse, ShieldedProtocol, SubtreeRoot, TransparentAddressBlockFilter, TreeState,
         TxFilter
     },
 };
@@ -473,7 +473,7 @@ impl CompactTxStreamer for GrpcClient {
                                             height, chain_height,
                                         ))))
                                         .await
-                                        
+
                                     {
                                         Ok(_) => break,
                                         Err(e) => {
@@ -617,7 +617,7 @@ impl CompactTxStreamer for GrpcClient {
                                             height, chain_height,
                                         ))))
                                         .await
-                                        
+
                                     {
                                         Ok(_) => break,
                                         Err(e) => {
@@ -1588,7 +1588,7 @@ impl CompactTxStreamer for GrpcClient {
                                     Ok(hash) => hash,
                                     Err(e) => {
                                         match channel_tx
-                                            .send(Err(tonic::Status::unknown(format!("Error: Failed to hex decode root hash: {}.", 
+                                            .send(Err(tonic::Status::unknown(format!("Error: Failed to hex decode root hash: {}.",
                                                 e
                                             ))))
                                             .await
@@ -1606,7 +1606,7 @@ impl CompactTxStreamer for GrpcClient {
                                         root_hash: checked_root_hash,
                                         completing_block_hash: hash.0.bytes_in_display_order().to_vec(),
                                         completing_block_height: checked_height,
-                                    })).await.is_err() 
+                                    })).await.is_err()
                                 {
                                     break;
                                 }
@@ -1625,8 +1625,8 @@ impl CompactTxStreamer for GrpcClient {
                             Err(e) => {
                                 // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                                 if channel_tx
-                                    .send(Err(tonic::Status::unknown(format!("Error: Could not fetch block at height [{}] from node: {}", 
-                                        subtree.end_height.0, 
+                                    .send(Err(tonic::Status::unknown(format!("Error: Could not fetch block at height [{}] from node: {}",
+                                        subtree.end_height.0,
                                         e
                                     ))))
                                     .await

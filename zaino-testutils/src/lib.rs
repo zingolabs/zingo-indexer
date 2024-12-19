@@ -596,12 +596,12 @@ mod tests {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         clients.faucet.do_sync(true).await.unwrap();
         dbg!(clients.faucet.do_balance().await);
-        
+
         assert!(
                 clients.faucet.do_balance().await.orchard_balance.unwrap() > 0
                     || clients.faucet.do_balance().await.transparent_balance.unwrap() > 0,
                 "No mining reward recieved from Zebrad. Faucet Orchard Balance: {:}. Faucet Transparent Balance: {:}.",
-                clients.faucet.do_balance().await.orchard_balance.unwrap(), 
+                clients.faucet.do_balance().await.orchard_balance.unwrap(),
                 clients.faucet.do_balance().await.transparent_balance.unwrap()
         );
 
@@ -625,7 +625,7 @@ mod tests {
                 clients.faucet.do_balance().await.orchard_balance.unwrap() > 0
                     || clients.faucet.do_balance().await.transparent_balance.unwrap() > 0,
                 "No mining reward recieved from Zcashd. Faucet Orchard Balance: {:}. Faucet Transparent Balance: {:}.",
-                clients.faucet.do_balance().await.orchard_balance.unwrap(), 
+                clients.faucet.do_balance().await.orchard_balance.unwrap(),
                 clients.faucet.do_balance().await.transparent_balance.unwrap()
             );
 
@@ -661,7 +661,7 @@ mod tests {
         assert!(
             clients.faucet.do_balance().await.orchard_balance.unwrap() > 0,
             "No funds recieved from shield. Faucet Orchard Balance: {:}. Faucet Transparent Balance: {:}.",
-            clients.faucet.do_balance().await.orchard_balance.unwrap(), 
+            clients.faucet.do_balance().await.orchard_balance.unwrap(),
             clients.faucet.do_balance().await.transparent_balance.unwrap()
         );
 
@@ -681,7 +681,7 @@ mod tests {
         dbg!(clients.recipient.do_balance().await);
 
         assert_eq!(
-            clients.recipient.do_balance().await.verified_sapling_balance.unwrap(), 
+            clients.recipient.do_balance().await.verified_sapling_balance.unwrap(),
             250_000
         );
 
@@ -723,7 +723,7 @@ mod tests {
         dbg!(clients.recipient.do_balance().await);
 
         assert_eq!(
-            clients.recipient.do_balance().await.verified_sapling_balance.unwrap(), 
+            clients.recipient.do_balance().await.verified_sapling_balance.unwrap(),
             250_000
         );
 
