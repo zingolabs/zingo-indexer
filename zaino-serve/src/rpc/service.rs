@@ -782,6 +782,7 @@ impl CompactTxStreamer for GrpcClient {
             .await?;
             let chain_height = zebrad_client.get_blockchain_info().await?.blocks.0;
             let block_filter = request.into_inner();
+            dbg!(block_filter.clone());
             let (start, end) =
                 match block_filter.range {
                     Some(range) => match (range.start, range.end) {
@@ -821,6 +822,7 @@ impl CompactTxStreamer for GrpcClient {
                 .get_address_txids(vec![block_filter.address], start, end)
                 .await
                 .map_err(|e| e.to_grpc_status())?;
+            dbg!(txids.clone());
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
                 // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
@@ -1409,7 +1411,7 @@ impl CompactTxStreamer for GrpcClient {
             let hash_or_height = if block_id.height != 0 {
                 match u32::try_from(block_id.height) {
                     Ok(height) => {
-                        if height >= chain_info.blocks.0 {
+                        if height > chain_info.blocks.0 {
                             return Err(tonic::Status::out_of_range(
                             format!(
                                 "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",

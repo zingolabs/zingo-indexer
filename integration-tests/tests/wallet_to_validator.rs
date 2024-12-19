@@ -186,6 +186,8 @@ mod wallet_basic {
         .unwrap();
 
         test_manager.local_net.generate_blocks(1).await.unwrap();
+        test_manager.local_net.generate_blocks(99).await.unwrap();
+
         clients.recipient.do_sync(true).await.unwrap();
 
         assert_eq!(
@@ -269,7 +271,7 @@ mod wallet_basic {
         .await
         .unwrap();
 
-        test_manager.local_net.generate_blocks(1).await.unwrap();
+        test_manager.local_net.generate_blocks(100).await.unwrap();
         clients.recipient.do_sync(true).await.unwrap();
 
         assert_eq!(
@@ -343,7 +345,7 @@ mod wallet_basic {
         .await
         .unwrap();
 
-        test_manager.local_net.generate_blocks(1).await.unwrap();
+        test_manager.local_net.generate_blocks(100).await.unwrap();
         clients.recipient.do_sync(true).await.unwrap();
 
         assert_eq!(
@@ -432,6 +434,8 @@ mod wallet_basic {
         let _ = zingolib::lightclient::LightClient::start_mempool_monitor(recipient_client.clone())
             .unwrap();
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+        test_manager.local_net.print_stdout();
 
         assert_eq!(
             recipient_client

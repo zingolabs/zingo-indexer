@@ -212,6 +212,14 @@ impl zcash_local_net::validator::Validator for LocalNet {
         }
     }
 
+    /// Prints the stdout log.
+    fn print_stdout(&self) {
+        match self {
+            LocalNet::Zcashd(net) => net.validator().print_stdout(),
+            LocalNet::Zebrad(net) => net.validator().print_stdout(),
+        }
+    }
+
     /// Chain_Cache PathBuf must contain validator bin name for this function to function.
     fn load_chain(
     chain_cache: PathBuf,
