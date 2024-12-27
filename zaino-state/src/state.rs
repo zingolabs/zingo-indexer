@@ -85,10 +85,9 @@ impl StateService {
             Some(config.validator_rpc_user.clone()),
             Some(config.validator_rpc_password.clone()),
         )
-        .await
-        .unwrap();
+        .await?;
 
-        let zebra_build_data = rpc_client.get_info().await.unwrap();
+        let zebra_build_data = rpc_client.get_info().await?;
 
         let data = ServiceMetadata {
             build_info: get_build_info(),
@@ -110,6 +109,7 @@ impl StateService {
 
         state_service.status.store(StatusType::Syncing.into());
 
+        // TODO: Update initial sync to use latest_chain_tip, this should be done once zebra regtest is running rug free.
         poll_fn(|cx| state_service.read_state_service.poll_ready(cx)).await?;
 
         state_service.status.store(StatusType::Ready.into());
@@ -472,8 +472,11 @@ impl StateService {
                     }
                 }
             }
-            let tx = txids.unwrap();
-            let trees = orchard_trees.unwrap();
+            let tx = txids
+                .ok_or_else(|| StateServiceError::Custom("No txids found in block.".to_string()))?;
+
+            let trees = orchard_trees
+                .ok_or_else(|| StateServiceError::Custom("No orchard trees found.".to_string()))?;
 
             Ok(GetBlock::Object {
                 hash,
@@ -563,7 +566,7 @@ impl StateService {
         };
 
         let response = if !verbose {
-            GetBlockHeader::Raw(HexData(header.zcash_serialize_to_vec().unwrap()))
+            GetBlockHeader::Raw(HexData(header.zcash_serialize_to_vec()?))
         } else {
             let zebra_state::ReadResponse::SaplingTree(sapling_tree) = self
                 .checked_call(zebra_state::ReadRequest::SaplingTree(hash_or_height))
@@ -719,7 +722,18 @@ impl StateService {
                                 };
                             }
                             Err(e) => {
-                                let chain_height = latest_chain_tip.best_tip_height().unwrap().0;
+                                let chain_height = match latest_chain_tip.best_tip_height() {
+                                    Some(ch) => ch.0,
+                                    None => {
+                                    if let Err(e) = channel_tx
+                                        .send(Err(tonic::Status::unknown("No best tip height found")))
+                                        .await
+                                        {
+                                            eprintln!("Error: channel closed unexpectedly: {e}");
+                                        }
+                                    break;
+                                    }
+                                };
                                 if height >= chain_height {
                                     match channel_tx
                                         .send(Err(tonic::Status::out_of_range(format!(
@@ -985,27 +999,44 @@ fn tx_to_compact(
                 .collect(),
             transaction
                 .sapling_outputs()
-                .map(|output| CompactSaplingOutput {
-                    cmu: output.cm_u.to_bytes().to_vec(),
-                    ephemeral_key: <[u8; 32]>::from(output.ephemeral_key).to_vec(),
-                    ciphertext: output.enc_ciphertext.zcash_serialize_to_vec().unwrap(),
-                })
-                .collect(),
+                .map(
+                    |output| -> Result<CompactSaplingOutput, StateServiceError> {
+                        let ciphertext = output
+                            .enc_ciphertext
+                            .zcash_serialize_to_vec()
+                            .map_err(StateServiceError::IoError)?;
+
+                        Ok(CompactSaplingOutput {
+                            cmu: output.cm_u.to_bytes().to_vec(),
+                            ephemeral_key: <[u8; 32]>::from(output.ephemeral_key).to_vec(),
+                            ciphertext,
+                        })
+                    },
+                )
+                .collect::<Result<Vec<CompactSaplingOutput>, _>>()?,
         )
     } else {
         (Vec::new(), Vec::new())
     };
-
     let actions = if transaction.has_orchard_shielded_data() {
         transaction
             .orchard_actions()
-            .map(|action| CompactOrchardAction {
-                nullifier: <[u8; 32]>::from(action.nullifier).to_vec(),
-                cmx: <[u8; 32]>::from(action.cm_x).to_vec(),
-                ephemeral_key: <[u8; 32]>::from(action.ephemeral_key).to_vec(),
-                ciphertext: action.enc_ciphertext.zcash_serialize_to_vec().unwrap(),
-            })
-            .collect()
+            .map(
+                |action| -> Result<CompactOrchardAction, StateServiceError> {
+                    let ciphertext = action
+                        .enc_ciphertext
+                        .zcash_serialize_to_vec()
+                        .map_err(StateServiceError::IoError)?;
+
+                    Ok(CompactOrchardAction {
+                        nullifier: <[u8; 32]>::from(action.nullifier).to_vec(),
+                        cmx: <[u8; 32]>::from(action.cm_x).to_vec(),
+                        ephemeral_key: <[u8; 32]>::from(action.ephemeral_key).to_vec(),
+                        ciphertext,
+                    })
+                },
+            )
+            .collect::<Result<Vec<CompactOrchardAction>, _>>()?
     } else {
         Vec::new()
     };

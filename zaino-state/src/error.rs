@@ -31,6 +31,10 @@ pub enum StateServiceError {
     #[error("Integer conversion error: {0}")]
     TryFromIntError(#[from] std::num::TryFromIntError),
 
+    /// std::io::Error
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
+
     /// A generic boxed error.
     #[error("Generic error: {0}")]
     Generic(#[from] Box<dyn std::error::Error + Send + Sync>),
