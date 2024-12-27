@@ -459,7 +459,7 @@ impl CompactTxStreamer for GrpcClient {
                         } else {
                             height
                         };
-                        println!("[TEST] Fetching block at height: {}.", height);
+                        // println!("[TEST] Fetching block at height: {}.", height);
                         match get_block_from_node(&zebrad_uri, &height).await {
                             Ok(block) => {
                                 if channel_tx.send(Ok(block)).await.is_err() {
@@ -783,7 +783,6 @@ impl CompactTxStreamer for GrpcClient {
             .await?;
             let chain_height = zebrad_client.get_blockchain_info().await?.blocks.0;
             let block_filter = request.into_inner();
-            dbg!(block_filter.clone());
             let (start, end) =
                 match block_filter.range {
                     Some(range) => match (range.start, range.end) {
@@ -823,7 +822,6 @@ impl CompactTxStreamer for GrpcClient {
                 .get_address_txids(vec![block_filter.address], start, end)
                 .await
                 .map_err(|e| e.to_grpc_status())?;
-            dbg!(txids.clone());
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
                 // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
@@ -1290,7 +1288,6 @@ impl CompactTxStreamer for GrpcClient {
                         match mempool.get_mempool_txids().await {
                             Ok(mempool_txids) => {
                                 for txid in &mempool_txids[txid_index..] {
-                                    dbg!(txid);
                                     match zebrad_client
                                         .get_raw_transaction(txid.clone(), Some(1))
                                         .await {
