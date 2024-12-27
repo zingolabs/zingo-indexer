@@ -150,6 +150,7 @@ mod wallet_basic {
         send_to_transparent("zcashd").await;
     }
 
+    /// Bug documented in https://github.com/zingolabs/zaino/issues/145.
     #[tokio::test]
     async fn zebrad_send_to_transparent() {
         send_to_transparent("zebrad").await;
@@ -426,6 +427,7 @@ mod wallet_basic {
         monitor_unverified_mempool("zcashd").await;
     }
 
+    /// Bug documented in https://github.com/zingolabs/zaino/issues/144.
     #[tokio::test]
     async fn zebrad_monitor_unverified_mempool() {
         monitor_unverified_mempool("zebrad").await;

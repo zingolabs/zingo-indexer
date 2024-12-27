@@ -617,6 +617,7 @@ impl StateService {
 /// TODO: Update this to be `impl LightWalletIndexer for StateService` once rpc methods are implemented and tested (or implement separately).
 impl StateService {}
 
+/// !!! NOTE / TODO: This code should be retested before continued development, once zebra regtest is fully operational.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -816,6 +817,7 @@ mod tests {
         test_manager.close().await;
     }
 
+    /// Bug documented in https://github.com/zingolabs/zaino/issues/146.
     #[tokio::test]
     async fn state_service_get_blockchain_info_no_cache() {
         let mut test_manager = TestManager::launch("zebrad", None, false, false)
