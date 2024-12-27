@@ -2071,6 +2071,8 @@ version = "0.0.0"
 dependencies = [
  "tokio",
  "tracing-subscriber",
+ "url",
+ "zaino-fetch",
  "zaino-testutils",
  "zcash_local_net",
  "zingolib",

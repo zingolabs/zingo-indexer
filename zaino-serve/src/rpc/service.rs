@@ -1290,6 +1290,7 @@ impl CompactTxStreamer for GrpcClient {
                         match mempool.get_mempool_txids().await {
                             Ok(mempool_txids) => {
                                 for txid in &mempool_txids[txid_index..] {
+                                    dbg!(txid);
                                     match zebrad_client
                                         .get_raw_transaction(txid.clone(), Some(1))
                                         .await {
