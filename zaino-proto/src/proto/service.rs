@@ -277,8 +277,8 @@ impl ShieldedProtocol {
 /// Generated client implementations.
 pub mod compact_tx_streamer_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
-    use tonic::codegen::*;
     use tonic::codegen::http::Uri;
+    use tonic::codegen::*;
     #[derive(Debug, Clone)]
     pub struct CompactTxStreamerClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -322,9 +322,8 @@ pub mod compact_tx_streamer_client {
                     <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
                 >,
             >,
-            <T as tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
-            >>::Error: Into<StdError> + Send + Sync,
+            <T as tonic::codegen::Service<http::Request<tonic::body::BoxBody>>>::Error:
+                Into<StdError> + Send + Sync,
         {
             CompactTxStreamerClient::new(InterceptedService::new(inner, interceptor))
         }
@@ -364,27 +363,21 @@ pub mod compact_tx_streamer_client {
             &mut self,
             request: impl tonic::IntoRequest<super::ChainSpec>,
         ) -> std::result::Result<tonic::Response<super::BlockId>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetLatestBlock",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "cash.z.wallet.sdk.rpc.CompactTxStreamer",
-                        "GetLatestBlock",
-                    ),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "cash.z.wallet.sdk.rpc.CompactTxStreamer",
+                "GetLatestBlock",
+            ));
             self.inner.unary(req, path, codec).await
         }
         /// Return the compact block corresponding to the given block identifier
@@ -395,27 +388,21 @@ pub mod compact_tx_streamer_client {
             tonic::Response<crate::proto::compact_formats::CompactBlock>,
             tonic::Status,
         > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetBlock",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "cash.z.wallet.sdk.rpc.CompactTxStreamer",
-                        "GetBlock",
-                    ),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "cash.z.wallet.sdk.rpc.CompactTxStreamer",
+                "GetBlock",
+            ));
             self.inner.unary(req, path, codec).await
         }
         /// Same as GetBlock except actions contain only nullifiers
@@ -426,27 +413,21 @@ pub mod compact_tx_streamer_client {
             tonic::Response<crate::proto::compact_formats::CompactBlock>,
             tonic::Status,
         > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetBlockNullifiers",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "cash.z.wallet.sdk.rpc.CompactTxStreamer",
-                        "GetBlockNullifiers",
-                    ),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "cash.z.wallet.sdk.rpc.CompactTxStreamer",
+                "GetBlockNullifiers",
+            ));
             self.inner.unary(req, path, codec).await
         }
         /// Return a list of consecutive compact blocks
@@ -454,32 +435,24 @@ pub mod compact_tx_streamer_client {
             &mut self,
             request: impl tonic::IntoRequest<super::BlockRange>,
         ) -> std::result::Result<
-            tonic::Response<
-                tonic::codec::Streaming<crate::proto::compact_formats::CompactBlock>,
-            >,
+            tonic::Response<tonic::codec::Streaming<crate::proto::compact_formats::CompactBlock>>,
             tonic::Status,
         > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetBlockRange",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "cash.z.wallet.sdk.rpc.CompactTxStreamer",
-                        "GetBlockRange",
-                    ),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "cash.z.wallet.sdk.rpc.CompactTxStreamer",
+                "GetBlockRange",
+            ));
             self.inner.server_streaming(req, path, codec).await
         }
         /// Same as GetBlockRange except actions contain only nullifiers
@@ -487,32 +460,24 @@ pub mod compact_tx_streamer_client {
             &mut self,
             request: impl tonic::IntoRequest<super::BlockRange>,
         ) -> std::result::Result<
-            tonic::Response<
-                tonic::codec::Streaming<crate::proto::compact_formats::CompactBlock>,
-            >,
+            tonic::Response<tonic::codec::Streaming<crate::proto::compact_formats::CompactBlock>>,
             tonic::Status,
         > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetBlockRangeNullifiers",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "cash.z.wallet.sdk.rpc.CompactTxStreamer",
-                        "GetBlockRangeNullifiers",
-                    ),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "cash.z.wallet.sdk.rpc.CompactTxStreamer",
+                "GetBlockRangeNullifiers",
+            ));
             self.inner.server_streaming(req, path, codec).await
         }
         /// Return the requested full (not compact) transaction (as from zcashd)
@@ -520,27 +485,21 @@ pub mod compact_tx_streamer_client {
             &mut self,
             request: impl tonic::IntoRequest<super::TxFilter>,
         ) -> std::result::Result<tonic::Response<super::RawTransaction>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetTransaction",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "cash.z.wallet.sdk.rpc.CompactTxStreamer",
-                        "GetTransaction",
-                    ),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "cash.z.wallet.sdk.rpc.CompactTxStreamer",
+                "GetTransaction",
+            ));
             self.inner.unary(req, path, codec).await
         }
         /// Submit the given transaction to the Zcash network
@@ -548,27 +507,21 @@ pub mod compact_tx_streamer_client {
             &mut self,
             request: impl tonic::IntoRequest<super::RawTransaction>,
         ) -> std::result::Result<tonic::Response<super::SendResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/SendTransaction",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "cash.z.wallet.sdk.rpc.CompactTxStreamer",
-                        "SendTransaction",
-                    ),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "cash.z.wallet.sdk.rpc.CompactTxStreamer",
+                "SendTransaction",
+            ));
             self.inner.unary(req, path, codec).await
         }
         /// Return the txids corresponding to the given t-address within the given block range
@@ -579,81 +532,63 @@ pub mod compact_tx_streamer_client {
             tonic::Response<tonic::codec::Streaming<super::RawTransaction>>,
             tonic::Status,
         > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetTaddressTxids",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "cash.z.wallet.sdk.rpc.CompactTxStreamer",
-                        "GetTaddressTxids",
-                    ),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "cash.z.wallet.sdk.rpc.CompactTxStreamer",
+                "GetTaddressTxids",
+            ));
             self.inner.server_streaming(req, path, codec).await
         }
         pub async fn get_taddress_balance(
             &mut self,
             request: impl tonic::IntoRequest<super::AddressList>,
         ) -> std::result::Result<tonic::Response<super::Balance>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetTaddressBalance",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "cash.z.wallet.sdk.rpc.CompactTxStreamer",
-                        "GetTaddressBalance",
-                    ),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "cash.z.wallet.sdk.rpc.CompactTxStreamer",
+                "GetTaddressBalance",
+            ));
             self.inner.unary(req, path, codec).await
         }
         pub async fn get_taddress_balance_stream(
             &mut self,
             request: impl tonic::IntoStreamingRequest<Message = super::Address>,
         ) -> std::result::Result<tonic::Response<super::Balance>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetTaddressBalanceStream",
             );
             let mut req = request.into_streaming_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "cash.z.wallet.sdk.rpc.CompactTxStreamer",
-                        "GetTaddressBalanceStream",
-                    ),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "cash.z.wallet.sdk.rpc.CompactTxStreamer",
+                "GetTaddressBalanceStream",
+            ));
             self.inner.client_streaming(req, path, codec).await
         }
         /// Return the compact transactions currently in the mempool; the results
@@ -669,32 +604,24 @@ pub mod compact_tx_streamer_client {
             &mut self,
             request: impl tonic::IntoRequest<super::Exclude>,
         ) -> std::result::Result<
-            tonic::Response<
-                tonic::codec::Streaming<crate::proto::compact_formats::CompactTx>,
-            >,
+            tonic::Response<tonic::codec::Streaming<crate::proto::compact_formats::CompactTx>>,
             tonic::Status,
         > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetMempoolTx",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "cash.z.wallet.sdk.rpc.CompactTxStreamer",
-                        "GetMempoolTx",
-                    ),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "cash.z.wallet.sdk.rpc.CompactTxStreamer",
+                "GetMempoolTx",
+            ));
             self.inner.server_streaming(req, path, codec).await
         }
         /// Return a stream of current Mempool transactions. This will keep the output stream open while
@@ -706,27 +633,21 @@ pub mod compact_tx_streamer_client {
             tonic::Response<tonic::codec::Streaming<super::RawTransaction>>,
             tonic::Status,
         > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetMempoolStream",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "cash.z.wallet.sdk.rpc.CompactTxStreamer",
-                        "GetMempoolStream",
-                    ),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "cash.z.wallet.sdk.rpc.CompactTxStreamer",
+                "GetMempoolStream",
+            ));
             self.inner.server_streaming(req, path, codec).await
         }
         /// GetTreeState returns the note commitment tree state corresponding to the given block.
@@ -737,54 +658,42 @@ pub mod compact_tx_streamer_client {
             &mut self,
             request: impl tonic::IntoRequest<super::BlockId>,
         ) -> std::result::Result<tonic::Response<super::TreeState>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetTreeState",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "cash.z.wallet.sdk.rpc.CompactTxStreamer",
-                        "GetTreeState",
-                    ),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "cash.z.wallet.sdk.rpc.CompactTxStreamer",
+                "GetTreeState",
+            ));
             self.inner.unary(req, path, codec).await
         }
         pub async fn get_latest_tree_state(
             &mut self,
             request: impl tonic::IntoRequest<super::Empty>,
         ) -> std::result::Result<tonic::Response<super::TreeState>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetLatestTreeState",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "cash.z.wallet.sdk.rpc.CompactTxStreamer",
-                        "GetLatestTreeState",
-                    ),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "cash.z.wallet.sdk.rpc.CompactTxStreamer",
+                "GetLatestTreeState",
+            ));
             self.inner.unary(req, path, codec).await
         }
         /// Returns a stream of information about roots of subtrees of the Sapling and Orchard
@@ -796,57 +705,43 @@ pub mod compact_tx_streamer_client {
             tonic::Response<tonic::codec::Streaming<super::SubtreeRoot>>,
             tonic::Status,
         > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetSubtreeRoots",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "cash.z.wallet.sdk.rpc.CompactTxStreamer",
-                        "GetSubtreeRoots",
-                    ),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "cash.z.wallet.sdk.rpc.CompactTxStreamer",
+                "GetSubtreeRoots",
+            ));
             self.inner.server_streaming(req, path, codec).await
         }
         pub async fn get_address_utxos(
             &mut self,
             request: impl tonic::IntoRequest<super::GetAddressUtxosArg>,
-        ) -> std::result::Result<
-            tonic::Response<super::GetAddressUtxosReplyList>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+        ) -> std::result::Result<tonic::Response<super::GetAddressUtxosReplyList>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetAddressUtxos",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "cash.z.wallet.sdk.rpc.CompactTxStreamer",
-                        "GetAddressUtxos",
-                    ),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "cash.z.wallet.sdk.rpc.CompactTxStreamer",
+                "GetAddressUtxos",
+            ));
             self.inner.unary(req, path, codec).await
         }
         pub async fn get_address_utxos_stream(
@@ -856,27 +751,21 @@ pub mod compact_tx_streamer_client {
             tonic::Response<tonic::codec::Streaming<super::GetAddressUtxosReply>>,
             tonic::Status,
         > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetAddressUtxosStream",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "cash.z.wallet.sdk.rpc.CompactTxStreamer",
-                        "GetAddressUtxosStream",
-                    ),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "cash.z.wallet.sdk.rpc.CompactTxStreamer",
+                "GetAddressUtxosStream",
+            ));
             self.inner.server_streaming(req, path, codec).await
         }
         /// Return information about this lightwalletd instance and the blockchain
@@ -884,27 +773,21 @@ pub mod compact_tx_streamer_client {
             &mut self,
             request: impl tonic::IntoRequest<super::Empty>,
         ) -> std::result::Result<tonic::Response<super::LightdInfo>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetLightdInfo",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "cash.z.wallet.sdk.rpc.CompactTxStreamer",
-                        "GetLightdInfo",
-                    ),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "cash.z.wallet.sdk.rpc.CompactTxStreamer",
+                "GetLightdInfo",
+            ));
             self.inner.unary(req, path, codec).await
         }
         /// Testing-only, requires lightwalletd --ping-very-insecure (do not enable in production)
@@ -912,24 +795,21 @@ pub mod compact_tx_streamer_client {
             &mut self,
             request: impl tonic::IntoRequest<super::Duration>,
         ) -> std::result::Result<tonic::Response<super::PingResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/Ping",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new("cash.z.wallet.sdk.rpc.CompactTxStreamer", "Ping"),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "cash.z.wallet.sdk.rpc.CompactTxStreamer",
+                "Ping",
+            ));
             self.inner.unary(req, path, codec).await
         }
     }
@@ -968,34 +848,26 @@ pub mod compact_tx_streamer_server {
                     crate::proto::compact_formats::CompactBlock,
                     tonic::Status,
                 >,
-            >
-            + Send
+            > + Send
             + 'static;
         /// Return a list of consecutive compact blocks
         async fn get_block_range(
             &self,
             request: tonic::Request<super::BlockRange>,
-        ) -> std::result::Result<
-            tonic::Response<Self::GetBlockRangeStream>,
-            tonic::Status,
-        >;
+        ) -> std::result::Result<tonic::Response<Self::GetBlockRangeStream>, tonic::Status>;
         /// Server streaming response type for the GetBlockRangeNullifiers method.
         type GetBlockRangeNullifiersStream: tonic::codegen::tokio_stream::Stream<
                 Item = std::result::Result<
                     crate::proto::compact_formats::CompactBlock,
                     tonic::Status,
                 >,
-            >
-            + Send
+            > + Send
             + 'static;
         /// Same as GetBlockRange except actions contain only nullifiers
         async fn get_block_range_nullifiers(
             &self,
             request: tonic::Request<super::BlockRange>,
-        ) -> std::result::Result<
-            tonic::Response<Self::GetBlockRangeNullifiersStream>,
-            tonic::Status,
-        >;
+        ) -> std::result::Result<tonic::Response<Self::GetBlockRangeNullifiersStream>, tonic::Status>;
         /// Return the requested full (not compact) transaction (as from zcashd)
         async fn get_transaction(
             &self,
@@ -1009,17 +881,13 @@ pub mod compact_tx_streamer_server {
         /// Server streaming response type for the GetTaddressTxids method.
         type GetTaddressTxidsStream: tonic::codegen::tokio_stream::Stream<
                 Item = std::result::Result<super::RawTransaction, tonic::Status>,
-            >
-            + Send
+            > + Send
             + 'static;
         /// Return the txids corresponding to the given t-address within the given block range
         async fn get_taddress_txids(
             &self,
             request: tonic::Request<super::TransparentAddressBlockFilter>,
-        ) -> std::result::Result<
-            tonic::Response<Self::GetTaddressTxidsStream>,
-            tonic::Status,
-        >;
+        ) -> std::result::Result<tonic::Response<Self::GetTaddressTxidsStream>, tonic::Status>;
         async fn get_taddress_balance(
             &self,
             request: tonic::Request<super::AddressList>,
@@ -1030,12 +898,8 @@ pub mod compact_tx_streamer_server {
         ) -> std::result::Result<tonic::Response<super::Balance>, tonic::Status>;
         /// Server streaming response type for the GetMempoolTx method.
         type GetMempoolTxStream: tonic::codegen::tokio_stream::Stream<
-                Item = std::result::Result<
-                    crate::proto::compact_formats::CompactTx,
-                    tonic::Status,
-                >,
-            >
-            + Send
+                Item = std::result::Result<crate::proto::compact_formats::CompactTx, tonic::Status>,
+            > + Send
             + 'static;
         /// Return the compact transactions currently in the mempool; the results
         /// can be a few seconds out of date. If the Exclude list is empty, return
@@ -1049,25 +913,18 @@ pub mod compact_tx_streamer_server {
         async fn get_mempool_tx(
             &self,
             request: tonic::Request<super::Exclude>,
-        ) -> std::result::Result<
-            tonic::Response<Self::GetMempoolTxStream>,
-            tonic::Status,
-        >;
+        ) -> std::result::Result<tonic::Response<Self::GetMempoolTxStream>, tonic::Status>;
         /// Server streaming response type for the GetMempoolStream method.
         type GetMempoolStreamStream: tonic::codegen::tokio_stream::Stream<
                 Item = std::result::Result<super::RawTransaction, tonic::Status>,
-            >
-            + Send
+            > + Send
             + 'static;
         /// Return a stream of current Mempool transactions. This will keep the output stream open while
         /// there are mempool transactions. It will close the returned stream when a new block is mined.
         async fn get_mempool_stream(
             &self,
             request: tonic::Request<super::Empty>,
-        ) -> std::result::Result<
-            tonic::Response<Self::GetMempoolStreamStream>,
-            tonic::Status,
-        >;
+        ) -> std::result::Result<tonic::Response<Self::GetMempoolStreamStream>, tonic::Status>;
         /// GetTreeState returns the note commitment tree state corresponding to the given block.
         /// See section 3.7 of the Zcash protocol specification. It returns several other useful
         /// values also (even though they can be obtained using GetBlock).
@@ -1083,38 +940,27 @@ pub mod compact_tx_streamer_server {
         /// Server streaming response type for the GetSubtreeRoots method.
         type GetSubtreeRootsStream: tonic::codegen::tokio_stream::Stream<
                 Item = std::result::Result<super::SubtreeRoot, tonic::Status>,
-            >
-            + Send
+            > + Send
             + 'static;
         /// Returns a stream of information about roots of subtrees of the Sapling and Orchard
         /// note commitment trees.
         async fn get_subtree_roots(
             &self,
             request: tonic::Request<super::GetSubtreeRootsArg>,
-        ) -> std::result::Result<
-            tonic::Response<Self::GetSubtreeRootsStream>,
-            tonic::Status,
-        >;
+        ) -> std::result::Result<tonic::Response<Self::GetSubtreeRootsStream>, tonic::Status>;
         async fn get_address_utxos(
             &self,
             request: tonic::Request<super::GetAddressUtxosArg>,
-        ) -> std::result::Result<
-            tonic::Response<super::GetAddressUtxosReplyList>,
-            tonic::Status,
-        >;
+        ) -> std::result::Result<tonic::Response<super::GetAddressUtxosReplyList>, tonic::Status>;
         /// Server streaming response type for the GetAddressUtxosStream method.
         type GetAddressUtxosStreamStream: tonic::codegen::tokio_stream::Stream<
                 Item = std::result::Result<super::GetAddressUtxosReply, tonic::Status>,
-            >
-            + Send
+            > + Send
             + 'static;
         async fn get_address_utxos_stream(
             &self,
             request: tonic::Request<super::GetAddressUtxosArg>,
-        ) -> std::result::Result<
-            tonic::Response<Self::GetAddressUtxosStreamStream>,
-            tonic::Status,
-        >;
+        ) -> std::result::Result<tonic::Response<Self::GetAddressUtxosStreamStream>, tonic::Status>;
         /// Return information about this lightwalletd instance and the blockchain
         async fn get_lightd_info(
             &self,
@@ -1149,10 +995,7 @@ pub mod compact_tx_streamer_server {
                 max_encoding_message_size: None,
             }
         }
-        pub fn with_interceptor<F>(
-            inner: T,
-            interceptor: F,
-        ) -> InterceptedService<Self, F>
+        pub fn with_interceptor<F>(inner: T, interceptor: F) -> InterceptedService<Self, F>
         where
             F: tonic::service::Interceptor,
         {
@@ -1208,23 +1051,16 @@ pub mod compact_tx_streamer_server {
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetLatestBlock" => {
                     #[allow(non_camel_case_types)]
                     struct GetLatestBlockSvc<T: CompactTxStreamer>(pub Arc<T>);
-                    impl<
-                        T: CompactTxStreamer,
-                    > tonic::server::UnaryService<super::ChainSpec>
-                    for GetLatestBlockSvc<T> {
+                    impl<T: CompactTxStreamer> tonic::server::UnaryService<super::ChainSpec> for GetLatestBlockSvc<T> {
                         type Response = super::BlockId;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::ChainSpec>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as CompactTxStreamer>::get_latest_block(&inner, request)
-                                    .await
+                                <T as CompactTxStreamer>::get_latest_block(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -1255,14 +1091,9 @@ pub mod compact_tx_streamer_server {
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetBlock" => {
                     #[allow(non_camel_case_types)]
                     struct GetBlockSvc<T: CompactTxStreamer>(pub Arc<T>);
-                    impl<
-                        T: CompactTxStreamer,
-                    > tonic::server::UnaryService<super::BlockId> for GetBlockSvc<T> {
+                    impl<T: CompactTxStreamer> tonic::server::UnaryService<super::BlockId> for GetBlockSvc<T> {
                         type Response = crate::proto::compact_formats::CompactBlock;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::BlockId>,
@@ -1300,25 +1131,18 @@ pub mod compact_tx_streamer_server {
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetBlockNullifiers" => {
                     #[allow(non_camel_case_types)]
                     struct GetBlockNullifiersSvc<T: CompactTxStreamer>(pub Arc<T>);
-                    impl<
-                        T: CompactTxStreamer,
-                    > tonic::server::UnaryService<super::BlockId>
-                    for GetBlockNullifiersSvc<T> {
+                    impl<T: CompactTxStreamer> tonic::server::UnaryService<super::BlockId>
+                        for GetBlockNullifiersSvc<T>
+                    {
                         type Response = crate::proto::compact_formats::CompactBlock;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::BlockId>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as CompactTxStreamer>::get_block_nullifiers(
-                                        &inner,
-                                        request,
-                                    )
+                                <T as CompactTxStreamer>::get_block_nullifiers(&inner, request)
                                     .await
                             };
                             Box::pin(fut)
@@ -1350,24 +1174,21 @@ pub mod compact_tx_streamer_server {
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetBlockRange" => {
                     #[allow(non_camel_case_types)]
                     struct GetBlockRangeSvc<T: CompactTxStreamer>(pub Arc<T>);
-                    impl<
-                        T: CompactTxStreamer,
-                    > tonic::server::ServerStreamingService<super::BlockRange>
-                    for GetBlockRangeSvc<T> {
+                    impl<T: CompactTxStreamer>
+                        tonic::server::ServerStreamingService<super::BlockRange>
+                        for GetBlockRangeSvc<T>
+                    {
                         type Response = crate::proto::compact_formats::CompactBlock;
                         type ResponseStream = T::GetBlockRangeStream;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::ResponseStream>,
-                            tonic::Status,
-                        >;
+                        type Future =
+                            BoxFuture<tonic::Response<Self::ResponseStream>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::BlockRange>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as CompactTxStreamer>::get_block_range(&inner, request)
-                                    .await
+                                <T as CompactTxStreamer>::get_block_range(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -1398,16 +1219,14 @@ pub mod compact_tx_streamer_server {
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetBlockRangeNullifiers" => {
                     #[allow(non_camel_case_types)]
                     struct GetBlockRangeNullifiersSvc<T: CompactTxStreamer>(pub Arc<T>);
-                    impl<
-                        T: CompactTxStreamer,
-                    > tonic::server::ServerStreamingService<super::BlockRange>
-                    for GetBlockRangeNullifiersSvc<T> {
+                    impl<T: CompactTxStreamer>
+                        tonic::server::ServerStreamingService<super::BlockRange>
+                        for GetBlockRangeNullifiersSvc<T>
+                    {
                         type Response = crate::proto::compact_formats::CompactBlock;
                         type ResponseStream = T::GetBlockRangeNullifiersStream;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::ResponseStream>,
-                            tonic::Status,
-                        >;
+                        type Future =
+                            BoxFuture<tonic::Response<Self::ResponseStream>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::BlockRange>,
@@ -1415,10 +1234,9 @@ pub mod compact_tx_streamer_server {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
                                 <T as CompactTxStreamer>::get_block_range_nullifiers(
-                                        &inner,
-                                        request,
-                                    )
-                                    .await
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
@@ -1449,23 +1267,16 @@ pub mod compact_tx_streamer_server {
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetTransaction" => {
                     #[allow(non_camel_case_types)]
                     struct GetTransactionSvc<T: CompactTxStreamer>(pub Arc<T>);
-                    impl<
-                        T: CompactTxStreamer,
-                    > tonic::server::UnaryService<super::TxFilter>
-                    for GetTransactionSvc<T> {
+                    impl<T: CompactTxStreamer> tonic::server::UnaryService<super::TxFilter> for GetTransactionSvc<T> {
                         type Response = super::RawTransaction;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::TxFilter>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as CompactTxStreamer>::get_transaction(&inner, request)
-                                    .await
+                                <T as CompactTxStreamer>::get_transaction(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -1496,23 +1307,18 @@ pub mod compact_tx_streamer_server {
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/SendTransaction" => {
                     #[allow(non_camel_case_types)]
                     struct SendTransactionSvc<T: CompactTxStreamer>(pub Arc<T>);
-                    impl<
-                        T: CompactTxStreamer,
-                    > tonic::server::UnaryService<super::RawTransaction>
-                    for SendTransactionSvc<T> {
+                    impl<T: CompactTxStreamer> tonic::server::UnaryService<super::RawTransaction>
+                        for SendTransactionSvc<T>
+                    {
                         type Response = super::SendResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::RawTransaction>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as CompactTxStreamer>::send_transaction(&inner, request)
-                                    .await
+                                <T as CompactTxStreamer>::send_transaction(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -1543,28 +1349,21 @@ pub mod compact_tx_streamer_server {
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetTaddressTxids" => {
                     #[allow(non_camel_case_types)]
                     struct GetTaddressTxidsSvc<T: CompactTxStreamer>(pub Arc<T>);
-                    impl<
-                        T: CompactTxStreamer,
-                    > tonic::server::ServerStreamingService<
-                        super::TransparentAddressBlockFilter,
-                    > for GetTaddressTxidsSvc<T> {
+                    impl<T: CompactTxStreamer>
+                        tonic::server::ServerStreamingService<super::TransparentAddressBlockFilter>
+                        for GetTaddressTxidsSvc<T>
+                    {
                         type Response = super::RawTransaction;
                         type ResponseStream = T::GetTaddressTxidsStream;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::ResponseStream>,
-                            tonic::Status,
-                        >;
+                        type Future =
+                            BoxFuture<tonic::Response<Self::ResponseStream>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::TransparentAddressBlockFilter>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as CompactTxStreamer>::get_taddress_txids(
-                                        &inner,
-                                        request,
-                                    )
-                                    .await
+                                <T as CompactTxStreamer>::get_taddress_txids(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -1595,25 +1394,18 @@ pub mod compact_tx_streamer_server {
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetTaddressBalance" => {
                     #[allow(non_camel_case_types)]
                     struct GetTaddressBalanceSvc<T: CompactTxStreamer>(pub Arc<T>);
-                    impl<
-                        T: CompactTxStreamer,
-                    > tonic::server::UnaryService<super::AddressList>
-                    for GetTaddressBalanceSvc<T> {
+                    impl<T: CompactTxStreamer> tonic::server::UnaryService<super::AddressList>
+                        for GetTaddressBalanceSvc<T>
+                    {
                         type Response = super::Balance;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::AddressList>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as CompactTxStreamer>::get_taddress_balance(
-                                        &inner,
-                                        request,
-                                    )
+                                <T as CompactTxStreamer>::get_taddress_balance(&inner, request)
                                     .await
                             };
                             Box::pin(fut)
@@ -1645,15 +1437,11 @@ pub mod compact_tx_streamer_server {
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetTaddressBalanceStream" => {
                     #[allow(non_camel_case_types)]
                     struct GetTaddressBalanceStreamSvc<T: CompactTxStreamer>(pub Arc<T>);
-                    impl<
-                        T: CompactTxStreamer,
-                    > tonic::server::ClientStreamingService<super::Address>
-                    for GetTaddressBalanceStreamSvc<T> {
+                    impl<T: CompactTxStreamer> tonic::server::ClientStreamingService<super::Address>
+                        for GetTaddressBalanceStreamSvc<T>
+                    {
                         type Response = super::Balance;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<tonic::Streaming<super::Address>>,
@@ -1661,10 +1449,9 @@ pub mod compact_tx_streamer_server {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
                                 <T as CompactTxStreamer>::get_taddress_balance_stream(
-                                        &inner,
-                                        request,
-                                    )
-                                    .await
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
@@ -1695,24 +1482,20 @@ pub mod compact_tx_streamer_server {
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetMempoolTx" => {
                     #[allow(non_camel_case_types)]
                     struct GetMempoolTxSvc<T: CompactTxStreamer>(pub Arc<T>);
-                    impl<
-                        T: CompactTxStreamer,
-                    > tonic::server::ServerStreamingService<super::Exclude>
-                    for GetMempoolTxSvc<T> {
+                    impl<T: CompactTxStreamer> tonic::server::ServerStreamingService<super::Exclude>
+                        for GetMempoolTxSvc<T>
+                    {
                         type Response = crate::proto::compact_formats::CompactTx;
                         type ResponseStream = T::GetMempoolTxStream;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::ResponseStream>,
-                            tonic::Status,
-                        >;
+                        type Future =
+                            BoxFuture<tonic::Response<Self::ResponseStream>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::Exclude>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as CompactTxStreamer>::get_mempool_tx(&inner, request)
-                                    .await
+                                <T as CompactTxStreamer>::get_mempool_tx(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -1743,27 +1526,17 @@ pub mod compact_tx_streamer_server {
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetMempoolStream" => {
                     #[allow(non_camel_case_types)]
                     struct GetMempoolStreamSvc<T: CompactTxStreamer>(pub Arc<T>);
-                    impl<
-                        T: CompactTxStreamer,
-                    > tonic::server::ServerStreamingService<super::Empty>
-                    for GetMempoolStreamSvc<T> {
+                    impl<T: CompactTxStreamer> tonic::server::ServerStreamingService<super::Empty>
+                        for GetMempoolStreamSvc<T>
+                    {
                         type Response = super::RawTransaction;
                         type ResponseStream = T::GetMempoolStreamStream;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::ResponseStream>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::Empty>,
-                        ) -> Self::Future {
+                        type Future =
+                            BoxFuture<tonic::Response<Self::ResponseStream>, tonic::Status>;
+                        fn call(&mut self, request: tonic::Request<super::Empty>) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as CompactTxStreamer>::get_mempool_stream(
-                                        &inner,
-                                        request,
-                                    )
-                                    .await
+                                <T as CompactTxStreamer>::get_mempool_stream(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -1794,23 +1567,16 @@ pub mod compact_tx_streamer_server {
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetTreeState" => {
                     #[allow(non_camel_case_types)]
                     struct GetTreeStateSvc<T: CompactTxStreamer>(pub Arc<T>);
-                    impl<
-                        T: CompactTxStreamer,
-                    > tonic::server::UnaryService<super::BlockId>
-                    for GetTreeStateSvc<T> {
+                    impl<T: CompactTxStreamer> tonic::server::UnaryService<super::BlockId> for GetTreeStateSvc<T> {
                         type Response = super::TreeState;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::BlockId>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as CompactTxStreamer>::get_tree_state(&inner, request)
-                                    .await
+                                <T as CompactTxStreamer>::get_tree_state(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -1841,23 +1607,13 @@ pub mod compact_tx_streamer_server {
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetLatestTreeState" => {
                     #[allow(non_camel_case_types)]
                     struct GetLatestTreeStateSvc<T: CompactTxStreamer>(pub Arc<T>);
-                    impl<T: CompactTxStreamer> tonic::server::UnaryService<super::Empty>
-                    for GetLatestTreeStateSvc<T> {
+                    impl<T: CompactTxStreamer> tonic::server::UnaryService<super::Empty> for GetLatestTreeStateSvc<T> {
                         type Response = super::TreeState;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::Empty>,
-                        ) -> Self::Future {
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(&mut self, request: tonic::Request<super::Empty>) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as CompactTxStreamer>::get_latest_tree_state(
-                                        &inner,
-                                        request,
-                                    )
+                                <T as CompactTxStreamer>::get_latest_tree_state(&inner, request)
                                     .await
                             };
                             Box::pin(fut)
@@ -1889,24 +1645,21 @@ pub mod compact_tx_streamer_server {
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetSubtreeRoots" => {
                     #[allow(non_camel_case_types)]
                     struct GetSubtreeRootsSvc<T: CompactTxStreamer>(pub Arc<T>);
-                    impl<
-                        T: CompactTxStreamer,
-                    > tonic::server::ServerStreamingService<super::GetSubtreeRootsArg>
-                    for GetSubtreeRootsSvc<T> {
+                    impl<T: CompactTxStreamer>
+                        tonic::server::ServerStreamingService<super::GetSubtreeRootsArg>
+                        for GetSubtreeRootsSvc<T>
+                    {
                         type Response = super::SubtreeRoot;
                         type ResponseStream = T::GetSubtreeRootsStream;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::ResponseStream>,
-                            tonic::Status,
-                        >;
+                        type Future =
+                            BoxFuture<tonic::Response<Self::ResponseStream>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::GetSubtreeRootsArg>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as CompactTxStreamer>::get_subtree_roots(&inner, request)
-                                    .await
+                                <T as CompactTxStreamer>::get_subtree_roots(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -1937,23 +1690,19 @@ pub mod compact_tx_streamer_server {
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetAddressUtxos" => {
                     #[allow(non_camel_case_types)]
                     struct GetAddressUtxosSvc<T: CompactTxStreamer>(pub Arc<T>);
-                    impl<
-                        T: CompactTxStreamer,
-                    > tonic::server::UnaryService<super::GetAddressUtxosArg>
-                    for GetAddressUtxosSvc<T> {
+                    impl<T: CompactTxStreamer>
+                        tonic::server::UnaryService<super::GetAddressUtxosArg>
+                        for GetAddressUtxosSvc<T>
+                    {
                         type Response = super::GetAddressUtxosReplyList;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::GetAddressUtxosArg>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as CompactTxStreamer>::get_address_utxos(&inner, request)
-                                    .await
+                                <T as CompactTxStreamer>::get_address_utxos(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -1984,26 +1733,21 @@ pub mod compact_tx_streamer_server {
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetAddressUtxosStream" => {
                     #[allow(non_camel_case_types)]
                     struct GetAddressUtxosStreamSvc<T: CompactTxStreamer>(pub Arc<T>);
-                    impl<
-                        T: CompactTxStreamer,
-                    > tonic::server::ServerStreamingService<super::GetAddressUtxosArg>
-                    for GetAddressUtxosStreamSvc<T> {
+                    impl<T: CompactTxStreamer>
+                        tonic::server::ServerStreamingService<super::GetAddressUtxosArg>
+                        for GetAddressUtxosStreamSvc<T>
+                    {
                         type Response = super::GetAddressUtxosReply;
                         type ResponseStream = T::GetAddressUtxosStreamStream;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::ResponseStream>,
-                            tonic::Status,
-                        >;
+                        type Future =
+                            BoxFuture<tonic::Response<Self::ResponseStream>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::GetAddressUtxosArg>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as CompactTxStreamer>::get_address_utxos_stream(
-                                        &inner,
-                                        request,
-                                    )
+                                <T as CompactTxStreamer>::get_address_utxos_stream(&inner, request)
                                     .await
                             };
                             Box::pin(fut)
@@ -2035,21 +1779,13 @@ pub mod compact_tx_streamer_server {
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetLightdInfo" => {
                     #[allow(non_camel_case_types)]
                     struct GetLightdInfoSvc<T: CompactTxStreamer>(pub Arc<T>);
-                    impl<T: CompactTxStreamer> tonic::server::UnaryService<super::Empty>
-                    for GetLightdInfoSvc<T> {
+                    impl<T: CompactTxStreamer> tonic::server::UnaryService<super::Empty> for GetLightdInfoSvc<T> {
                         type Response = super::LightdInfo;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::Empty>,
-                        ) -> Self::Future {
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(&mut self, request: tonic::Request<super::Empty>) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as CompactTxStreamer>::get_lightd_info(&inner, request)
-                                    .await
+                                <T as CompactTxStreamer>::get_lightd_info(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -2080,14 +1816,9 @@ pub mod compact_tx_streamer_server {
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/Ping" => {
                     #[allow(non_camel_case_types)]
                     struct PingSvc<T: CompactTxStreamer>(pub Arc<T>);
-                    impl<
-                        T: CompactTxStreamer,
-                    > tonic::server::UnaryService<super::Duration> for PingSvc<T> {
+                    impl<T: CompactTxStreamer> tonic::server::UnaryService<super::Duration> for PingSvc<T> {
                         type Response = super::PingResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::Duration>,
@@ -2122,18 +1853,14 @@ pub mod compact_tx_streamer_server {
                     };
                     Box::pin(fut)
                 }
-                _ => {
-                    Box::pin(async move {
-                        Ok(
-                            http::Response::builder()
-                                .status(200)
-                                .header("grpc-status", "12")
-                                .header("content-type", "application/grpc")
-                                .body(empty_body())
-                                .unwrap(),
-                        )
-                    })
-                }
+                _ => Box::pin(async move {
+                    Ok(http::Response::builder()
+                        .status(200)
+                        .header("grpc-status", "12")
+                        .header("content-type", "application/grpc")
+                        .body(empty_body())
+                        .unwrap())
+                }),
             }
         }
     }
@@ -2159,8 +1886,7 @@ pub mod compact_tx_streamer_server {
             write!(f, "{:?}", self.0)
         }
     }
-    impl<T: CompactTxStreamer> tonic::server::NamedService
-    for CompactTxStreamerServer<T> {
+    impl<T: CompactTxStreamer> tonic::server::NamedService for CompactTxStreamerServer<T> {
         const NAME: &'static str = "cash.z.wallet.sdk.rpc.CompactTxStreamer";
     }
 }
