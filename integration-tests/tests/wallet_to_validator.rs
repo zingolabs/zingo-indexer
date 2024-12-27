@@ -150,6 +150,7 @@ mod wallet_basic {
         send_to_transparent("zcashd").await;
     }
 
+    /// Bug documented in https://github.com/zingolabs/zaino/issues/145.
     #[tokio::test]
     async fn zebrad_send_to_transparent() {
         send_to_transparent("zebrad").await;
@@ -186,6 +187,52 @@ mod wallet_basic {
         .unwrap();
 
         test_manager.local_net.generate_blocks(1).await.unwrap();
+
+        let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new(
+            url::Url::parse(&format!(
+                "http://127.0.0.1:{}",
+                test_manager.zebrad_rpc_listen_port
+            ))
+            .expect("Failed to construct URL")
+            .as_str()
+            .try_into()
+            .expect("Failed to convert URL to URI"),
+            Some("xxxxxx".to_string()),
+            Some("xxxxxx".to_string()),
+        )
+        .await
+        .unwrap();
+
+        println!("\n\nFetching Chain Height!\n");
+
+        let height = dbg!(fetch_service.get_blockchain_info().await.unwrap().blocks.0);
+
+        println!("\n\nFetching Tx From Unfinalized Chain!\n");
+
+        let _unfinalised_transactions = dbg!(
+            fetch_service
+                .get_address_txids(
+                    vec![clients.get_recipient_address("transparent").await],
+                    height,
+                    height,
+                )
+                .await
+        );
+
+        test_manager.local_net.generate_blocks(99).await.unwrap();
+
+        println!("\n\nFetching Tx From Finalized Chain!\n");
+
+        let _finalised_transactions = dbg!(
+            fetch_service
+                .get_address_txids(
+                    vec![clients.get_recipient_address("transparent").await],
+                    height,
+                    height,
+                )
+                .await
+        );
+
         clients.recipient.do_sync(true).await.unwrap();
 
         assert_eq!(
@@ -197,6 +244,8 @@ mod wallet_basic {
                 .unwrap(),
             250_000
         );
+
+        // test_manager.local_net.print_stdout();
 
         test_manager.close().await;
     }
@@ -269,7 +318,7 @@ mod wallet_basic {
         .await
         .unwrap();
 
-        test_manager.local_net.generate_blocks(1).await.unwrap();
+        test_manager.local_net.generate_blocks(100).await.unwrap();
         clients.recipient.do_sync(true).await.unwrap();
 
         assert_eq!(
@@ -343,7 +392,7 @@ mod wallet_basic {
         .await
         .unwrap();
 
-        test_manager.local_net.generate_blocks(1).await.unwrap();
+        test_manager.local_net.generate_blocks(100).await.unwrap();
         clients.recipient.do_sync(true).await.unwrap();
 
         assert_eq!(
@@ -378,6 +427,7 @@ mod wallet_basic {
         monitor_unverified_mempool("zcashd").await;
     }
 
+    /// Bug documented in https://github.com/zingolabs/zaino/issues/144.
     #[tokio::test]
     async fn zebrad_monitor_unverified_mempool() {
         monitor_unverified_mempool("zebrad").await;
@@ -407,7 +457,7 @@ mod wallet_basic {
             clients.faucet.do_sync(true).await.unwrap();
         };
 
-        from_inputs::quick_send(
+        let txid_1 = from_inputs::quick_send(
             &clients.faucet,
             vec![(
                 &zingolib::get_base_address_macro!(recipient_client, "unified"),
@@ -417,7 +467,7 @@ mod wallet_basic {
         )
         .await
         .unwrap();
-        from_inputs::quick_send(
+        let txid_2 = from_inputs::quick_send(
             &clients.faucet,
             vec![(
                 &zingolib::get_base_address_macro!(recipient_client, "sapling"),
@@ -428,10 +478,66 @@ mod wallet_basic {
         .await
         .unwrap();
 
+        println!("\n\nStarting Mempool!\n");
+
         recipient_client.clear_state().await;
         let _ = zingolib::lightclient::LightClient::start_mempool_monitor(recipient_client.clone())
             .unwrap();
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+        // test_manager.local_net.print_stdout();
+
+        let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new(
+            url::Url::parse(&format!(
+                "http://127.0.0.1:{}",
+                test_manager.zebrad_rpc_listen_port
+            ))
+            .expect("Failed to construct URL")
+            .as_str()
+            .try_into()
+            .expect("Failed to convert URL to URI"),
+            Some("xxxxxx".to_string()),
+            Some("xxxxxx".to_string()),
+        )
+        .await
+        .unwrap();
+
+        println!("\n\nFetching Raw Mempool!\n");
+
+        let mempool_txids = fetch_service.get_raw_mempool().await.unwrap();
+        dbg!(txid_1);
+        dbg!(txid_2);
+        dbg!(mempool_txids.clone());
+
+        println!("\n\nFetching Mempool Tx 1!\n");
+        let _transaction_1 = dbg!(
+            fetch_service
+                .get_raw_transaction(mempool_txids.transactions[0].clone(), Some(1))
+                .await
+        );
+
+        println!("\n\nFetching Mempool Tx 2!\n");
+        let _transaction_2 = dbg!(
+            fetch_service
+                .get_raw_transaction(mempool_txids.transactions[1].clone(), Some(1))
+                .await
+        );
+
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+
+        println!("\n\nFetching Mined Tx 1!\n");
+        let _transaction_1 = dbg!(
+            fetch_service
+                .get_raw_transaction(mempool_txids.transactions[0].clone(), Some(1))
+                .await
+        );
+
+        println!("\n\nFetching Mined Tx 2!\n");
+        let _transaction_2 = dbg!(
+            fetch_service
+                .get_raw_transaction(mempool_txids.transactions[1].clone(), Some(1))
+                .await
+        );
 
         assert_eq!(
             recipient_client

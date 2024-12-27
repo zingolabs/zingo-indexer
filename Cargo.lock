@@ -561,7 +561,7 @@ dependencies = [
 [[package]]
 name = "build_utils"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/zingolib.git?tag=zaino_dep_003#5b8cc62da6461bf2a7808f72101e5eae3164e5c3"
+source = "git+https://github.com/zingolabs/zingolib.git?tag=zaino_dep_004#f9f3e5f6da261ec6b7bd1282905534fdc328cb41"
 
 [[package]]
 name = "bumpalo"
@@ -2071,6 +2071,8 @@ version = "0.0.0"
 dependencies = [
  "tokio",
  "tracing-subscriber",
+ "url",
+ "zaino-fetch",
  "zaino-testutils",
  "zcash_local_net",
  "zingolib",
@@ -2272,7 +2274,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if 1.0.0",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -5049,7 +5051,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5579,7 +5581,7 @@ dependencies = [
 [[package]]
 name = "zcash_local_net"
 version = "0.1.0"
-source = "git+https://github.com/idky137/zcash-local-net.git?branch=expose_data_dir#17a450cd0b846382d1b92ce14c9c9b57b3960a23"
+source = "git+https://github.com/zingolabs/zcash-local-net.git?rev=92b509aa152baf7c5b336bed9462dd751799ae76#92b509aa152baf7c5b336bed9462dd751799ae76"
 dependencies = [
  "getset",
  "hex",
@@ -6292,7 +6294,7 @@ dependencies = [
 [[package]]
 name = "zingo-memo"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/zingolib.git?tag=zaino_dep_003#5b8cc62da6461bf2a7808f72101e5eae3164e5c3"
+source = "git+https://github.com/zingolabs/zingolib.git?tag=zaino_dep_004#f9f3e5f6da261ec6b7bd1282905534fdc328cb41"
 dependencies = [
  "zcash_address 0.6.0 (git+https://github.com/zingolabs/librustzcash.git?tag=zcash_client_sqlite-0.12.1_plus_zingolabs_changes-test_2)",
  "zcash_client_backend",
@@ -6304,7 +6306,7 @@ dependencies = [
 [[package]]
 name = "zingo-netutils"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/zingolib.git?tag=zaino_dep_003#5b8cc62da6461bf2a7808f72101e5eae3164e5c3"
+source = "git+https://github.com/zingolabs/zingolib.git?tag=zaino_dep_004#f9f3e5f6da261ec6b7bd1282905534fdc328cb41"
 dependencies = [
  "http 1.2.0",
  "http-body 1.0.1",
@@ -6324,7 +6326,7 @@ dependencies = [
 [[package]]
 name = "zingo-status"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/zingolib.git?tag=zaino_dep_003#5b8cc62da6461bf2a7808f72101e5eae3164e5c3"
+source = "git+https://github.com/zingolabs/zingolib.git?tag=zaino_dep_004#f9f3e5f6da261ec6b7bd1282905534fdc328cb41"
 dependencies = [
  "zcash_primitives 0.19.0 (git+https://github.com/zingolabs/librustzcash.git?tag=zcash_client_sqlite-0.12.1_plus_zingolabs_changes-test_2)",
 ]
@@ -6332,7 +6334,7 @@ dependencies = [
 [[package]]
 name = "zingo-sync"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/zingolib.git?tag=zaino_dep_003#5b8cc62da6461bf2a7808f72101e5eae3164e5c3"
+source = "git+https://github.com/zingolabs/zingolib.git?tag=zaino_dep_004#f9f3e5f6da261ec6b7bd1282905534fdc328cb41"
 dependencies = [
  "base58",
  "crossbeam-channel",
@@ -6363,7 +6365,7 @@ dependencies = [
 [[package]]
 name = "zingolib"
 version = "0.2.0"
-source = "git+https://github.com/zingolabs/zingolib.git?tag=zaino_dep_003#5b8cc62da6461bf2a7808f72101e5eae3164e5c3"
+source = "git+https://github.com/zingolabs/zingolib.git?tag=zaino_dep_004#f9f3e5f6da261ec6b7bd1282905534fdc328cb41"
 dependencies = [
  "append-only-vec",
  "base58",

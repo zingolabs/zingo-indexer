@@ -1020,6 +1020,7 @@ fn tx_to_compact(
     })
 }
 
+/// !!! NOTE / TODO: This code should be retested before continued development, once zebra regtest is fully operational.
 #[cfg(test)]
 mod tests {
     use std::net::SocketAddr;
@@ -1028,6 +1029,7 @@ mod tests {
     use futures::stream::StreamExt;
     use zaino_proto::proto::service::{compact_tx_streamer_server::CompactTxStreamer, BlockId};
     use zaino_testutils::{TestManager, ZEBRAD_CHAIN_CACHE_BIN, ZEBRAD_TESTNET_CACHE_BIN};
+    use zcash_local_net::validator::Validator;
     use zebra_chain::parameters::Network;
 
     #[tokio::test]
@@ -1209,6 +1211,95 @@ mod tests {
         let fetch_service_duration = fetch_start.elapsed();
         let fetch_service_get_blockchain_info: GetBlockChainInfo =
             fetch_service_get_blockchain_info.into();
+
+        // Zaino-Fetch does not return value_pools, ingnore this field.
+        assert_eq!(
+            (
+                state_service_get_blockchain_info.chain(),
+                state_service_get_blockchain_info.blocks(),
+                state_service_get_blockchain_info.best_block_hash(),
+                state_service_get_blockchain_info.estimated_height(),
+                state_service_get_blockchain_info.upgrades(),
+                state_service_get_blockchain_info.consensus(),
+            ),
+            (
+                fetch_service_get_blockchain_info.chain(),
+                fetch_service_get_blockchain_info.blocks(),
+                fetch_service_get_blockchain_info.best_block_hash(),
+                fetch_service_get_blockchain_info.estimated_height(),
+                fetch_service_get_blockchain_info.upgrades(),
+                fetch_service_get_blockchain_info.consensus(),
+            )
+        );
+
+        println!("GetBlockChainInfo responses correct. State-Service processing time: {:?} - fetch-Service processing time: {:?}.", state_service_duration, fetch_service_duration);
+
+        test_manager.close().await;
+    }
+
+    /// Bug documented in https://github.com/zingolabs/zaino/issues/146.
+    #[tokio::test]
+    async fn state_service_get_blockchain_info_no_cache() {
+        let mut test_manager = TestManager::launch("zebrad", None, None, false, false)
+            .await
+            .unwrap();
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+
+        let state_service = StateService::spawn(StateServiceConfig::new(
+            zebra_state::Config {
+                cache_dir: test_manager.data_dir.clone(),
+                ephemeral: false,
+                delete_old_database: true,
+                debug_stop_at_height: None,
+                debug_validity_check_interval: None,
+            },
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+        let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new(
+            url::Url::parse(&format!(
+                "http://127.0.0.1:{}",
+                test_manager.zebrad_rpc_listen_port
+            ))
+            .expect("Failed to construct URL")
+            .as_str()
+            .try_into()
+            .expect("Failed to convert URL to URI"),
+            Some("xxxxxx".to_string()),
+            Some("xxxxxx".to_string()),
+        )
+        .await
+        .unwrap();
+
+        let state_start = tokio::time::Instant::now();
+        let state_service_get_blockchain_info = state_service.get_blockchain_info().await.unwrap();
+        let state_service_duration = state_start.elapsed();
+
+        let fetch_start = tokio::time::Instant::now();
+        let fetch_service_get_blockchain_info = fetch_service.get_blockchain_info().await.unwrap();
+        let fetch_service_duration = fetch_start.elapsed();
+        let fetch_service_get_blockchain_info: GetBlockChainInfo =
+            fetch_service_get_blockchain_info.into();
+
+        println!(
+            "Fetch Service Chain Height: {}",
+            fetch_service_get_blockchain_info.blocks().0
+        );
+        println!(
+            "State Service Chain Height: {}",
+            state_service_get_blockchain_info.blocks().0
+        );
+
+        test_manager.local_net.print_stdout();
 
         // Zaino-Fetch does not return value_pools, ingnore this field.
         assert_eq!(
