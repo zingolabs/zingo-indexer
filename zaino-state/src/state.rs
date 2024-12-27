@@ -1,4 +1,4 @@
-//! Holds Wrapper functionality for Zebra's `ReadStateService`.
+//! Zcash chain fetch and tx submission service backed by Zebras [`ReadStateService`].
 
 use chrono::Utc;
 use hex::ToHex;
