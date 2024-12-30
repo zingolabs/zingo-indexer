@@ -9,6 +9,8 @@ use tokio::time::timeout;
 use tower::Service;
 use zaino_proto::proto::service::BlockRange;
 use zebra_chain::parameters::Network;
+use zebra_rpc::methods::GetBlockTransaction;
+use zebra_rpc::server::error::LegacyCode;
 
 use zebra_chain::{
     chain_tip::{ChainTip, NetworkChainTipHeightEstimator},
@@ -17,7 +19,7 @@ use zebra_chain::{
     transaction::Transaction,
 };
 use zebra_rpc::{
-    constants::{INVALID_ADDRESS_OR_KEY_ERROR_CODE, MISSING_BLOCK_ERROR_CODE},
+    // constants::{INVALID_ADDRESS_OR_KEY_ERROR_CODE, MISSING_BLOCK_ERROR_CODE},
     methods::{
         hex_data::HexData, types::ValuePoolBalance, ConsensusBranchIdHex, GetBlock,
         GetBlockChainInfo, GetBlockHash, GetBlockHeader, GetBlockHeaderObject, GetBlockTrees,
@@ -369,7 +371,7 @@ impl StateService {
                 zebra_state::ReadResponse::Block(Some(block)) => Ok(GetBlock::Raw(block.into())),
                 zebra_state::ReadResponse::Block(None) => Err(StateServiceError::RpcError(
                     zaino_fetch::jsonrpc::connector::RpcError {
-                        code: MISSING_BLOCK_ERROR_CODE.code(),
+                        code: LegacyCode::InvalidParameter as i64,
                         message: "Block not found".to_string(),
                         data: None,
                     },
@@ -423,11 +425,7 @@ impl StateService {
                             zebra_state::ReadResponse::TransactionIdsForBlock(Some(tx_ids)) => tx_ids,
                             zebra_state::ReadResponse::TransactionIdsForBlock(None) => {
                                 return Err(StateServiceError::RpcError(zaino_fetch::jsonrpc::connector::RpcError {
-                                    code: if hash_or_height.hash().is_some() {
-                                        INVALID_ADDRESS_OR_KEY_ERROR_CODE.code()
-                                    } else {
-                                        MISSING_BLOCK_ERROR_CODE.code()
-                                    },
+                                    code: LegacyCode::InvalidParameter as i64,
                                     message: "Block not found".to_string(),
                                     data: None,
                                 }));
@@ -443,11 +441,7 @@ impl StateService {
                             zebra_state::ReadResponse::OrchardTree(Some(tree)) => tree,
                             zebra_state::ReadResponse::OrchardTree(None) => {
                                 return Err(StateServiceError::RpcError(zaino_fetch::jsonrpc::connector::RpcError {
-                                    code: if hash_or_height.hash().is_some() {
-                                        INVALID_ADDRESS_OR_KEY_ERROR_CODE.code()
-                                    } else {
-                                        MISSING_BLOCK_ERROR_CODE.code()
-                                    },
+                                    code: LegacyCode::InvalidParameter as i64,
                                     message: "Missing orchard tree for block.".to_string(),
                                     data: None,
                                 }));
@@ -472,8 +466,15 @@ impl StateService {
                     }
                 }
             }
+
             let tx = txids
-                .ok_or_else(|| StateServiceError::Custom("No txids found in block.".to_string()))?;
+                .ok_or_else(|| StateServiceError::Custom("No txids found in block.".to_string()))?
+                .into_iter()
+                .map(|tx| {
+                    tx.parse::<zebra_chain::transaction::Hash>()
+                        .map(GetBlockTransaction::Hash)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
 
             let trees = orchard_trees
                 .ok_or_else(|| StateServiceError::Custom("No orchard trees found.".to_string()))?;
@@ -550,11 +551,7 @@ impl StateService {
                     // Compatibility with zcashd. Note that since this function
                     // is reused by getblock(), we return the errors expected
                     // by it (they differ whether a hash or a height was passed)
-                    code: if hash_or_height.hash().is_some() {
-                        INVALID_ADDRESS_OR_KEY_ERROR_CODE.code()
-                    } else {
-                        MISSING_BLOCK_ERROR_CODE.code()
-                    },
+                    code: LegacyCode::InvalidParameter as i64,
                     message: "block height not in best chain".to_string(),
                     data: None,
                 })
@@ -580,7 +577,7 @@ impl StateService {
             // This could be `None` if there's a chain reorg between state queries.
             let sapling_tree = sapling_tree.ok_or_else(|| {
                 StateServiceError::RpcError(zaino_fetch::jsonrpc::connector::RpcError {
-                    code: MISSING_BLOCK_ERROR_CODE.code(),
+                    code: LegacyCode::InvalidParameter as i64,
                     message: "missing sapling tree for block".to_string(),
                     data: None,
                 })
@@ -816,11 +813,7 @@ impl StateService {
                     // Compatibility with zcashd. Note that since this function
                     // is reused by getblock(), we return the errors expected
                     // by it (they differ whether a hash or a height was passed)
-                    code: if hash_or_height.hash().is_some() {
-                        INVALID_ADDRESS_OR_KEY_ERROR_CODE.code()
-                    } else {
-                        MISSING_BLOCK_ERROR_CODE.code()
-                    },
+                    code: LegacyCode::InvalidParameter as i64,
                     message: "block height not in best chain".to_string(),
                     data: None,
                 })
@@ -846,7 +839,7 @@ impl StateService {
             // This could be `None` if there's a chain reorg between state queries.
             let sapling_tree = sapling_tree.ok_or_else(|| {
                 StateServiceError::RpcError(zaino_fetch::jsonrpc::connector::RpcError {
-                    code: MISSING_BLOCK_ERROR_CODE.code(),
+                    code: LegacyCode::InvalidParameter as i64,
                     message: "missing sapling tree for block".to_string(),
                     data: None,
                 })
@@ -923,7 +916,7 @@ impl StateService {
         else {
             return Err(StateServiceError::RpcError(
                 zaino_fetch::jsonrpc::connector::RpcError {
-                    code: MISSING_BLOCK_ERROR_CODE.code(),
+                    code: LegacyCode::InvalidParameter as i64,
                     message: "Block not found".to_string(),
                     data: None,
                 },
@@ -1400,22 +1393,22 @@ mod tests {
         .unwrap();
 
         let state_start = tokio::time::Instant::now();
-        let state_service_get_blockchain_info = state_service
+        let state_service_get_block = state_service
             .get_block("1".to_string(), Some(0))
             .await
             .unwrap();
         let state_service_duration = state_start.elapsed();
 
         let fetch_start = tokio::time::Instant::now();
-        let fetch_service_get_blockchain_info = fetch_service
+        let fetch_service_get_block = fetch_service
             .get_block("1".to_string(), Some(0))
             .await
             .unwrap();
         let fetch_service_duration = fetch_start.elapsed();
 
         assert_eq!(
-            state_service_get_blockchain_info,
-            fetch_service_get_blockchain_info.into()
+            state_service_get_block,
+            fetch_service_get_block.try_into().unwrap()
         );
 
         println!("GetBlock(raw) responses correct. State-Service processing time: {:?} - fetch-Service processing time: {:?}.", state_service_duration, fetch_service_duration);
@@ -1466,14 +1459,14 @@ mod tests {
         .unwrap();
 
         let state_start = tokio::time::Instant::now();
-        let state_service_get_blockchain_info = state_service
+        let state_service_get_block = state_service
             .get_block("1".to_string(), Some(1))
             .await
             .unwrap();
         let state_service_duration = state_start.elapsed();
 
         let fetch_start = tokio::time::Instant::now();
-        let fetch_service_get_blockchain_info = fetch_service
+        let fetch_service_get_block = fetch_service
             .get_block("1".to_string(), Some(1))
             .await
             .unwrap();
@@ -1481,8 +1474,8 @@ mod tests {
 
         // Zaino-fetch only returns fields that are required by the lightwallet services. Check those fields match and ignore the others.
         match (
-            state_service_get_blockchain_info,
-            fetch_service_get_blockchain_info.into(),
+            state_service_get_block,
+            fetch_service_get_block.try_into().unwrap(),
         ) {
             (
                 zebra_rpc::methods::GetBlock::Object {

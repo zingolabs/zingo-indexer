@@ -154,12 +154,17 @@ impl Indexer for FetchService {
         &self,
         address_strings: AddressStrings,
     ) -> Result<AddressBalance, Self::Error> {
-        // Ok(self
-        //     .fetcher
-        //     .get_address_balance(address_strings.addresses)
-        //     .await?
-        //     .into())
-        todo!()
+        Ok(self
+            .fetcher
+            .get_address_balance(address_strings.valid_address_strings().map_err(|code| {
+                FetchServiceError::RpcError(zaino_fetch::jsonrpc::connector::RpcError {
+                    code: code as i32 as i64,
+                    message: "Invalid address provided".to_string(),
+                    data: None,
+                })
+            })?)
+            .await?
+            .into())
     }
 
     /// Sends the raw bytes of a signed transaction to the local node's mempool, if the transaction is valid.
@@ -222,7 +227,7 @@ impl Indexer for FetchService {
             .fetcher
             .get_block(hash_or_height, verbosity)
             .await?
-            .into())
+            .try_into()?)
     }
 
     /// Returns all transaction ids in the memory pool, as a JSON array.

@@ -71,6 +71,14 @@ pub struct GetBalanceResponse {
     pub balance: u64,
 }
 
+impl From<GetBalanceResponse> for zebra_rpc::methods::AddressBalance {
+    fn from(response: GetBalanceResponse) -> Self {
+        zebra_rpc::methods::AddressBalance {
+            balance: response.balance,
+        }
+    }
+}
+
 /// Contains the hex-encoded hash of the sent transaction.
 ///
 /// This is used for the output parameter of [`JsonRpcConnector::send_raw_transaction`].
@@ -235,11 +243,13 @@ pub enum GetBlockResponse {
     },
 }
 
-impl From<GetBlockResponse> for zebra_rpc::methods::GetBlock {
-    fn from(response: GetBlockResponse) -> Self {
+impl TryFrom<GetBlockResponse> for zebra_rpc::methods::GetBlock {
+    type Error = zebra_chain::serialization::SerializationError;
+
+    fn try_from(response: GetBlockResponse) -> Result<Self, Self::Error> {
         match response {
             GetBlockResponse::Raw(serialized_block) => {
-                zebra_rpc::methods::GetBlock::Raw(serialized_block.0)
+                Ok(zebra_rpc::methods::GetBlock::Raw(serialized_block.0))
             }
             GetBlockResponse::Object {
                 hash,
@@ -248,25 +258,35 @@ impl From<GetBlockResponse> for zebra_rpc::methods::GetBlock {
                 time,
                 tx,
                 trees,
-            } => zebra_rpc::methods::GetBlock::Object {
-                hash: zebra_rpc::methods::GetBlockHash(hash.0),
-                confirmations,
-                size: None,
-                height,
-                version: None,
-                merkle_root: None,
-                final_sapling_root: None,
-                final_orchard_root: None,
-                tx,
-                time,
-                nonce: None,
-                solution: None,
-                bits: None,
-                difficulty: None,
-                trees: trees.into(),
-                previous_block_hash: None,
-                next_block_hash: None,
-            },
+            } => {
+                let tx_ids: Result<Vec<_>, _> = tx
+                    .into_iter()
+                    .map(|txid| {
+                        txid.parse::<zebra_chain::transaction::Hash>()
+                            .map(zebra_rpc::methods::GetBlockTransaction::Hash)
+                    })
+                    .collect();
+
+                Ok(zebra_rpc::methods::GetBlock::Object {
+                    hash: zebra_rpc::methods::GetBlockHash(hash.0),
+                    confirmations,
+                    size: None,
+                    height,
+                    version: None,
+                    merkle_root: None,
+                    final_sapling_root: None,
+                    final_orchard_root: None,
+                    tx: tx_ids?,
+                    time,
+                    nonce: None,
+                    solution: None,
+                    bits: None,
+                    difficulty: None,
+                    trees: trees.into(),
+                    previous_block_hash: None,
+                    next_block_hash: None,
+                })
+            }
         }
     }
 }
