@@ -47,14 +47,12 @@ impl Worker {
         _worker_id: usize,
         queue: QueueReceiver<ZingoIndexerRequest>,
         requeue: QueueSender<ZingoIndexerRequest>,
-        lightwalletd_uri: Uri,
         zebrad_uri: Uri,
         atomic_status: AtomicStatus,
         online: Arc<AtomicBool>,
     ) -> Self {
         let grpc_client = GrpcClient {
-            lightwalletd_uri,
-            zebrad_uri,
+            zebrad_rpc_uri: zebrad_uri,
             online: online.clone(),
         };
         Worker {
@@ -205,7 +203,6 @@ impl WorkerPool {
         idle_size: u16,
         queue: QueueReceiver<ZingoIndexerRequest>,
         _requeue: QueueSender<ZingoIndexerRequest>,
-        lightwalletd_uri: Uri,
         zebrad_uri: Uri,
         status: WorkerPoolStatus,
         online: Arc<AtomicBool>,
@@ -217,7 +214,6 @@ impl WorkerPool {
                     workers.len(),
                     queue.clone(),
                     _requeue.clone(),
-                    lightwalletd_uri.clone(),
                     zebrad_uri.clone(),
                     status.statuses[workers.len()].clone(),
                     online.clone(),
@@ -257,8 +253,7 @@ impl WorkerPool {
                     worker_index,
                     self.workers[0].queue.clone(),
                     self.workers[0].requeue.clone(),
-                    self.workers[0].grpc_client.lightwalletd_uri.clone(),
-                    self.workers[0].grpc_client.zebrad_uri.clone(),
+                    self.workers[0].grpc_client.zebrad_rpc_uri.clone(),
                     self.status.statuses[worker_index].clone(),
                     self.online.clone(),
                 )

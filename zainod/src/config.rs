@@ -9,9 +9,6 @@ pub struct IndexerConfig {
     pub tcp_active: bool,
     /// TcpIngestors listen port
     pub listen_port: Option<u16>,
-    /// LightWalletD listen port [DEPRECATED].
-    /// Used by zingo-testutils.
-    pub lightwalletd_port: u16,
     /// Full node / validator listen port.
     pub zebrad_port: u16,
     /// Full node Username.
@@ -51,7 +48,6 @@ impl Default for IndexerConfig {
         Self {
             tcp_active: true,
             listen_port: Some(8080),
-            lightwalletd_port: 9067,
             zebrad_port: 18232,
             node_user: Some("xxxxxx".to_string()),
             node_password: Some("xxxxxx".to_string()),
@@ -71,7 +67,6 @@ pub fn load_config(file_path: &std::path::PathBuf) -> IndexerConfig {
             config = IndexerConfig {
                 tcp_active: parsed_config.tcp_active,
                 listen_port: parsed_config.listen_port.or(config.listen_port),
-                lightwalletd_port: parsed_config.lightwalletd_port,
                 zebrad_port: parsed_config.zebrad_port,
                 node_user: parsed_config.node_user.or(config.node_user),
                 node_password: parsed_config.node_password.or(config.node_password),

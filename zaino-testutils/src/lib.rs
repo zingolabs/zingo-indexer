@@ -338,8 +338,6 @@ impl TestManager {
             let indexer_config = zainodlib::config::IndexerConfig {
                 tcp_active: true,
                 listen_port: Some(zaino_grpc_listen_port),
-                // NOTE: Remove field from IndexerConfig with the removal of current testutils.
-                lightwalletd_port: portpicker::pick_unused_port().expect("No ports free"),
                 zebrad_port: zebrad_rpc_listen_port,
                 node_user: Some("xxxxxx".to_string()),
                 node_password: Some("xxxxxx".to_string()),
