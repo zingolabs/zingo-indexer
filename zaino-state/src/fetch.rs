@@ -26,9 +26,9 @@ pub struct FetchService {
     /// Sync task handle.
     // sync_task_handle: tokio::task::JoinHandle<()>,
     /// Service metadata.
-    data: ServiceMetadata,
+    _data: ServiceMetadata,
     /// StateService config data.
-    config: FetchServiceConfig,
+    _config: FetchServiceConfig,
     /// Thread-safe status indicator.
     status: AtomicStatus,
 }
@@ -186,12 +186,11 @@ impl Indexer for FetchService {
         &self,
         raw_transaction_hex: String,
     ) -> Result<SentTransactionHash, Self::Error> {
-        // Ok(self
-        //     .fetcher
-        //     .send_raw_transaction(raw_transaction_hex)
-        //     .await?
-        //     .into())
-        todo!()
+        Ok(self
+            .fetcher
+            .send_raw_transaction(raw_transaction_hex)
+            .await?
+            .into())
     }
 
     /// Returns the requested block by hash or height, as a [`GetBlock`] JSON string.
@@ -236,8 +235,7 @@ impl Indexer for FetchService {
     /// method: post
     /// tags: blockchain
     async fn get_raw_mempool(&self) -> Result<Vec<String>, Self::Error> {
-        // Ok(self.fetcher.get_raw_mempool().await?.into())
-        todo!()
+        Ok(self.fetcher.get_raw_mempool().await?.transactions)
     }
 
     /// Returns information about the given block's Sapling & Orchard tree state.
@@ -257,8 +255,11 @@ impl Indexer for FetchService {
     /// `lightwalletd` only uses positive heights, so Zebra does not support
     /// negative heights.
     async fn z_get_treestate(&self, hash_or_height: String) -> Result<GetTreestate, Self::Error> {
-        // Ok(self.fetcher.get_treestate(hash_or_height).await?.into())
-        todo!()
+        Ok(self
+            .fetcher
+            .get_treestate(hash_or_height)
+            .await?
+            .try_into()?)
     }
 
     /// Returns information about a range of Sapling or Orchard subtrees.
@@ -285,12 +286,15 @@ impl Indexer for FetchService {
         start_index: NoteCommitmentSubtreeIndex,
         limit: Option<NoteCommitmentSubtreeIndex>,
     ) -> Result<GetSubtrees, Self::Error> {
-        // Ok(self
-        //     .fetcher
-        //     .get_subtrees_by_index(pool, start_index, limit)
-        //     .await?
-        //     .into())
-        todo!()
+        Ok(self
+            .fetcher
+            .get_subtrees_by_index(
+                pool,
+                start_index.0,
+                limit.and_then(|limit_index| Some(limit_index.0)),
+            )
+            .await?
+            .into())
     }
 
     /// Returns the raw transaction data, as a [`GetRawTransaction`] JSON string or structure.
@@ -317,12 +321,11 @@ impl Indexer for FetchService {
         txid_hex: String,
         verbose: Option<u8>,
     ) -> Result<GetRawTransaction, Self::Error> {
-        // Ok(self
-        //     .fetcher
-        //     .get_raw_transaction(txid_hex, verbose)
-        //     .await?
-        //     .into())
-        todo!()
+        Ok(self
+            .fetcher
+            .get_raw_transaction(txid_hex, verbose)
+            .await?
+            .into())
     }
 
     /// Returns the transaction ids made by the provided transparent addresses.
@@ -346,12 +349,12 @@ impl Indexer for FetchService {
         &self,
         request: GetAddressTxIdsRequest,
     ) -> Result<Vec<String>, Self::Error> {
-        // Ok(self
-        //     .fetcher
-        //     .get_address_txids(request.addresses, request.start, request.end)
-        //     .await?
-        //     .into())
-        todo!()
+        let (addresses, start, end) = request.into_parts();
+        Ok(self
+            .fetcher
+            .get_address_txids(addresses, start, end)
+            .await?
+            .transactions)
     }
 
     /// Returns all unspent outputs for a list of addresses.
@@ -372,11 +375,18 @@ impl Indexer for FetchService {
         &self,
         address_strings: AddressStrings,
     ) -> Result<Vec<GetAddressUtxos>, Self::Error> {
-        // Ok(self
-        //     .fetcher
-        //     .get_address_utxos(address_strings.addresses)
-        //     .await?
-        //     .into())
-        todo!()
+        Ok(self
+            .fetcher
+            .get_address_utxos(address_strings.valid_address_strings().map_err(|code| {
+                FetchServiceError::RpcError(zaino_fetch::jsonrpc::connector::RpcError {
+                    code: code as i32 as i64,
+                    message: "Invalid address provided".to_string(),
+                    data: None,
+                })
+            })?)
+            .await?
+            .into_iter()
+            .map(|utxos| utxos.into())
+            .collect())
     }
 }
