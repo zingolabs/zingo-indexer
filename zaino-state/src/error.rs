@@ -101,6 +101,18 @@ pub enum FetchServiceError {
     #[error("Integer conversion error: {0}")]
     TryFromIntError(#[from] std::num::TryFromIntError),
 
+    /// UTF-8 conversion error.
+    #[error("UTF-8 conversion error: {0}")]
+    Utf8Error(#[from] std::str::Utf8Error),
+
+    /// Integer parsing error.
+    #[error("Integer parsing error: {0}")]
+    ParseIntError(#[from] std::num::ParseIntError),
+
+    /// Chain parse error.
+    #[error("Chain parse error: {0}")]
+    ChainParseError(#[from] zaino_fetch::chain::error::ParseError),
+
     /// std::io::Error
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
@@ -129,6 +141,15 @@ impl From<FetchServiceError> for tonic::Status {
             }
             FetchServiceError::TryFromIntError(err) => {
                 tonic::Status::internal(format!("Integer conversion error: {}", err))
+            }
+            FetchServiceError::Utf8Error(err) => {
+                tonic::Status::internal(format!("UTF-8 conversion error: {}", err))
+            }
+            FetchServiceError::ParseIntError(err) => {
+                tonic::Status::internal(format!("Integer parsing error: {}", err))
+            }
+            FetchServiceError::ChainParseError(err) => {
+                tonic::Status::internal(format!("Chain parse error: {}", err))
             }
             FetchServiceError::IoError(err) => {
                 tonic::Status::internal(format!("IO error: {}", err))

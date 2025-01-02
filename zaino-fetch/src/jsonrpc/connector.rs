@@ -9,7 +9,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     fmt,
-    sync::atomic::{AtomicI32, Ordering},
+    sync::{
+        atomic::{AtomicI32, Ordering},
+        Arc,
+    },
 };
 
 use crate::jsonrpc::{
@@ -71,10 +74,10 @@ impl fmt::Display for RpcError {
 impl std::error::Error for RpcError {}
 
 /// JsonRPC Client config data.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct JsonRpcConnector {
     url: Url,
-    id_counter: AtomicI32,
+    id_counter: Arc<AtomicI32>,
     user: Option<String>,
     password: Option<String>,
 }
@@ -89,7 +92,7 @@ impl JsonRpcConnector {
         let url = reqwest::Url::parse(&uri.to_string())?;
         Ok(Self {
             url,
-            id_counter: AtomicI32::new(0),
+            id_counter: Arc::new(AtomicI32::new(0)),
             user,
             password,
         })

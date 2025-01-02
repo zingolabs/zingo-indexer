@@ -30,6 +30,7 @@ tokio-stream = { workspace = true }
 futures = { workspace = true }
 tonic = { workspace = true }
 http = { workspace = true }
+lazy-regex = { workspace = true }
 
 [dev-dependencies]
 zaino-testutils = { path = "../zaino-testutils" }

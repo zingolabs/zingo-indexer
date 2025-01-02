@@ -5,9 +5,9 @@ use async_trait::async_trait;
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
     service::{
-        AddressList, Balance, BlockId, BlockRange, ChainSpec, Duration, Exclude,
-        GetAddressUtxosArg, GetAddressUtxosReplyList, GetSubtreeRootsArg, LightdInfo, PingResponse,
-        RawTransaction, SendResponse, TransparentAddressBlockFilter, TreeState, TxFilter,
+        AddressList, Balance, BlockId, BlockRange, Duration, Exclude, GetAddressUtxosArg,
+        GetAddressUtxosReplyList, GetSubtreeRootsArg, LightdInfo, PingResponse, RawTransaction,
+        SendResponse, TransparentAddressBlockFilter, TreeState, TxFilter,
     },
 };
 use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
@@ -261,7 +261,7 @@ pub trait LightWalletIndexer: Send + Sync + 'static {
     type Error: std::error::Error + Send + Sync + 'static + Into<tonic::Status>;
 
     /// Return the height of the tip of the best chain
-    async fn get_latest_block(&self, request: ChainSpec) -> Result<BlockId, Self::Error>;
+    async fn get_latest_block(&self) -> Result<BlockId, Self::Error>;
 
     /// Return the compact block corresponding to the given block identifier
     async fn get_block(&self, request: BlockId) -> Result<CompactBlock, Self::Error>;
@@ -360,5 +360,7 @@ pub trait LightWalletIndexer: Send + Sync + 'static {
     async fn get_lightd_info(&self) -> Result<LightdInfo, Self::Error>;
 
     /// Testing-only, requires lightwalletd --ping-very-insecure (do not enable in production)
+    ///
+    /// NOTE: Currently unimplemented in Zaino.
     async fn ping(&self, request: Duration) -> Result<PingResponse, Self::Error>;
 }
