@@ -40,6 +40,36 @@ pub enum StateServiceError {
     Generic(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
+impl From<StateServiceError> for tonic::Status {
+    fn from(error: StateServiceError) -> Self {
+        match error {
+            StateServiceError::Custom(message) => tonic::Status::internal(message),
+            StateServiceError::JoinError(err) => {
+                tonic::Status::internal(format!("Join error: {}", err))
+            }
+            StateServiceError::JsonRpcConnectorError(err) => {
+                tonic::Status::internal(format!("JsonRpcConnector error: {}", err))
+            }
+            StateServiceError::RpcError(err) => {
+                tonic::Status::internal(format!("RPC error: {:?}", err))
+            }
+            StateServiceError::TonicStatusError(err) => err,
+            StateServiceError::SerializationError(err) => {
+                tonic::Status::internal(format!("Serialization error: {}", err))
+            }
+            StateServiceError::TryFromIntError(err) => {
+                tonic::Status::internal(format!("Integer conversion error: {}", err))
+            }
+            StateServiceError::IoError(err) => {
+                tonic::Status::internal(format!("IO error: {}", err))
+            }
+            StateServiceError::Generic(err) => {
+                tonic::Status::internal(format!("Generic error: {}", err))
+            }
+        }
+    }
+}
+
 /// Errors related to the `StateService`.
 #[derive(Debug, thiserror::Error)]
 pub enum FetchServiceError {
@@ -78,4 +108,34 @@ pub enum FetchServiceError {
     /// A generic boxed error.
     #[error("Generic error: {0}")]
     Generic(#[from] Box<dyn std::error::Error + Send + Sync>),
+}
+
+impl From<FetchServiceError> for tonic::Status {
+    fn from(error: FetchServiceError) -> Self {
+        match error {
+            FetchServiceError::Custom(message) => tonic::Status::internal(message),
+            FetchServiceError::JoinError(err) => {
+                tonic::Status::internal(format!("Join error: {}", err))
+            }
+            FetchServiceError::JsonRpcConnectorError(err) => {
+                tonic::Status::internal(format!("JsonRpcConnector error: {}", err))
+            }
+            FetchServiceError::RpcError(err) => {
+                tonic::Status::internal(format!("RPC error: {:?}", err))
+            }
+            FetchServiceError::TonicStatusError(err) => err,
+            FetchServiceError::SerializationError(err) => {
+                tonic::Status::internal(format!("Serialization error: {}", err))
+            }
+            FetchServiceError::TryFromIntError(err) => {
+                tonic::Status::internal(format!("Integer conversion error: {}", err))
+            }
+            FetchServiceError::IoError(err) => {
+                tonic::Status::internal(format!("IO error: {}", err))
+            }
+            FetchServiceError::Generic(err) => {
+                tonic::Status::internal(format!("Generic error: {}", err))
+            }
+        }
+    }
 }

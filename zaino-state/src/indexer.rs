@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
     service::{
-        Address, AddressList, Balance, BlockId, BlockRange, ChainSpec, Duration, Exclude,
+        AddressList, Balance, BlockId, BlockRange, ChainSpec, Duration, Exclude,
         GetAddressUtxosArg, GetAddressUtxosReplyList, GetSubtreeRootsArg, LightdInfo, PingResponse,
         RawTransaction, SendResponse, TransparentAddressBlockFilter, TreeState, TxFilter,
     },
@@ -18,8 +18,8 @@ use zebra_rpc::methods::{
 };
 
 use crate::stream::{
-    CompactBlockStream, CompactTransactionStream, RawTransactionStream, SubtreeRootReplyStream,
-    UtxoReplyStream,
+    AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
+    SubtreeRootReplyStream, UtxoReplyStream,
 };
 
 /// Zcash RPC method signatures.
@@ -80,7 +80,7 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     /// The RPC documentation says that the returned object has a string `balance` field, but
     /// zcashd actually [returns an
     /// integer](https://github.com/zcash/lightwalletd/blob/bdaac63f3ee0dbef62bde04f6817a9f90d483b00/common/common.go#L128-L130).
-    async fn get_address_balance(
+    async fn z_get_address_balance(
         &self,
         address_strings: AddressStrings,
     ) -> Result<AddressBalance, Self::Error>;
@@ -129,7 +129,7 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     /// use verbosity=3.
     ///
     /// The undocumented `chainwork` field is not returned.
-    async fn get_block(
+    async fn z_get_block(
         &self,
         hash_or_height: String,
         verbosity: Option<u8>,
@@ -246,7 +246,7 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     ///
     /// lightwalletd always uses the multi-address request, without chaininfo:
     /// <https://github.com/zcash/lightwalletd/blob/master/frontend/service.go#L402>
-    async fn get_address_utxos(
+    async fn z_get_address_utxos(
         &self,
         address_strings: AddressStrings,
     ) -> Result<Vec<GetAddressUtxos>, Self::Error>;
@@ -299,7 +299,7 @@ pub trait LightWalletIndexer: Send + Sync + 'static {
     /// TODO: Update input type.
     async fn get_taddress_balance_stream(
         &self,
-        request: tonic::Streaming<Address>,
+        request: AddressStream,
     ) -> Result<Balance, Self::Error>;
 
     /// Return the compact transactions currently in the mempool; the results
