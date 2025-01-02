@@ -4,7 +4,7 @@ use crate::{
     config::FetchServiceConfig,
     error::FetchServiceError,
     get_build_info,
-    indexer::Indexer,
+    indexer::ZcashIndexer,
     status::{AtomicStatus, StatusType},
     ServiceMetadata,
 };
@@ -93,7 +93,7 @@ impl Drop for FetchService {
 }
 
 #[async_trait]
-impl Indexer for FetchService {
+impl ZcashIndexer for FetchService {
     type Error = FetchServiceError;
 
     /// Returns software information from the RPC server, as a [`GetInfo`] JSON struct.
