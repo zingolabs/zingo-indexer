@@ -4369,7 +4369,7 @@ dependencies = [
 [[package]]
 name = "tower-batch-control"
 version = "0.2.41-beta.19"
-source = "git+https://github.com/idky137/zebra.git?branch=add_public_func_for_zaino_pt2#f69f0c72631bddcece9af495d1cf543255af598b"
+source = "git+https://github.com/idky137/zebra.git?branch=add_public_func_for_zaino_pt2#8e8ebe2972459a40461a718fe277b45d5d2fe7b3"
 dependencies = [
  "futures",
  "futures-core",
@@ -4385,7 +4385,7 @@ dependencies = [
 [[package]]
 name = "tower-fallback"
 version = "0.2.41-beta.19"
-source = "git+https://github.com/idky137/zebra.git?branch=add_public_func_for_zaino_pt2#f69f0c72631bddcece9af495d1cf543255af598b"
+source = "git+https://github.com/idky137/zebra.git?branch=add_public_func_for_zaino_pt2#8e8ebe2972459a40461a718fe277b45d5d2fe7b3"
 dependencies = [
  "futures-core",
  "pin-project",
@@ -5234,6 +5234,7 @@ dependencies = [
  "zebra-chain",
  "zebra-rpc",
  "zebra-state",
+ "zingolib",
 ]
 
 [[package]]
@@ -5603,7 +5604,7 @@ dependencies = [
 [[package]]
 name = "zebra-chain"
 version = "1.0.0-beta.43"
-source = "git+https://github.com/idky137/zebra.git?branch=add_public_func_for_zaino_pt2#f69f0c72631bddcece9af495d1cf543255af598b"
+source = "git+https://github.com/idky137/zebra.git?branch=add_public_func_for_zaino_pt2#8e8ebe2972459a40461a718fe277b45d5d2fe7b3"
 dependencies = [
  "bitflags",
  "bitflags-serde-legacy",
@@ -5659,7 +5660,7 @@ dependencies = [
 [[package]]
 name = "zebra-consensus"
 version = "1.0.0-beta.43"
-source = "git+https://github.com/idky137/zebra.git?branch=add_public_func_for_zaino_pt2#f69f0c72631bddcece9af495d1cf543255af598b"
+source = "git+https://github.com/idky137/zebra.git?branch=add_public_func_for_zaino_pt2#8e8ebe2972459a40461a718fe277b45d5d2fe7b3"
 dependencies = [
  "bellman",
  "blake2b_simd",
@@ -5695,7 +5696,7 @@ dependencies = [
 [[package]]
 name = "zebra-network"
 version = "1.0.0-beta.43"
-source = "git+https://github.com/idky137/zebra.git?branch=add_public_func_for_zaino_pt2#f69f0c72631bddcece9af495d1cf543255af598b"
+source = "git+https://github.com/idky137/zebra.git?branch=add_public_func_for_zaino_pt2#8e8ebe2972459a40461a718fe277b45d5d2fe7b3"
 dependencies = [
  "bitflags",
  "byteorder",
@@ -5731,7 +5732,7 @@ dependencies = [
 [[package]]
 name = "zebra-node-services"
 version = "1.0.0-beta.43"
-source = "git+https://github.com/idky137/zebra.git?branch=add_public_func_for_zaino_pt2#f69f0c72631bddcece9af495d1cf543255af598b"
+source = "git+https://github.com/idky137/zebra.git?branch=add_public_func_for_zaino_pt2#8e8ebe2972459a40461a718fe277b45d5d2fe7b3"
 dependencies = [
  "color-eyre",
  "jsonrpc-core",
@@ -5745,7 +5746,7 @@ dependencies = [
 [[package]]
 name = "zebra-rpc"
 version = "1.0.0-beta.43"
-source = "git+https://github.com/idky137/zebra.git?branch=add_public_func_for_zaino_pt2#f69f0c72631bddcece9af495d1cf543255af598b"
+source = "git+https://github.com/idky137/zebra.git?branch=add_public_func_for_zaino_pt2#8e8ebe2972459a40461a718fe277b45d5d2fe7b3"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -5778,7 +5779,7 @@ dependencies = [
 [[package]]
 name = "zebra-script"
 version = "1.0.0-beta.43"
-source = "git+https://github.com/idky137/zebra.git?branch=add_public_func_for_zaino_pt2#f69f0c72631bddcece9af495d1cf543255af598b"
+source = "git+https://github.com/idky137/zebra.git?branch=add_public_func_for_zaino_pt2#8e8ebe2972459a40461a718fe277b45d5d2fe7b3"
 dependencies = [
  "thiserror 2.0.9",
  "zcash_script",
@@ -5788,7 +5789,7 @@ dependencies = [
 [[package]]
 name = "zebra-state"
 version = "1.0.0-beta.43"
-source = "git+https://github.com/idky137/zebra.git?branch=add_public_func_for_zaino_pt2#f69f0c72631bddcece9af495d1cf543255af598b"
+source = "git+https://github.com/idky137/zebra.git?branch=add_public_func_for_zaino_pt2#8e8ebe2972459a40461a718fe277b45d5d2fe7b3"
 dependencies = [
  "bincode",
  "chrono",

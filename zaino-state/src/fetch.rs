@@ -26,7 +26,7 @@ pub struct FetchService {
     /// Sync task handle.
     // sync_task_handle: tokio::task::JoinHandle<()>,
     /// Service metadata.
-    _data: ServiceMetadata,
+    data: ServiceMetadata,
     /// StateService config data.
     _config: FetchServiceConfig,
     /// Thread-safe status indicator.
@@ -62,7 +62,7 @@ impl FetchService {
         let state_service = Self {
             fetcher,
             data,
-            config,
+            _config: config,
             status: AtomicStatus::new(StatusType::Spawning.into()),
         };
 
@@ -111,7 +111,10 @@ impl Indexer for FetchService {
     /// Some fields from the zcashd reference are missing from Zebra's [`GetInfo`]. It only contains the fields
     /// [required for lightwalletd support.](https://github.com/zcash/lightwalletd/blob/v0.4.9/common/common.go#L91-L95)
     async fn get_info(&self) -> Result<GetInfo, Self::Error> {
-        Ok(self.fetcher.get_info().await?.into())
+        Ok(GetInfo::from_parts(
+            self.data.zebra_build(),
+            self.data.zebra_subversion(),
+        ))
     }
 
     /// Returns blockchain state information, as a [`GetBlockChainInfo`] JSON struct.
@@ -388,5 +391,510 @@ impl Indexer for FetchService {
             .into_iter()
             .map(|utxos| utxos.into())
             .collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::SocketAddr;
+
+    use super::*;
+    use zaino_testutils::{TestManager, ZCASHD_CHAIN_CACHE_BIN, ZEBRAD_CHAIN_CACHE_BIN};
+    use zcash_local_net::validator::Validator;
+    use zebra_chain::parameters::Network;
+
+    #[tokio::test]
+    async fn launch_fetch_service_zcashd_regtest_no_cache() {
+        launch_fetch_service("zcashd", None).await;
+    }
+
+    #[tokio::test]
+    async fn launch_fetch_service_zcashd_regtest_with_cache() {
+        launch_fetch_service("zcashd", ZCASHD_CHAIN_CACHE_BIN.clone()).await;
+    }
+
+    #[tokio::test]
+    async fn launch_fetch_service_zebrad_regtest_no_cache() {
+        launch_fetch_service("zebrad", None).await;
+    }
+
+    #[tokio::test]
+    async fn launch_fetch_service_zebrad_regtest_with_cache() {
+        launch_fetch_service("zebrad", ZEBRAD_CHAIN_CACHE_BIN.clone()).await;
+    }
+
+    async fn launch_fetch_service(validator: &str, chain_cache: Option<std::path::PathBuf>) {
+        let mut test_manager = TestManager::launch(validator, None, chain_cache, false, false)
+            .await
+            .unwrap();
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+
+        assert_eq!(fetch_service.status(), StatusType::Ready);
+        dbg!(fetch_service.data.clone());
+        dbg!(fetch_service.get_info().await.unwrap());
+        dbg!(fetch_service.get_blockchain_info().await.unwrap().blocks());
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_get_address_balance_zcashd() {
+        fetch_service_get_address_balance("zcashd").await;
+    }
+
+    async fn fetch_service_get_address_balance(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+            .await
+            .unwrap();
+
+        let clients = test_manager
+            .clients
+            .as_ref()
+            .expect("Clients are not initialized");
+        let recipient_address = clients.get_recipient_address("transparent").await;
+
+        clients.faucet.do_sync(true).await.unwrap();
+        zingolib::testutils::lightclient::from_inputs::quick_send(
+            &clients.faucet,
+            vec![(recipient_address.as_str(), 250_000, None)],
+        )
+        .await
+        .unwrap();
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+        clients.recipient.do_sync(true).await.unwrap();
+        let recipient_balance = clients.recipient.do_balance().await;
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+
+        let fetch_service_balance = fetch_service
+            .get_address_balance(AddressStrings::new_valid(vec![recipient_address]).unwrap())
+            .await
+            .unwrap();
+
+        dbg!(recipient_balance.clone());
+        dbg!(fetch_service_balance.clone());
+
+        assert_eq!(recipient_balance.transparent_balance.unwrap(), 250_000,);
+        assert_eq!(
+            recipient_balance.transparent_balance.unwrap(),
+            fetch_service_balance.balance,
+        );
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_get_block_raw_zcashd() {
+        fetch_service_get_block_raw("zcashd").await;
+    }
+
+    async fn fetch_service_get_block_raw(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, false, false)
+            .await
+            .unwrap();
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+
+        dbg!(fetch_service
+            .get_block("1".to_string(), Some(0))
+            .await
+            .unwrap());
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_get_block_object_zcashd() {
+        fetch_service_get_block_object("zcashd").await;
+    }
+
+    async fn fetch_service_get_block_object(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, false, false)
+            .await
+            .unwrap();
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+
+        dbg!(fetch_service
+            .get_block("1".to_string(), Some(1))
+            .await
+            .unwrap());
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_get_raw_mempool_zcashd() {
+        fetch_service_get_raw_mempool("zcashd").await;
+    }
+
+    async fn fetch_service_get_raw_mempool(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+            .await
+            .unwrap();
+
+        let clients = test_manager
+            .clients
+            .as_ref()
+            .expect("Clients are not initialized");
+
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+        clients.faucet.do_sync(true).await.unwrap();
+
+        let tx_1 = zingolib::testutils::lightclient::from_inputs::quick_send(
+            &clients.faucet,
+            vec![(
+                &clients.get_recipient_address("transparent").await,
+                250_000,
+                None,
+            )],
+        )
+        .await
+        .unwrap();
+        let tx_2 = zingolib::testutils::lightclient::from_inputs::quick_send(
+            &clients.faucet,
+            vec![(
+                &clients.get_recipient_address("unified").await,
+                250_000,
+                None,
+            )],
+        )
+        .await
+        .unwrap();
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+
+        let fetch_service_mempool = fetch_service.get_raw_mempool().await.unwrap();
+
+        dbg!(&tx_1);
+        dbg!(&tx_2);
+        dbg!(&fetch_service_mempool);
+
+        assert_eq!(tx_1.first().to_string(), fetch_service_mempool[0]);
+        assert_eq!(tx_2.first().to_string(), fetch_service_mempool[1]);
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_z_get_treestate_zcashd() {
+        fetch_service_z_get_treestate("zcashd").await;
+    }
+
+    async fn fetch_service_z_get_treestate(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+            .await
+            .unwrap();
+
+        let clients = test_manager
+            .clients
+            .as_ref()
+            .expect("Clients are not initialized");
+
+        clients.faucet.do_sync(true).await.unwrap();
+        zingolib::testutils::lightclient::from_inputs::quick_send(
+            &clients.faucet,
+            vec![(
+                &clients.get_recipient_address("unified").await,
+                250_000,
+                None,
+            )],
+        )
+        .await
+        .unwrap();
+
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+
+        dbg!(fetch_service
+            .z_get_treestate("2".to_string())
+            .await
+            .unwrap());
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_z_get_subtrees_by_index_zcashd() {
+        fetch_service_z_get_subtrees_by_index("zcashd").await;
+    }
+
+    async fn fetch_service_z_get_subtrees_by_index(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+            .await
+            .unwrap();
+
+        let clients = test_manager
+            .clients
+            .as_ref()
+            .expect("Clients are not initialized");
+
+        clients.faucet.do_sync(true).await.unwrap();
+        zingolib::testutils::lightclient::from_inputs::quick_send(
+            &clients.faucet,
+            vec![(
+                &clients.get_recipient_address("unified").await,
+                250_000,
+                None,
+            )],
+        )
+        .await
+        .unwrap();
+
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+
+        dbg!(fetch_service
+            .z_get_subtrees_by_index("orchard".to_string(), NoteCommitmentSubtreeIndex(0), None)
+            .await
+            .unwrap());
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_get_raw_transaction_zcashd() {
+        fetch_service_get_raw_transaction("zcashd").await;
+    }
+
+    async fn fetch_service_get_raw_transaction(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+            .await
+            .unwrap();
+
+        let clients = test_manager
+            .clients
+            .as_ref()
+            .expect("Clients are not initialized");
+
+        clients.faucet.do_sync(true).await.unwrap();
+        let tx = zingolib::testutils::lightclient::from_inputs::quick_send(
+            &clients.faucet,
+            vec![(
+                &clients.get_recipient_address("unified").await,
+                250_000,
+                None,
+            )],
+        )
+        .await
+        .unwrap();
+
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+
+        dbg!(fetch_service
+            .get_raw_transaction(tx.first().to_string(), Some(1))
+            .await
+            .unwrap());
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_get_address_tx_ids_zcashd() {
+        fetch_service_get_address_tx_ids("zcashd").await;
+    }
+
+    async fn fetch_service_get_address_tx_ids(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+            .await
+            .unwrap();
+
+        let clients = test_manager
+            .clients
+            .as_ref()
+            .expect("Clients are not initialized");
+        let recipient_address = clients.get_recipient_address("transparent").await;
+
+        clients.faucet.do_sync(true).await.unwrap();
+        let tx = zingolib::testutils::lightclient::from_inputs::quick_send(
+            &clients.faucet,
+            vec![(recipient_address.as_str(), 250_000, None)],
+        )
+        .await
+        .unwrap();
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+
+        let fetch_service_txids = fetch_service
+            .get_address_tx_ids(GetAddressTxIdsRequest::from_parts(
+                vec![recipient_address],
+                0,
+                2,
+            ))
+            .await
+            .unwrap();
+
+        dbg!(&tx);
+        dbg!(&fetch_service_txids);
+        assert_eq!(tx.first().to_string(), fetch_service_txids[0]);
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_get_address_utxos_zcashd() {
+        fetch_service_get_address_utxos("zcashd").await;
+    }
+
+    async fn fetch_service_get_address_utxos(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+            .await
+            .unwrap();
+
+        let clients = test_manager
+            .clients
+            .as_ref()
+            .expect("Clients are not initialized");
+        let recipient_address = clients.get_recipient_address("transparent").await;
+
+        clients.faucet.do_sync(true).await.unwrap();
+        let txid_1 = zingolib::testutils::lightclient::from_inputs::quick_send(
+            &clients.faucet,
+            vec![(recipient_address.as_str(), 250_000, None)],
+        )
+        .await
+        .unwrap();
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+        clients.faucet.do_sync(true).await.unwrap();
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+
+        let fetch_service_utxos = fetch_service
+            .get_address_utxos(AddressStrings::new_valid(vec![recipient_address]).unwrap())
+            .await
+            .unwrap();
+        let (_, fetch_service_txid, ..) = fetch_service_utxos[0].into_parts();
+
+        dbg!(&txid_1);
+        dbg!(&fetch_service_utxos);
+        assert_eq!(txid_1.first().to_string(), fetch_service_txid.to_string());
+
+        test_manager.close().await;
     }
 }
