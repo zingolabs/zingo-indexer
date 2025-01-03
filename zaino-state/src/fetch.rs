@@ -732,6 +732,8 @@ impl LightWalletIndexer for FetchService {
     }
 
     /// Return the requested full (not compact) transaction (as from zcashd)
+    ///
+    /// NOTE: This implementation is slow due to fetching mempool height, the internal mempool or non-finalised state should be queried.
     async fn get_transaction(&self, request: TxFilter) -> Result<RawTransaction, Self::Error> {
         let hash = request.hash;
         if hash.len() == 32 {
@@ -747,13 +749,9 @@ impl LightWalletIndexer for FetchService {
                 ));
             };
             let height: u64 = match height {
-                Some(h) => h.try_into().map_err(|_e| {
-                    tonic::Status::unknown(
-                        "Error: Invalid response from server - Height conversion failed",
-                    )
-                })?,
-                // Zebra returns None for mempool transactions, convert to -1.
-                None => u64::MAX,
+                Some(h) => h as u64,
+                // Zebra returns None for mempool transactions, convert to `Mempool Height`.
+                None => self.get_blockchain_info().await?.blocks().0 as u64,
             };
 
             Ok(RawTransaction {
@@ -1617,6 +1615,7 @@ mod tests {
     use std::net::SocketAddr;
 
     use super::*;
+    use zaino_proto::proto::service::compact_tx_streamer_server::CompactTxStreamer;
     use zaino_testutils::{TestManager, ZCASHD_CHAIN_CACHE_BIN, ZEBRAD_CHAIN_CACHE_BIN};
     use zcash_local_net::validator::Validator;
     use zebra_chain::parameters::Network;
@@ -2112,6 +2111,958 @@ mod tests {
         dbg!(&txid_1);
         dbg!(&fetch_service_utxos);
         assert_eq!(txid_1.first().to_string(), fetch_service_txid.to_string());
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_get_latest_block_zcashd() {
+        fetch_service_get_latest_block("zcashd").await;
+    }
+
+    async fn fetch_service_get_latest_block(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+            .await
+            .unwrap();
+        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
+            .parse::<http::Uri>()
+            .expect("Failed to convert URL to URI");
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+        let grpc_service = zaino_serve::rpc::GrpcClient {
+            zebrad_rpc_uri: zebra_uri,
+            online: test_manager.online.clone(),
+        };
+
+        let fetch_service_get_latest_block = dbg!(fetch_service.get_latest_block().await.unwrap());
+        let grpc_service_get_latest_block = dbg!(grpc_service
+            .get_latest_block(tonic::Request::new(
+                zaino_proto::proto::service::ChainSpec {},
+            ))
+            .await
+            .unwrap())
+        .into_inner();
+
+        assert_eq!(
+            fetch_service_get_latest_block,
+            grpc_service_get_latest_block
+        );
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_get_block_zcashd() {
+        fetch_service_get_block("zcashd").await;
+    }
+
+    async fn fetch_service_get_block(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+            .await
+            .unwrap();
+        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
+            .parse::<http::Uri>()
+            .expect("Failed to convert URL to URI");
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+        let grpc_service = zaino_serve::rpc::GrpcClient {
+            zebrad_rpc_uri: zebra_uri,
+            online: test_manager.online.clone(),
+        };
+
+        let block_id = BlockId {
+            height: 1,
+            hash: Vec::new(),
+        };
+
+        let fetch_service_get_block =
+            dbg!(fetch_service.get_block(block_id.clone()).await.unwrap());
+        let grpc_service_get_block = dbg!(grpc_service
+            .get_block(tonic::Request::new(block_id))
+            .await
+            .unwrap())
+        .into_inner();
+
+        assert_eq!(fetch_service_get_block, grpc_service_get_block);
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_get_block_nullifiers_zcashd() {
+        fetch_service_get_block_nullifiers("zcashd").await;
+    }
+
+    async fn fetch_service_get_block_nullifiers(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+            .await
+            .unwrap();
+        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
+            .parse::<http::Uri>()
+            .expect("Failed to convert URL to URI");
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+        let grpc_service = zaino_serve::rpc::GrpcClient {
+            zebrad_rpc_uri: zebra_uri,
+            online: test_manager.online.clone(),
+        };
+
+        let block_id = BlockId {
+            height: 1,
+            hash: Vec::new(),
+        };
+
+        let fetch_service_get_block_nullifiers = dbg!(fetch_service
+            .get_block_nullifiers(block_id.clone())
+            .await
+            .unwrap());
+        let grpc_service_get_block_nullifiers = dbg!(grpc_service
+            .get_block_nullifiers(tonic::Request::new(block_id))
+            .await
+            .unwrap())
+        .into_inner();
+
+        assert_eq!(
+            fetch_service_get_block_nullifiers,
+            grpc_service_get_block_nullifiers
+        );
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_get_block_range_zcashd() {
+        fetch_service_get_block_range("zcashd").await;
+    }
+
+    async fn fetch_service_get_block_range(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+            .await
+            .unwrap();
+        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
+            .parse::<http::Uri>()
+            .expect("Failed to convert URL to URI");
+        test_manager.local_net.generate_blocks(10).await.unwrap();
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+        let grpc_service = zaino_serve::rpc::GrpcClient {
+            zebrad_rpc_uri: zebra_uri,
+            online: test_manager.online.clone(),
+        };
+
+        let block_range = BlockRange {
+            start: Some(BlockId {
+                height: 1,
+                hash: Vec::new(),
+            }),
+            end: Some(BlockId {
+                height: 10,
+                hash: Vec::new(),
+            }),
+        };
+
+        let fetch_service_stream = fetch_service
+            .get_block_range(block_range.clone())
+            .await
+            .unwrap();
+        let fetch_service_compact_blocks: Vec<_> = fetch_service_stream.collect().await;
+        let grpc_service_stream = grpc_service
+            .get_block_range(tonic::Request::new(block_range))
+            .await
+            .unwrap()
+            .into_inner();
+        let grpc_service_compact_blocks: Vec<_> = grpc_service_stream.collect().await;
+
+        // Extract only the successful `CompactBlock` results
+        let fetch_blocks: Vec<_> = fetch_service_compact_blocks
+            .into_iter()
+            .filter_map(|result| result.ok())
+            .collect();
+        let grpc_blocks: Vec<_> = grpc_service_compact_blocks
+            .into_iter()
+            .filter_map(|result| result.ok())
+            .collect();
+
+        assert_eq!(fetch_blocks, grpc_blocks);
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_get_block_range_nullifiers_zcashd() {
+        fetch_service_get_block_range_nullifiers("zcashd").await;
+    }
+
+    async fn fetch_service_get_block_range_nullifiers(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+            .await
+            .unwrap();
+        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
+            .parse::<http::Uri>()
+            .expect("Failed to convert URL to URI");
+        test_manager.local_net.generate_blocks(10).await.unwrap();
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+        let grpc_service = zaino_serve::rpc::GrpcClient {
+            zebrad_rpc_uri: zebra_uri,
+            online: test_manager.online.clone(),
+        };
+
+        let block_range = BlockRange {
+            start: Some(BlockId {
+                height: 1,
+                hash: Vec::new(),
+            }),
+            end: Some(BlockId {
+                height: 10,
+                hash: Vec::new(),
+            }),
+        };
+
+        let fetch_service_stream = fetch_service
+            .get_block_range_nullifiers(block_range.clone())
+            .await
+            .unwrap();
+        let fetch_service_compact_blocks: Vec<_> = fetch_service_stream.collect().await;
+        let grpc_service_stream = grpc_service
+            .get_block_range_nullifiers(tonic::Request::new(block_range))
+            .await
+            .unwrap()
+            .into_inner();
+        let grpc_service_compact_blocks: Vec<_> = grpc_service_stream.collect().await;
+
+        // Extract only the successful `CompactBlock` results
+        let fetch_nullifiers: Vec<_> = fetch_service_compact_blocks
+            .into_iter()
+            .filter_map(|result| result.ok())
+            .collect();
+        let grpc_nullifiers: Vec<_> = grpc_service_compact_blocks
+            .into_iter()
+            .filter_map(|result| result.ok())
+            .collect();
+
+        assert_eq!(fetch_nullifiers, grpc_nullifiers);
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_get_transaction_mined_zcashd() {
+        fetch_service_get_transaction_mined("zcashd").await;
+    }
+
+    async fn fetch_service_get_transaction_mined(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+            .await
+            .unwrap();
+        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
+            .parse::<http::Uri>()
+            .expect("Failed to convert URL to URI");
+
+        let clients = test_manager
+            .clients
+            .as_ref()
+            .expect("Clients are not initialized");
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+        let grpc_service = zaino_serve::rpc::GrpcClient {
+            zebrad_rpc_uri: zebra_uri,
+            online: test_manager.online.clone(),
+        };
+
+        clients.faucet.do_sync(true).await.unwrap();
+
+        let tx = zingolib::testutils::lightclient::from_inputs::quick_send(
+            &clients.faucet,
+            vec![(
+                &clients.get_recipient_address("unified").await,
+                250_000,
+                None,
+            )],
+        )
+        .await
+        .unwrap();
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+
+        let tx_filter = TxFilter {
+            block: None,
+            index: 0,
+            hash: tx.first().as_ref().to_vec(),
+        };
+
+        let fetch_service_get_transaction = dbg!(fetch_service
+            .get_transaction(tx_filter.clone())
+            .await
+            .unwrap());
+        let grpc_service_get_transaction = dbg!(grpc_service
+            .get_transaction(tonic::Request::new(tx_filter))
+            .await
+            .unwrap())
+        .into_inner();
+
+        assert_eq!(fetch_service_get_transaction, grpc_service_get_transaction);
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_get_transaction_mempool_zcashd() {
+        fetch_service_get_transaction_mempool("zcashd").await;
+    }
+
+    async fn fetch_service_get_transaction_mempool(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+            .await
+            .unwrap();
+        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
+            .parse::<http::Uri>()
+            .expect("Failed to convert URL to URI");
+
+        let clients = test_manager
+            .clients
+            .as_ref()
+            .expect("Clients are not initialized");
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+        let grpc_service = zaino_serve::rpc::GrpcClient {
+            zebrad_rpc_uri: zebra_uri,
+            online: test_manager.online.clone(),
+        };
+
+        clients.faucet.do_sync(true).await.unwrap();
+
+        let tx = zingolib::testutils::lightclient::from_inputs::quick_send(
+            &clients.faucet,
+            vec![(
+                &clients.get_recipient_address("unified").await,
+                250_000,
+                None,
+            )],
+        )
+        .await
+        .unwrap();
+
+        let tx_filter = TxFilter {
+            block: None,
+            index: 0,
+            hash: tx.first().as_ref().to_vec(),
+        };
+
+        let fetch_service_get_transaction = dbg!(fetch_service
+            .get_transaction(tx_filter.clone())
+            .await
+            .unwrap());
+        let grpc_service_get_transaction = dbg!(grpc_service
+            .get_transaction(tonic::Request::new(tx_filter))
+            .await
+            .unwrap())
+        .into_inner();
+
+        assert_eq!(fetch_service_get_transaction, grpc_service_get_transaction);
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_get_taddress_txids_zcashd() {
+        fetch_service_get_taddress_txids("zcashd").await;
+    }
+
+    async fn fetch_service_get_taddress_txids(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+            .await
+            .unwrap();
+        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
+            .parse::<http::Uri>()
+            .expect("Failed to convert URL to URI");
+
+        let clients = test_manager
+            .clients
+            .as_ref()
+            .expect("Clients are not initialized");
+        let recipient_address = clients.get_recipient_address("transparent").await;
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+        let grpc_service = zaino_serve::rpc::GrpcClient {
+            zebrad_rpc_uri: zebra_uri,
+            online: test_manager.online.clone(),
+        };
+
+        clients.faucet.do_sync(true).await.unwrap();
+        let tx = zingolib::testutils::lightclient::from_inputs::quick_send(
+            &clients.faucet,
+            vec![(&recipient_address, 250_000, None)],
+        )
+        .await
+        .unwrap();
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+
+        let block_filter = TransparentAddressBlockFilter {
+            address: recipient_address,
+            range: Some(BlockRange {
+                start: Some(BlockId {
+                    height: 0,
+                    hash: Vec::new(),
+                }),
+                end: Some(BlockId {
+                    height: 2,
+                    hash: Vec::new(),
+                }),
+            }),
+        };
+
+        let fetch_service_stream = fetch_service
+            .get_taddress_txids(block_filter.clone())
+            .await
+            .unwrap();
+        let fetch_service_tx: Vec<_> = fetch_service_stream.collect().await;
+        let grpc_service_stream = grpc_service
+            .get_taddress_txids(tonic::Request::new(block_filter))
+            .await
+            .unwrap()
+            .into_inner();
+        let grpc_service_tx: Vec<_> = grpc_service_stream.collect().await;
+
+        // Extract only the successful `CompactBlock` results
+        let fetch_tx: Vec<_> = fetch_service_tx
+            .into_iter()
+            .filter_map(|result| result.ok())
+            .collect();
+        let grpc_tx: Vec<_> = grpc_service_tx
+            .into_iter()
+            .filter_map(|result| result.ok())
+            .collect();
+
+        dbg!(tx);
+        dbg!(&fetch_tx);
+        dbg!(&grpc_tx);
+        assert_eq!(fetch_tx, grpc_tx);
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_get_taddress_balance_zcashd() {
+        fetch_service_get_taddress_balance("zcashd").await;
+    }
+
+    async fn fetch_service_get_taddress_balance(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+            .await
+            .unwrap();
+        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
+            .parse::<http::Uri>()
+            .expect("Failed to convert URL to URI");
+
+        let clients = test_manager
+            .clients
+            .as_ref()
+            .expect("Clients are not initialized");
+        let recipient_address = clients.get_recipient_address("transparent").await;
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+        let grpc_service = zaino_serve::rpc::GrpcClient {
+            zebrad_rpc_uri: zebra_uri,
+            online: test_manager.online.clone(),
+        };
+
+        clients.faucet.do_sync(true).await.unwrap();
+        zingolib::testutils::lightclient::from_inputs::quick_send(
+            &clients.faucet,
+            vec![(&recipient_address, 250_000, None)],
+        )
+        .await
+        .unwrap();
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+        clients.recipient.do_sync(true).await.unwrap();
+        let balance = clients.recipient.do_balance().await;
+
+        let address_list = AddressList {
+            addresses: vec![recipient_address],
+        };
+
+        let fetch_service_balance = fetch_service
+            .get_taddress_balance(address_list.clone())
+            .await
+            .unwrap();
+        let grpc_service_balance = grpc_service
+            .get_taddress_balance(tonic::Request::new(address_list))
+            .await
+            .unwrap()
+            .into_inner();
+
+        assert_eq!(fetch_service_balance, grpc_service_balance);
+        assert_eq!(
+            fetch_service_balance.value_zat as u64,
+            balance.transparent_balance.unwrap()
+        );
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_get_tree_state_zcashd() {
+        fetch_service_get_tree_state("zcashd").await;
+    }
+
+    async fn fetch_service_get_tree_state(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+            .await
+            .unwrap();
+        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
+            .parse::<http::Uri>()
+            .expect("Failed to convert URL to URI");
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+        let grpc_service = zaino_serve::rpc::GrpcClient {
+            zebrad_rpc_uri: zebra_uri,
+            online: test_manager.online.clone(),
+        };
+
+        let block_id = BlockId {
+            height: 1,
+            hash: Vec::new(),
+        };
+
+        let fetch_service_get_tree_state = dbg!(fetch_service
+            .get_tree_state(block_id.clone())
+            .await
+            .unwrap());
+        let grpc_service_get_tree_state = dbg!(grpc_service
+            .get_tree_state(tonic::Request::new(block_id))
+            .await
+            .unwrap())
+        .into_inner();
+
+        assert_eq!(fetch_service_get_tree_state, grpc_service_get_tree_state);
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_get_latest_tree_state_zcashd() {
+        fetch_service_get_latest_tree_state("zcashd").await;
+    }
+
+    async fn fetch_service_get_latest_tree_state(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+            .await
+            .unwrap();
+        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
+            .parse::<http::Uri>()
+            .expect("Failed to convert URL to URI");
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+        let grpc_service = zaino_serve::rpc::GrpcClient {
+            zebrad_rpc_uri: zebra_uri,
+            online: test_manager.online.clone(),
+        };
+
+        let fetch_service_get_tree_state =
+            dbg!(fetch_service.get_latest_tree_state().await.unwrap());
+        let grpc_service_get_tree_state = dbg!(grpc_service
+            .get_latest_tree_state(tonic::Request::new(zaino_proto::proto::service::Empty {}))
+            .await
+            .unwrap())
+        .into_inner();
+
+        assert_eq!(fetch_service_get_tree_state, grpc_service_get_tree_state);
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_get_subtree_roots_zcashd() {
+        fetch_service_get_subtree_roots("zcashd").await;
+    }
+
+    async fn fetch_service_get_subtree_roots(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+            .await
+            .unwrap();
+        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
+            .parse::<http::Uri>()
+            .expect("Failed to convert URL to URI");
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+        let grpc_service = zaino_serve::rpc::GrpcClient {
+            zebrad_rpc_uri: zebra_uri,
+            online: test_manager.online.clone(),
+        };
+
+        let subtree_roots_arg = GetSubtreeRootsArg {
+            start_index: 0,
+            shielded_protocol: 1,
+            max_entries: 0,
+        };
+
+        let fetch_service_stream = fetch_service
+            .get_subtree_roots(subtree_roots_arg.clone())
+            .await
+            .unwrap();
+        let fetch_service_roots: Vec<_> = fetch_service_stream.collect().await;
+        let grpc_service_stream = grpc_service
+            .get_subtree_roots(tonic::Request::new(subtree_roots_arg))
+            .await
+            .unwrap()
+            .into_inner();
+        let grpc_service_roots: Vec<_> = grpc_service_stream.collect().await;
+
+        let fetch_roots: Vec<_> = fetch_service_roots
+            .into_iter()
+            .filter_map(|result| result.ok())
+            .collect();
+        let grpc_roots: Vec<_> = grpc_service_roots
+            .into_iter()
+            .filter_map(|result| result.ok())
+            .collect();
+
+        assert_eq!(fetch_roots, grpc_roots);
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_get_taddress_utxos_zcashd() {
+        fetch_service_get_taddress_utxos("zcashd").await;
+    }
+
+    async fn fetch_service_get_taddress_utxos(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+            .await
+            .unwrap();
+        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
+            .parse::<http::Uri>()
+            .expect("Failed to convert URL to URI");
+
+        let clients = test_manager
+            .clients
+            .as_ref()
+            .expect("Clients are not initialized");
+        let recipient_address = clients.get_recipient_address("transparent").await;
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+        let grpc_service = zaino_serve::rpc::GrpcClient {
+            zebrad_rpc_uri: zebra_uri,
+            online: test_manager.online.clone(),
+        };
+
+        clients.faucet.do_sync(true).await.unwrap();
+        let tx = zingolib::testutils::lightclient::from_inputs::quick_send(
+            &clients.faucet,
+            vec![(&recipient_address, 250_000, None)],
+        )
+        .await
+        .unwrap();
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+
+        let utxos_arg = GetAddressUtxosArg {
+            addresses: vec![recipient_address],
+            start_height: 0,
+            max_entries: 0,
+        };
+
+        let fetch_service_get_taddress_utxos = fetch_service
+            .get_address_utxos(utxos_arg.clone())
+            .await
+            .unwrap();
+
+        let grpc_service_get_taddress_utxos = grpc_service
+            .get_address_utxos(tonic::Request::new(utxos_arg))
+            .await
+            .unwrap()
+            .into_inner();
+
+        dbg!(tx);
+        dbg!(&fetch_service_get_taddress_utxos);
+        dbg!(&grpc_service_get_taddress_utxos);
+        assert_eq!(
+            fetch_service_get_taddress_utxos,
+            grpc_service_get_taddress_utxos
+        );
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_get_taddress_utxos_stream_zcashd() {
+        fetch_service_get_taddress_utxos_stream("zcashd").await;
+    }
+
+    async fn fetch_service_get_taddress_utxos_stream(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+            .await
+            .unwrap();
+        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
+            .parse::<http::Uri>()
+            .expect("Failed to convert URL to URI");
+
+        let clients = test_manager
+            .clients
+            .as_ref()
+            .expect("Clients are not initialized");
+        let recipient_address = clients.get_recipient_address("transparent").await;
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+        let grpc_service = zaino_serve::rpc::GrpcClient {
+            zebrad_rpc_uri: zebra_uri,
+            online: test_manager.online.clone(),
+        };
+
+        clients.faucet.do_sync(true).await.unwrap();
+        zingolib::testutils::lightclient::from_inputs::quick_send(
+            &clients.faucet,
+            vec![(&recipient_address, 250_000, None)],
+        )
+        .await
+        .unwrap();
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+
+        let utxos_arg = GetAddressUtxosArg {
+            addresses: vec![recipient_address],
+            start_height: 0,
+            max_entries: 0,
+        };
+
+        let fetch_service_stream = fetch_service
+            .get_address_utxos_stream(utxos_arg.clone())
+            .await
+            .unwrap();
+        let fetch_service_utxos: Vec<_> = fetch_service_stream.collect().await;
+        let grpc_service_stream = grpc_service
+            .get_address_utxos_stream(tonic::Request::new(utxos_arg))
+            .await
+            .unwrap()
+            .into_inner();
+        let grpc_service_utxos: Vec<_> = grpc_service_stream.collect().await;
+
+        let fetch_utxos: Vec<_> = fetch_service_utxos
+            .into_iter()
+            .filter_map(|result| result.ok())
+            .collect();
+        let grpc_utxos: Vec<_> = grpc_service_utxos
+            .into_iter()
+            .filter_map(|result| result.ok())
+            .collect();
+
+        assert_eq!(fetch_utxos, grpc_utxos);
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_get_lightd_info_zcashd() {
+        fetch_service_get_lightd_info("zcashd").await;
+    }
+
+    async fn fetch_service_get_lightd_info(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+            .await
+            .unwrap();
+        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
+            .parse::<http::Uri>()
+            .expect("Failed to convert URL to URI");
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+        let grpc_service = zaino_serve::rpc::GrpcClient {
+            zebrad_rpc_uri: zebra_uri,
+            online: test_manager.online.clone(),
+        };
+
+        let fetch_service_get_lightd_info = dbg!(fetch_service.get_lightd_info().await.unwrap());
+        let grpc_service_get_lightd_info = dbg!(grpc_service
+            .get_lightd_info(tonic::Request::new(zaino_proto::proto::service::Empty {}))
+            .await
+            .unwrap())
+        .into_inner();
+
+        // Clean build date from responses.
+        let mut fetch_service_cleaned_info = fetch_service_get_lightd_info.clone();
+        let mut grpc_service_cleaned_info = grpc_service_get_lightd_info.clone();
+        fetch_service_cleaned_info.build_date = String::new();
+        grpc_service_cleaned_info.build_date = String::new();
+
+        assert_eq!(fetch_service_cleaned_info, grpc_service_cleaned_info);
 
         test_manager.close().await;
     }
