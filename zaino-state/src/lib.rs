@@ -5,10 +5,12 @@
 
 use zebra_chain::parameters::Network;
 
+pub mod broadcast;
 pub mod config;
 pub mod error;
 pub mod fetch;
 pub mod indexer;
+pub mod mempool;
 pub mod state;
 pub mod status;
 pub mod stream;
