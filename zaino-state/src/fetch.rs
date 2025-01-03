@@ -1045,7 +1045,10 @@ impl LightWalletIndexer for FetchService {
         &self,
         _request: Exclude,
     ) -> Result<CompactTransactionStream, Self::Error> {
-        unimplemented!()
+        Err(FetchServiceError::TonicStatusError(tonic::Status::new(
+            tonic::Code::Unimplemented,
+            "get_mempool_tx is not implemented in Zaino.",
+        )))
     }
 
     /// Return a stream of current Mempool transactions. This will keep the output stream open while
@@ -1053,7 +1056,10 @@ impl LightWalletIndexer for FetchService {
     ///
     /// NOTE: To be implemented with the mempool updgrade.
     async fn get_mempool_stream(&self) -> Result<RawTransactionStream, Self::Error> {
-        unimplemented!()
+        Err(FetchServiceError::TonicStatusError(tonic::Status::new(
+            tonic::Code::Unimplemented,
+            "get_mempool_stream is not implemented in Zaino.",
+        )))
     }
 
     /// GetTreeState returns the note commitment tree state corresponding to the given block.
@@ -1491,7 +1497,10 @@ impl LightWalletIndexer for FetchService {
     ///
     /// NOTE: Currently unimplemented in Zaino.
     async fn ping(&self, _request: Duration) -> Result<PingResponse, Self::Error> {
-        unimplemented!()
+        Err(FetchServiceError::TonicStatusError(tonic::Status::new(
+            tonic::Code::Unimplemented,
+            "ping is not implemented in Zaino.",
+        )))
     }
 }
 
