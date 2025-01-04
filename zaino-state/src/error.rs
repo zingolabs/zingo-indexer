@@ -85,6 +85,10 @@ pub enum FetchServiceError {
     #[error("JsonRpcConnector error: {0}")]
     JsonRpcConnectorError(#[from] zaino_fetch::jsonrpc::error::JsonRpcConnectorError),
 
+    /// Error from the mempool.
+    #[error("Mempool error: {0}")]
+    MempoolError(#[from] MempoolError),
+
     /// RPC error in compatibility with zcashd.
     #[error("RPC error: {0:?}")]
     RpcError(#[from] zaino_fetch::jsonrpc::connector::RpcError),
@@ -131,6 +135,9 @@ impl From<FetchServiceError> for tonic::Status {
             }
             FetchServiceError::JsonRpcConnectorError(err) => {
                 tonic::Status::internal(format!("JsonRpcConnector error: {}", err))
+            }
+            FetchServiceError::MempoolError(err) => {
+                tonic::Status::internal(format!("Mempool error: {}", err))
             }
             FetchServiceError::RpcError(err) => {
                 tonic::Status::internal(format!("RPC error: {:?}", err))

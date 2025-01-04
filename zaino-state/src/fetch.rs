@@ -5,6 +5,7 @@ use crate::{
     error::FetchServiceError,
     get_build_info,
     indexer::{LightWalletIndexer, ZcashIndexer},
+    mempool::{Mempool, MempoolSubscriber},
     status::{AtomicStatus, StatusType},
     stream::{
         AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
@@ -33,14 +34,17 @@ use zebra_rpc::methods::{
     GetBlockChainInfo, GetBlockTransaction, GetInfo, GetRawTransaction, SentTransactionHash,
 };
 
-/// Chain fetch service backed by Zcashds JsonRPC service.
+/// Chain fetch service backed by Zcashd's JsonRPC engine.
+///
+/// This service is a central service, [`FetchServiceSubscriber`] should be created to fetch data.
+/// This is done to enable large numbers of concurrent subscribers without significant slowdowns.
 #[derive(Debug, Clone)]
 pub struct FetchService {
     /// JsonRPC Client.
     fetcher: JsonRpcConnector,
     // TODO: Add Internal Non-Finalised State
-    /// Sync task handle.
-    // sync_task_handle: tokio::task::JoinHandle<()>,
+    /// Internal mempool.
+    mempool: Mempool,
     /// Service metadata.
     data: ServiceMetadata,
     /// StateService config data.
@@ -66,6 +70,8 @@ impl FetchService {
         )
         .await?;
 
+        let mempool = Mempool::spawn(&fetcher, None).await?;
+
         let zebra_build_data = fetcher.get_info().await?;
 
         let data = ServiceMetadata {
@@ -77,6 +83,7 @@ impl FetchService {
 
         let state_service = Self {
             fetcher,
+            mempool,
             data,
             config,
             status: AtomicStatus::new(StatusType::Spawning.into()),
@@ -84,11 +91,22 @@ impl FetchService {
 
         state_service.status.store(StatusType::Syncing.into());
 
-        // TODO: Wait for Non-Finalised state to sync or for mempool to come online.
+        // TODO: Wait for Non-Finalised state to sync.
 
         state_service.status.store(StatusType::Ready.into());
 
         Ok(state_service)
+    }
+
+    /// Returns a [`FetchServiceSubscriber`].
+    pub fn subscriber(&self) -> FetchServiceSubscriber {
+        FetchServiceSubscriber {
+            fetcher: self.fetcher.clone(),
+            mempool: self.mempool.subscriber(),
+            data: self.data.clone(),
+            config: self.config.clone(),
+            status: self.status.clone(),
+        }
     }
 
     /// Fetches the current status
@@ -98,7 +116,7 @@ impl FetchService {
 
     /// Shuts down the StateService.
     pub fn close(&mut self) {
-        // self.sync_task_handle.abort();
+        self.mempool.close();
     }
 }
 
@@ -108,8 +126,33 @@ impl Drop for FetchService {
     }
 }
 
+/// A fetch service subscriber.
+///
+/// Subscribers should be
+#[derive(Debug, Clone)]
+pub struct FetchServiceSubscriber {
+    /// JsonRPC Client.
+    fetcher: JsonRpcConnector,
+    // TODO: Add Internal Non-Finalised State
+    /// Internal mempool.
+    mempool: MempoolSubscriber,
+    /// Service metadata.
+    data: ServiceMetadata,
+    /// StateService config data.
+    config: FetchServiceConfig,
+    /// Thread-safe status indicator.
+    status: AtomicStatus,
+}
+
+impl FetchServiceSubscriber {
+    /// Fetches the current status
+    pub fn status(&self) -> StatusType {
+        self.status.load().into()
+    }
+}
+
 #[async_trait]
-impl ZcashIndexer for FetchService {
+impl ZcashIndexer for FetchServiceSubscriber {
     type Error = FetchServiceError;
 
     /// Returns software information from the RPC server, as a [`GetInfo`] JSON struct.
@@ -254,7 +297,13 @@ impl ZcashIndexer for FetchService {
     /// method: post
     /// tags: blockchain
     async fn get_raw_mempool(&self) -> Result<Vec<String>, Self::Error> {
-        Ok(self.fetcher.get_raw_mempool().await?.transactions)
+        // Ok(self.fetcher.get_raw_mempool().await?.transactions)
+        Ok(self
+            .mempool
+            .get_mempool()
+            .into_iter()
+            .map(|(key, _)| key.0)
+            .collect())
     }
 
     /// Returns information about the given block's Sapling & Orchard tree state.
@@ -411,7 +460,7 @@ impl ZcashIndexer for FetchService {
 }
 
 #[async_trait]
-impl LightWalletIndexer for FetchService {
+impl LightWalletIndexer for FetchServiceSubscriber {
     type Error = FetchServiceError;
 
     /// Return the height of the tip of the best chain
@@ -1502,7 +1551,7 @@ impl LightWalletIndexer for FetchService {
     }
 }
 
-impl FetchService {
+impl FetchServiceSubscriber {
     /// Fetches CompactBlock from the validator.
     ///
     /// Uses 2 calls as z_get_block verbosity=1 is required to fetch txids from zcashd.
@@ -1657,7 +1706,8 @@ mod tests {
             Network::new_regtest(Some(1), Some(1)),
         ))
         .await
-        .unwrap();
+        .unwrap()
+        .subscriber();
 
         assert_eq!(fetch_service.status(), StatusType::Ready);
         dbg!(fetch_service.data.clone());
@@ -1706,7 +1756,8 @@ mod tests {
             Network::new_regtest(Some(1), Some(1)),
         ))
         .await
-        .unwrap();
+        .unwrap()
+        .subscriber();
 
         let fetch_service_balance = fetch_service
             .z_get_address_balance(AddressStrings::new_valid(vec![recipient_address]).unwrap())
@@ -1747,7 +1798,8 @@ mod tests {
             Network::new_regtest(Some(1), Some(1)),
         ))
         .await
-        .unwrap();
+        .unwrap()
+        .subscriber();
 
         dbg!(fetch_service
             .z_get_block("1".to_string(), Some(0))
@@ -1779,7 +1831,8 @@ mod tests {
             Network::new_regtest(Some(1), Some(1)),
         ))
         .await
-        .unwrap();
+        .unwrap()
+        .subscriber();
 
         dbg!(fetch_service
             .z_get_block("1".to_string(), Some(1))
@@ -1798,35 +1851,13 @@ mod tests {
         let mut test_manager = TestManager::launch(validator, None, None, true, true)
             .await
             .unwrap();
-
         let clients = test_manager
             .clients
             .as_ref()
             .expect("Clients are not initialized");
-
-        test_manager.local_net.generate_blocks(1).await.unwrap();
-        clients.faucet.do_sync(true).await.unwrap();
-
-        let tx_1 = zingolib::testutils::lightclient::from_inputs::quick_send(
-            &clients.faucet,
-            vec![(
-                &clients.get_recipient_address("transparent").await,
-                250_000,
-                None,
-            )],
-        )
-        .await
-        .unwrap();
-        let tx_2 = zingolib::testutils::lightclient::from_inputs::quick_send(
-            &clients.faucet,
-            vec![(
-                &clients.get_recipient_address("unified").await,
-                250_000,
-                None,
-            )],
-        )
-        .await
-        .unwrap();
+        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
+            .parse::<http::Uri>()
+            .expect("Failed to convert URL to URI");
 
         let fetch_service = FetchService::spawn(FetchServiceConfig::new(
             SocketAddr::new(
@@ -1841,15 +1872,48 @@ mod tests {
         ))
         .await
         .unwrap();
+        let fetch_service_subscriber = fetch_service.subscriber();
 
-        let fetch_service_mempool = fetch_service.get_raw_mempool().await.unwrap();
+        let json_service = JsonRpcConnector::new(
+            zebra_uri,
+            Some("xxxxxx".to_string()),
+            Some("xxxxxx".to_string()),
+        )
+        .await
+        .unwrap();
 
-        dbg!(&tx_1);
-        dbg!(&tx_2);
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+        clients.faucet.do_sync(true).await.unwrap();
+
+        zingolib::testutils::lightclient::from_inputs::quick_send(
+            &clients.faucet,
+            vec![(
+                &clients.get_recipient_address("transparent").await,
+                250_000,
+                None,
+            )],
+        )
+        .await
+        .unwrap();
+        zingolib::testutils::lightclient::from_inputs::quick_send(
+            &clients.faucet,
+            vec![(
+                &clients.get_recipient_address("unified").await,
+                250_000,
+                None,
+            )],
+        )
+        .await
+        .unwrap();
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+        let mut fetch_service_mempool = fetch_service_subscriber.get_raw_mempool().await.unwrap();
+        let mut json_service_mempool = json_service.get_raw_mempool().await.unwrap().transactions;
+
         dbg!(&fetch_service_mempool);
-
-        assert_eq!(tx_1.first().to_string(), fetch_service_mempool[0]);
-        assert_eq!(tx_2.first().to_string(), fetch_service_mempool[1]);
+        dbg!(&json_service_mempool);
+        assert_eq!(json_service_mempool.sort(), fetch_service_mempool.sort());
 
         test_manager.close().await;
     }
@@ -1895,7 +1959,8 @@ mod tests {
             Network::new_regtest(Some(1), Some(1)),
         ))
         .await
-        .unwrap();
+        .unwrap()
+        .subscriber();
 
         dbg!(fetch_service
             .z_get_treestate("2".to_string())
@@ -1946,7 +2011,8 @@ mod tests {
             Network::new_regtest(Some(1), Some(1)),
         ))
         .await
-        .unwrap();
+        .unwrap()
+        .subscriber();
 
         dbg!(fetch_service
             .z_get_subtrees_by_index("orchard".to_string(), NoteCommitmentSubtreeIndex(0), None)
@@ -1997,7 +2063,8 @@ mod tests {
             Network::new_regtest(Some(1), Some(1)),
         ))
         .await
-        .unwrap();
+        .unwrap()
+        .subscriber();
 
         dbg!(fetch_service
             .get_raw_transaction(tx.first().to_string(), Some(1))
@@ -2044,7 +2111,8 @@ mod tests {
             Network::new_regtest(Some(1), Some(1)),
         ))
         .await
-        .unwrap();
+        .unwrap()
+        .subscriber();
 
         let fetch_service_txids = fetch_service
             .get_address_tx_ids(GetAddressTxIdsRequest::from_parts(
@@ -2100,7 +2168,8 @@ mod tests {
             Network::new_regtest(Some(1), Some(1)),
         ))
         .await
-        .unwrap();
+        .unwrap()
+        .subscriber();
 
         let fetch_service_utxos = fetch_service
             .z_get_address_utxos(AddressStrings::new_valid(vec![recipient_address]).unwrap())
@@ -2140,7 +2209,8 @@ mod tests {
             Network::new_regtest(Some(1), Some(1)),
         ))
         .await
-        .unwrap();
+        .unwrap()
+        .subscriber();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -2188,7 +2258,8 @@ mod tests {
             Network::new_regtest(Some(1), Some(1)),
         ))
         .await
-        .unwrap();
+        .unwrap()
+        .subscriber();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -2237,7 +2308,8 @@ mod tests {
             Network::new_regtest(Some(1), Some(1)),
         ))
         .await
-        .unwrap();
+        .unwrap()
+        .subscriber();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -2292,7 +2364,8 @@ mod tests {
             Network::new_regtest(Some(1), Some(1)),
         ))
         .await
-        .unwrap();
+        .unwrap()
+        .subscriber();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -2362,7 +2435,8 @@ mod tests {
             Network::new_regtest(Some(1), Some(1)),
         ))
         .await
-        .unwrap();
+        .unwrap()
+        .subscriber();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -2436,7 +2510,8 @@ mod tests {
             Network::new_regtest(Some(1), Some(1)),
         ))
         .await
-        .unwrap();
+        .unwrap()
+        .subscriber();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -2507,7 +2582,8 @@ mod tests {
             Network::new_regtest(Some(1), Some(1)),
         ))
         .await
-        .unwrap();
+        .unwrap()
+        .subscriber();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -2578,7 +2654,8 @@ mod tests {
             Network::new_regtest(Some(1), Some(1)),
         ))
         .await
-        .unwrap();
+        .unwrap()
+        .subscriber();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -2668,7 +2745,8 @@ mod tests {
             Network::new_regtest(Some(1), Some(1)),
         ))
         .await
-        .unwrap();
+        .unwrap()
+        .subscriber();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -2733,7 +2811,8 @@ mod tests {
             Network::new_regtest(Some(1), Some(1)),
         ))
         .await
-        .unwrap();
+        .unwrap()
+        .subscriber();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -2784,7 +2863,8 @@ mod tests {
             Network::new_regtest(Some(1), Some(1)),
         ))
         .await
-        .unwrap();
+        .unwrap()
+        .subscriber();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -2828,7 +2908,8 @@ mod tests {
             Network::new_regtest(Some(1), Some(1)),
         ))
         .await
-        .unwrap();
+        .unwrap()
+        .subscriber();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -2897,7 +2978,8 @@ mod tests {
             Network::new_regtest(Some(1), Some(1)),
         ))
         .await
-        .unwrap();
+        .unwrap()
+        .subscriber();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -2971,7 +3053,8 @@ mod tests {
             Network::new_regtest(Some(1), Some(1)),
         ))
         .await
-        .unwrap();
+        .unwrap()
+        .subscriber();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -3043,7 +3126,8 @@ mod tests {
             Network::new_regtest(Some(1), Some(1)),
         ))
         .await
-        .unwrap();
+        .unwrap()
+        .subscriber();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
