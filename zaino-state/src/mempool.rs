@@ -202,11 +202,38 @@ impl MempoolSubscriber {
     }
 
     /// Returns all tx currently in the mempool and updates seen_txids.
+    ///
+    /// The transaction IDs in the Exclude list can be shortened to any number of bytes to make the request
+    /// more bandwidth-efficient; if two or more transactions in the mempool
+    /// match a shortened txid, they are all sent (none is excluded). Transactions
+    /// in the exclude list that don't exist in the mempool are ignored.
     pub fn get_filtered_mempool(
         &self,
-        ignore_list: HashSet<MempoolKey>,
+        exclude_list: Vec<String>,
     ) -> Vec<(MempoolKey, MempoolValue)> {
-        self.subscriber.get_filtered_state(&ignore_list)
+        let mempool_tx = self.subscriber.get_filtered_state(&HashSet::new());
+
+        let mempool_txids: HashSet<String> = mempool_tx
+            .iter()
+            .map(|(mempool_key, _)| mempool_key.0.clone())
+            .collect();
+
+        let mut txids_to_exclude: HashSet<MempoolKey> = HashSet::new();
+        for exclude_txid in &exclude_list {
+            let matching_txids: Vec<&String> = mempool_txids
+                .iter()
+                .filter(|txid| txid.starts_with(exclude_txid))
+                .collect();
+
+            if matching_txids.len() == 1 {
+                txids_to_exclude.insert(MempoolKey(matching_txids[0].clone()));
+            }
+        }
+
+        mempool_tx
+            .into_iter()
+            .filter(|(mempool_key, _)| !txids_to_exclude.contains(mempool_key))
+            .collect()
     }
 
     /// Returns a stream of mempool txids, closes the channel when a new block has been mined.

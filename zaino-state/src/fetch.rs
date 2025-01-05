@@ -1092,6 +1092,17 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         &self,
         _request: Exclude,
     ) -> Result<CompactTransactionStream, Self::Error> {
+        // let exclude_txids: Vec<String> = request
+        //     .txid
+        //     .iter()
+        //     .map(|txid_bytes| {
+        //         let reversed_txid_bytes: Vec<u8> = txid_bytes.iter().cloned().rev().collect();
+        //         hex::encode(&reversed_txid_bytes)
+        //     })
+        //     .collect();
+        // //
+
+        // todo!()
         Err(FetchServiceError::TonicStatusError(tonic::Status::new(
             tonic::Code::Unimplemented,
             "get_mempool_tx is not implemented in Zaino.",
