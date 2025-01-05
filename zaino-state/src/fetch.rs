@@ -301,6 +301,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
         Ok(self
             .mempool
             .get_mempool()
+            .await
             .into_iter()
             .map(|(key, _)| key.0)
             .collect())
@@ -1086,38 +1087,210 @@ impl LightWalletIndexer for FetchServiceSubscriber {
     /// more bandwidth-efficient; if two or more transactions in the mempool
     /// match a shortened txid, they are all sent (none is excluded). Transactions
     /// in the exclude list that don't exist in the mempool are ignored.
-    ///
-    /// NOTE: To be implemented with the mempool updgrade.
     async fn get_mempool_tx(
         &self,
-        _request: Exclude,
+        request: Exclude,
     ) -> Result<CompactTransactionStream, Self::Error> {
-        // let exclude_txids: Vec<String> = request
-        //     .txid
-        //     .iter()
-        //     .map(|txid_bytes| {
-        //         let reversed_txid_bytes: Vec<u8> = txid_bytes.iter().cloned().rev().collect();
-        //         hex::encode(&reversed_txid_bytes)
-        //     })
-        //     .collect();
-        // //
+        let exclude_txids: Vec<String> = request
+            .txid
+            .iter()
+            .map(|txid_bytes| {
+                let reversed_txid_bytes: Vec<u8> = txid_bytes.iter().cloned().rev().collect();
+                hex::encode(&reversed_txid_bytes)
+            })
+            .collect();
 
-        // todo!()
-        Err(FetchServiceError::TonicStatusError(tonic::Status::new(
-            tonic::Code::Unimplemented,
-            "get_mempool_tx is not implemented in Zaino.",
-        )))
+        let mempool = self.mempool.clone();
+        let service_timeout = self.config.service_timeout;
+        let (channel_tx, channel_rx) =
+            tokio::sync::mpsc::channel(self.config.service_channel_size as usize);
+        tokio::spawn(async move {
+            let timeout = timeout(
+                std::time::Duration::from_secs(service_timeout as u64),
+                async {
+                    for (txid, transaction) in mempool.get_filtered_mempool(exclude_txids).await {
+                        match transaction.0 {
+                            GetRawTransaction::Object(transaction_object) => {
+                                let txid_bytes = match hex::decode(txid.0) {
+                                    Ok(bytes) => bytes,
+                                    Err(e) => {
+                                        if channel_tx
+                                            .send(Err(tonic::Status::unknown(e.to_string())))
+                                            .await
+                                            .is_err()
+                                        {
+                                            break;
+                                        } else {
+                                            continue;
+                                        }
+                                    }
+                                };
+                                match <zaino_fetch::chain::transaction::FullTransaction as zaino_fetch::chain::utils::ParseFromSlice>::parse_from_slice(
+                                    transaction_object.hex.as_ref(), 
+                                    Some(vec!(txid_bytes)), None) 
+                                {
+                                    Ok(transaction) => {
+                                        if !transaction.0.is_empty() {
+                                            // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                                            if channel_tx
+                                                .send(Err(tonic::Status::unknown("Error: ")))
+                                                .await
+                                                .is_err()
+                                            {
+                                                break;
+                                            }
+                                        } else {
+                                            match transaction.1.to_compact(0) {
+                                                Ok(compact_tx) => {
+                                                    if channel_tx
+                                                        .send(Ok(compact_tx))
+                                                        .await
+                                                        .is_err()
+                                                    {
+                                                        break;
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                                                    if channel_tx
+                                                        .send(Err(tonic::Status::unknown(e.to_string())))
+                                                        .await
+                                                        .is_err()
+                                                    {
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                            }
+                                    Err(e) => {
+                                        // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                                        if channel_tx
+                                            .send(Err(tonic::Status::unknown(e.to_string())))
+                                            .await
+                                            .is_err()
+                                        {
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            GetRawTransaction::Raw(_) => {
+                                if channel_tx
+                                    .send(Err(tonic::Status::internal(
+                                        "Error: Received raw transaction type, this should not be impossible.",
+                                    )))
+                                    .await
+                                    .is_err()
+                                {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                },
+            )
+            .await;
+            match timeout {
+                Ok(_) => {}
+                Err(_) => {
+                    channel_tx
+                        .send(Err(tonic::Status::internal(
+                            "Error: get_mempool_tx gRPC request timed out",
+                        )))
+                        .await
+                        .ok();
+                }
+            }
+        });
+
+        Ok(CompactTransactionStream::new(channel_rx))
     }
 
     /// Return a stream of current Mempool transactions. This will keep the output stream open while
     /// there are mempool transactions. It will close the returned stream when a new block is mined.
-    ///
-    /// NOTE: To be implemented with the mempool updgrade.
     async fn get_mempool_stream(&self) -> Result<RawTransactionStream, Self::Error> {
-        Err(FetchServiceError::TonicStatusError(tonic::Status::new(
-            tonic::Code::Unimplemented,
-            "get_mempool_stream is not implemented in Zaino.",
-        )))
+        let mut mempool = self.mempool.clone();
+        let service_timeout = self.config.service_timeout;
+        let (channel_tx, channel_rx) =
+            tokio::sync::mpsc::channel(self.config.service_channel_size as usize);
+        let mempool_height = self.fetcher.get_blockchain_info().await?.blocks.0;
+        tokio::spawn(async move {
+            let timeout = timeout(
+                std::time::Duration::from_secs(service_timeout as u64),
+                async {
+                    let (mut mempool_stream, _mempool_handle) =
+                    match mempool.get_mempool_stream().await {
+                        Ok(stream) => stream,
+                        Err(e) => {
+                            eprintln!("Error getting mempool stream: {:?}", e);
+                            channel_tx
+                                .send(Err(tonic::Status::internal(
+                                    "Error getting mempool stream",
+                                )))
+                                .await
+                                .ok();
+                            return;
+                        }
+                    };
+                    while let Some(result) = mempool_stream.recv().await {
+                        match result {
+                            Ok((_mempool_key, mempool_value)) => {
+                                match mempool_value.0 {
+                                    GetRawTransaction::Object(transaction_object) => {
+                                        if channel_tx
+                                            .send(Ok(RawTransaction {
+                                                data: transaction_object.hex.as_ref().to_vec(),
+                                                height: mempool_height as u64,
+                                            }))
+                                            .await
+                                            .is_err()
+                                        {
+                                            break;
+                                        }
+                                    }
+                                    GetRawTransaction::Raw(_) => {
+                                        if channel_tx
+                                            .send(Err(tonic::Status::internal(
+                                                "Error: Received raw transaction type, this should not be impossible.",
+                                            )))
+                                            .await
+                                            .is_err()
+                                        {
+                                            break;
+                                        }
+                                    }
+                                } 
+                            }
+                            Err(e) => {
+                                channel_tx
+                                    .send(Err(tonic::Status::internal(format!(
+                                        "Error in mempool stream: {:?}",
+                                        e
+                                    ))))
+                                    .await
+                                    .ok();
+                                break;
+                            }
+                        }
+                    }
+                },
+            )
+            .await;
+            match timeout {
+                Ok(_) => {}
+                Err(_) => {
+                    channel_tx
+                        .send(Err(tonic::Status::internal(
+                            "Error: get_mempool_stream gRPC request timed out",
+                        )))
+                        .await
+                        .ok();
+                }
+            }
+        });
+
+        Ok(RawTransactionStream::new(channel_rx))
     }
 
     /// GetTreeState returns the note commitment tree state corresponding to the given block.

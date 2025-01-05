@@ -9,6 +9,7 @@ use crate::{
 };
 use zaino_fetch::jsonrpc::connector::JsonRpcConnector;
 use zebra_chain::block::Hash;
+use zebra_rpc::methods::GetRawTransaction;
 
 /// Mempool key
 ///
@@ -21,8 +22,8 @@ pub struct MempoolKey(pub String);
 /// NOTE: Currently holds a copy of txid,
 ///       this could be updated to store the corresponding transaction as the value,
 ///       this would enable the serving of mempool trasactions directly, significantly increasing efficiency.
-#[derive(Debug, Clone, PartialEq, Hash, Eq)]
-pub struct MempoolValue(pub String);
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MempoolValue(pub GetRawTransaction);
 
 /// Zcash mempool, uses dashmap for efficient serving of mempool tx.
 #[derive(Debug)]
@@ -53,17 +54,9 @@ impl Mempool {
             status: AtomicStatus::new(StatusType::Spawning.into()),
         };
 
-        mempool.state.insert_filtered_set(
-            mempool
-                .fetcher
-                .get_raw_mempool()
-                .await?
-                .transactions
-                .into_iter()
-                .map(|s| (MempoolKey(s.clone()), MempoolValue(s)))
-                .collect(),
-            StatusType::Ready,
-        );
+        mempool
+            .state
+            .insert_filtered_set(mempool.get_mempool_transactions().await?, StatusType::Ready);
 
         mempool.sync_task_handle = Some(mempool.serve().await?);
 
@@ -71,7 +64,7 @@ impl Mempool {
     }
 
     async fn serve(&self) -> Result<tokio::task::JoinHandle<()>, MempoolError> {
-        let fetcher = self.fetcher.clone();
+        let mempool = self.clone();
         let state = self.state.clone();
         let status = self.status.clone();
         status.store(StatusType::Ready.into());
@@ -80,7 +73,7 @@ impl Mempool {
             let mut best_block_hash: Hash;
             let mut check_block_hash: Hash;
 
-            match fetcher.get_blockchain_info().await {
+            match mempool.fetcher.get_blockchain_info().await {
                 Ok(chain_info) => {
                     best_block_hash = chain_info.best_block_hash.clone();
                 }
@@ -93,7 +86,7 @@ impl Mempool {
             }
 
             loop {
-                match fetcher.get_blockchain_info().await {
+                match mempool.fetcher.get_blockchain_info().await {
                     Ok(chain_info) => {
                         check_block_hash = chain_info.best_block_hash.clone();
                     }
@@ -111,16 +104,9 @@ impl Mempool {
                     state.clear();
                 }
 
-                match fetcher.get_raw_mempool().await {
-                    Ok(mempool_tx) => {
-                        state.insert_filtered_set(
-                            mempool_tx
-                                .transactions
-                                .into_iter()
-                                .map(|s| (MempoolKey(s.clone()), MempoolValue(s)))
-                                .collect(),
-                            StatusType::Ready,
-                        );
+                match mempool.get_mempool_transactions().await {
+                    Ok(mempool_transactions) => {
+                        state.insert_filtered_set(mempool_transactions, StatusType::Ready);
                     }
                     Err(e) => {
                         status.store(StatusType::RecoverableError.into());
@@ -140,6 +126,23 @@ impl Mempool {
         });
 
         Ok(sync_handle)
+    }
+
+    /// Returns all transactions in the mempool.
+    async fn get_mempool_transactions(
+        &self,
+    ) -> Result<Vec<(MempoolKey, MempoolValue)>, MempoolError> {
+        let mut transactions = Vec::new();
+
+        for txid in self.fetcher.get_raw_mempool().await?.transactions {
+            let transaction = self
+                .fetcher
+                .get_raw_transaction(txid.clone(), Some(1))
+                .await?;
+            transactions.push((MempoolKey(txid), MempoolValue(transaction.into())));
+        }
+
+        Ok(transactions)
     }
 
     /// Returns a [`MempoolSubscriber`].
@@ -197,7 +200,7 @@ pub struct MempoolSubscriber {
 
 impl MempoolSubscriber {
     /// Returns all tx currently in the mempool and updates seen_txids.
-    pub fn get_mempool(&self) -> Vec<(MempoolKey, MempoolValue)> {
+    pub async fn get_mempool(&self) -> Vec<(MempoolKey, MempoolValue)> {
         self.subscriber.get_filtered_state(&HashSet::new())
     }
 
@@ -207,7 +210,7 @@ impl MempoolSubscriber {
     /// more bandwidth-efficient; if two or more transactions in the mempool
     /// match a shortened txid, they are all sent (none is excluded). Transactions
     /// in the exclude list that don't exist in the mempool are ignored.
-    pub fn get_filtered_mempool(
+    pub async fn get_filtered_mempool(
         &self,
         exclude_list: Vec<String>,
     ) -> Vec<(MempoolKey, MempoolValue)> {
