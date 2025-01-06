@@ -606,7 +606,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         let (channel_tx, channel_rx) =
             tokio::sync::mpsc::channel(self.config.service_channel_size as usize);
         tokio::spawn(async move {
-            let timeout = timeout(std::time::Duration::from_secs(service_timeout as u64), async {
+            let timeout = timeout(std::time::Duration::from_secs((service_timeout*4) as u64), async {
                     for height in start..=end {
                         let height = if rev_order {
                             end - (height - start)
@@ -720,7 +720,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         let (channel_tx, channel_rx) =
             tokio::sync::mpsc::channel(self.config.service_channel_size as usize);
         tokio::spawn(async move {
-            let timeout = timeout(std::time::Duration::from_secs(service_timeout as u64), async {
+            let timeout = timeout(std::time::Duration::from_secs((service_timeout*4) as u64), async {
                     for height in start..=end {
                         let height = if rev_order {
                             end - (height - start)
@@ -883,7 +883,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         let (channel_tx, channel_rx) =
             tokio::sync::mpsc::channel(self.config.service_channel_size as usize);
         tokio::spawn(async move {
-            let timeout = timeout(std::time::Duration::from_secs(service_timeout as u64), async {
+            let timeout = timeout(std::time::Duration::from_secs((service_timeout*4) as u64), async {
                     for txid in txids {
                         let transaction = fetch_service_clone.get_raw_transaction(txid, Some(1)).await;
                         match transaction {
@@ -982,7 +982,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             tokio::sync::mpsc::channel::<String>(self.config.service_channel_size as usize);
         let fetcher_task_handle = tokio::spawn(async move {
             let fetcher_timeout = timeout(
-                std::time::Duration::from_secs(service_timeout as u64),
+                std::time::Duration::from_secs((service_timeout*4) as u64),
                 async {
                     let mut total_balance: u64 = 0;
                     loop {
@@ -1021,7 +1021,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
         // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [mempool_rpc_timout = 4*rpc_timeout]
         let addr_recv_timeout = timeout(
-            std::time::Duration::from_secs(service_timeout as u64),
+            std::time::Duration::from_secs((service_timeout*4) as u64),
             async {
                 while let Some(address_result) = request.next().await {
                     // TODO: Hide server error from clients before release. Currently useful for dev purposes.
@@ -1106,7 +1106,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             tokio::sync::mpsc::channel(self.config.service_channel_size as usize);
         tokio::spawn(async move {
             let timeout = timeout(
-                std::time::Duration::from_secs(service_timeout as u64),
+                std::time::Duration::from_secs((service_timeout*4) as u64),
                 async {
                     for (txid, transaction) in mempool.get_filtered_mempool(exclude_txids).await {
                         match transaction.0 {
@@ -1217,22 +1217,23 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         let mempool_height = self.fetcher.get_blockchain_info().await?.blocks.0;
         tokio::spawn(async move {
             let timeout = timeout(
-                std::time::Duration::from_secs(service_timeout as u64),
+                std::time::Duration::from_secs((service_timeout*6) as u64),
                 async {
                     let (mut mempool_stream, _mempool_handle) =
-                    match mempool.get_mempool_stream().await {
-                        Ok(stream) => stream,
-                        Err(e) => {
-                            eprintln!("Error getting mempool stream: {:?}", e);
-                            channel_tx
-                                .send(Err(tonic::Status::internal(
-                                    "Error getting mempool stream",
-                                )))
-                                .await
-                                .ok();
-                            return;
-                        }
-                    };
+                        match mempool.get_mempool_stream().await {
+                            Ok(stream) => stream,
+                            Err(e) => {
+                                eprintln!("Error getting mempool stream: {:?}", e);
+                                channel_tx
+                                    .send(Err(tonic::Status::internal(
+                                        "Error getting mempool stream",
+                                    )))
+                                    .await
+                                    .ok();
+                                return;
+                            }
+                        };
+                    loop {
                     while let Some(result) = mempool_stream.recv().await {
                         match result {
                             Ok((_mempool_key, mempool_value)) => {
@@ -1273,6 +1274,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                                 break;
                             }
                         }
+                    }
                     }
                 },
             )
@@ -1427,7 +1429,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             tokio::sync::mpsc::channel(self.config.service_channel_size as usize);
         tokio::spawn(async move {
             let timeout = timeout(
-                std::time::Duration::from_secs(service_timeout as u64),
+                std::time::Duration::from_secs((service_timeout*4) as u64),
                 async {
                     for subtree in subtrees.subtrees {
                         match fetch_service_clone
@@ -1617,7 +1619,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             tokio::sync::mpsc::channel(self.config.service_channel_size as usize);
         tokio::spawn(async move {
             let timeout = timeout(
-                std::time::Duration::from_secs(service_timeout as u64),
+                std::time::Duration::from_secs((service_timeout*4) as u64),
                 async {
                     let mut entries: u32 = 0;
                     for utxo in utxos {
@@ -2971,6 +2973,246 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn fetch_service_get_mempool_tx_zcashd() {
+        fetch_service_get_mempool_tx("zcashd").await;
+    }
+
+    async fn fetch_service_get_mempool_tx(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+            .await
+            .unwrap();
+        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
+            .parse::<http::Uri>()
+            .expect("Failed to convert URL to URI");
+        let clients = test_manager
+            .clients
+            .as_ref()
+            .expect("Clients are not initialized");
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+        let fetch_service_subscriber = fetch_service.subscriber();
+        
+        let grpc_service = zaino_serve::rpc::GrpcClient {
+            zebrad_rpc_uri: zebra_uri,
+            online: test_manager.online.clone(),
+        };
+
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+        clients.faucet.do_sync(true).await.unwrap();
+
+        let tx_1 = zingolib::testutils::lightclient::from_inputs::quick_send(
+            &clients.faucet,
+            vec![(
+                &clients.get_recipient_address("transparent").await,
+                250_000,
+                None,
+            )],
+        )
+        .await
+        .unwrap();
+        let tx_2 = zingolib::testutils::lightclient::from_inputs::quick_send(
+            &clients.faucet,
+            vec![(
+                &clients.get_recipient_address("unified").await,
+                250_000,
+                None,
+            )],
+        )
+        .await
+        .unwrap();
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+        let exclude_list_empty = Exclude { txid: Vec::new()};
+
+        let fetch_service_stream = fetch_service_subscriber
+            .get_mempool_tx(exclude_list_empty.clone())
+            .await
+            .unwrap();
+        let fetch_service_mempool_tx: Vec<_> = fetch_service_stream.collect().await;
+        let grpc_service_stream = grpc_service
+            .get_mempool_tx(tonic::Request::new(exclude_list_empty))
+            .await
+            .unwrap()
+            .into_inner();
+        let grpc_service_mempool_tx: Vec<_> = grpc_service_stream.collect().await;
+
+        let fetch_mempool_tx: Vec<_> = fetch_service_mempool_tx
+            .into_iter()
+            .filter_map(|result| result.ok())
+            .collect();
+        let grpc_mempool_tx: Vec<_> = grpc_service_mempool_tx
+            .into_iter()
+            .filter_map(|result| result.ok())
+            .collect();
+
+        let mut sorted_fetch_mempool_tx = fetch_mempool_tx.clone();
+        sorted_fetch_mempool_tx.sort_by_key(|tx| tx.hash.clone());
+        let mut sorted_grpc_mempool_tx = grpc_mempool_tx;
+        sorted_grpc_mempool_tx.sort_by_key(|tx| tx.hash.clone());
+
+        let mut tx1_bytes = tx_1.first().as_ref().clone();
+        tx1_bytes.reverse();
+        let mut tx2_bytes = tx_2.first().as_ref().clone();
+        tx2_bytes.reverse();
+
+        let mut sorted_txids = vec![tx1_bytes, tx2_bytes];
+        sorted_txids.sort_by_key(|hash| hash.clone());
+
+        assert_eq!(sorted_fetch_mempool_tx, sorted_grpc_mempool_tx);
+        assert_eq!(sorted_fetch_mempool_tx[0].hash, sorted_txids[0]);
+        assert_eq!(sorted_fetch_mempool_tx[1].hash, sorted_txids[1]);
+
+        let exclude_list = Exclude { txid: vec![sorted_txids[0][..8].to_vec()]};
+
+        let exclude_fetch_service_stream = fetch_service_subscriber
+            .get_mempool_tx(exclude_list.clone())
+            .await
+            .unwrap();
+        let exclude_fetch_service_mempool_tx: Vec<_> = exclude_fetch_service_stream.collect().await;
+        let exclude_grpc_service_stream = grpc_service
+            .get_mempool_tx(tonic::Request::new(exclude_list))
+            .await
+            .unwrap()
+            .into_inner();
+        let exclude_grpc_service_mempool_tx: Vec<_> = exclude_grpc_service_stream.collect().await;
+
+        let exclude_fetch_mempool_tx: Vec<_> = exclude_fetch_service_mempool_tx
+            .into_iter()
+            .filter_map(|result| result.ok())
+            .collect();
+        let exclude_grpc_mempool_tx: Vec<_> = exclude_grpc_service_mempool_tx
+            .into_iter()
+            .filter_map(|result| result.ok())
+            .collect();
+
+        let mut sorted_exclude_fetch_mempool_tx = exclude_fetch_mempool_tx.clone();
+        sorted_exclude_fetch_mempool_tx.sort_by_key(|tx| tx.hash.clone());
+        let mut sorted_exclude_grpc_mempool_tx = exclude_grpc_mempool_tx;
+        sorted_exclude_grpc_mempool_tx.sort_by_key(|tx| tx.hash.clone());
+
+        assert_eq!(sorted_exclude_fetch_mempool_tx, sorted_exclude_grpc_mempool_tx);
+        assert_eq!(sorted_exclude_fetch_mempool_tx[0].hash, sorted_txids[1]);
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn fetch_service_get_mempool_stream_zcashd() {
+        fetch_service_get_mempool_stream("zcashd").await;
+    }
+
+    async fn fetch_service_get_mempool_stream(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+            .await
+            .unwrap();
+        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
+            .parse::<http::Uri>()
+            .expect("Failed to convert URL to URI");
+        let clients = test_manager
+            .clients
+            .as_ref()
+            .expect("Clients are not initialized");
+
+        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_regtest(Some(1), Some(1)),
+        ))
+        .await
+        .unwrap();
+        let fetch_service_subscriber = fetch_service.subscriber();
+        let grpc_service = zaino_serve::rpc::GrpcClient {
+             zebrad_rpc_uri: zebra_uri,
+            online: test_manager.online.clone(),
+        };
+
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+        clients.faucet.do_sync(true).await.unwrap();
+
+        let fetch_service_handle = tokio::spawn(async move {
+            let fetch_service_stream = fetch_service_subscriber
+                .get_mempool_stream()
+                .await
+                .unwrap();
+            let fetch_service_mempool_tx: Vec<_> = fetch_service_stream.collect().await;
+            fetch_service_mempool_tx
+                .into_iter()
+                .filter_map(|result| result.ok())
+                .collect::<Vec<_>>()
+        });
+        let grpc_service_handle = tokio::spawn(async move {
+            let grpc_service_stream = grpc_service.get_mempool_stream(
+                tonic::Request::new(
+                    zaino_proto::proto::service::Empty {},
+                )).await
+            .unwrap()
+            .into_inner();
+            let grpc_service_mempool_tx: Vec<_> = grpc_service_stream.collect().await;
+            grpc_service_mempool_tx
+                .into_iter()
+                .filter_map(|result| result.ok())
+                .collect::<Vec<_>>()
+        });
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+        zingolib::testutils::lightclient::from_inputs::quick_send(
+            &clients.faucet,
+            vec![(
+                &clients.get_recipient_address("transparent").await,
+                250_000,
+                None,
+            )],
+        )
+        .await
+        .unwrap();
+        zingolib::testutils::lightclient::from_inputs::quick_send(
+            &clients.faucet,
+            vec![(
+                &clients.get_recipient_address("unified").await,
+                250_000,
+                None,
+            )],
+        )
+        .await
+        .unwrap();
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+
+        let fetch_mempool_tx = fetch_service_handle.await.unwrap();
+        let grpc_mempool_tx = grpc_service_handle.await.unwrap();
+
+        let mut sorted_fetch_mempool_tx = fetch_mempool_tx.clone();
+        sorted_fetch_mempool_tx.sort_by_key(|tx| tx.data.clone());
+        let mut sorted_grpc_mempool_tx = grpc_mempool_tx;
+        sorted_grpc_mempool_tx.sort_by_key(|tx| tx.data.clone());
+
+        assert_eq!(sorted_fetch_mempool_tx, sorted_grpc_mempool_tx);
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
     async fn fetch_service_get_tree_state_zcashd() {
         fetch_service_get_tree_state("zcashd").await;
     }
@@ -3324,11 +3566,14 @@ mod tests {
             .unwrap())
         .into_inner();
 
-        // Clean build date from responses.
+        // Clean build date and git commit from responses.
         let mut fetch_service_cleaned_info = fetch_service_get_lightd_info.clone();
         let mut grpc_service_cleaned_info = grpc_service_get_lightd_info.clone();
         fetch_service_cleaned_info.build_date = String::new();
         grpc_service_cleaned_info.build_date = String::new();
+        fetch_service_cleaned_info.git_commit = String::new();
+        grpc_service_cleaned_info.git_commit = String::new();
+
 
         assert_eq!(fetch_service_cleaned_info, grpc_service_cleaned_info);
 

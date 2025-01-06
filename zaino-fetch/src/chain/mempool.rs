@@ -130,9 +130,17 @@ impl Mempool {
 
         let mut txids_to_exclude: HashSet<String> = HashSet::new();
         for exclude_txid in &exclude_txids {
+            // Convert to big endian (server format).
+            let server_exclude_txid: String = exclude_txid
+                .chars()
+                .collect::<Vec<_>>()
+                .chunks(2)
+                .rev()
+                .map(|chunk| chunk.iter().collect::<String>())
+                .collect();
             let matching_txids: Vec<&String> = mempool_txids
                 .iter()
-                .filter(|txid| txid.starts_with(exclude_txid))
+                .filter(|txid| txid.starts_with(&server_exclude_txid))
                 .collect();
 
             if matching_txids.len() == 1 {

@@ -54,9 +54,23 @@ impl Mempool {
             status: AtomicStatus::new(StatusType::Spawning.into()),
         };
 
-        mempool
-            .state
-            .insert_filtered_set(mempool.get_mempool_transactions().await?, StatusType::Ready);
+        loop {
+            match mempool.get_mempool_transactions().await {
+                Ok(mempool_transactions) => {
+                    mempool.status.store(StatusType::Ready.into());
+                    mempool
+                        .state
+                        .insert_filtered_set(mempool_transactions, mempool.status.clone().into());
+                    break;
+                }
+                Err(e) => {
+                    mempool.status.store(StatusType::Spawning.into());
+                    mempool.state.notify(mempool.status.clone().into());
+                    eprintln!("{e}");
+                    continue;
+                }
+            };
+        }
 
         mempool.sync_task_handle = Some(mempool.serve().await?);
 
@@ -67,21 +81,24 @@ impl Mempool {
         let mempool = self.clone();
         let state = self.state.clone();
         let status = self.status.clone();
-        status.store(StatusType::Ready.into());
+        status.store(StatusType::Spawning.into());
 
         let sync_handle = tokio::spawn(async move {
             let mut best_block_hash: Hash;
             let mut check_block_hash: Hash;
 
-            match mempool.fetcher.get_blockchain_info().await {
-                Ok(chain_info) => {
-                    best_block_hash = chain_info.best_block_hash.clone();
-                }
-                Err(e) => {
-                    status.store(StatusType::RecoverableError.into());
-                    state.notify(status.into());
-                    eprintln!("{e}");
-                    return;
+            loop {
+                match mempool.fetcher.get_blockchain_info().await {
+                    Ok(chain_info) => {
+                        best_block_hash = chain_info.best_block_hash.clone();
+                        break;
+                    }
+                    Err(e) => {
+                        state.notify(status.clone().into());
+                        eprintln!("{e}");
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        continue;
+                    }
                 }
             }
 
@@ -92,27 +109,33 @@ impl Mempool {
                     }
                     Err(e) => {
                         status.store(StatusType::RecoverableError.into());
-                        state.notify(status.into());
+                        state.notify(status.clone().into());
                         eprintln!("{e}");
-                        return;
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        continue;
                     }
                 }
 
                 if check_block_hash != best_block_hash {
                     best_block_hash = check_block_hash;
-                    state.notify(StatusType::Syncing);
+                    status.store(StatusType::Syncing.into());
+                    state.notify(status.clone().into());
                     state.clear();
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    continue;
                 }
 
                 match mempool.get_mempool_transactions().await {
                     Ok(mempool_transactions) => {
-                        state.insert_filtered_set(mempool_transactions, StatusType::Ready);
+                        status.store(StatusType::Ready.into());
+                        state.insert_filtered_set(mempool_transactions, status.clone().into());
                     }
                     Err(e) => {
                         status.store(StatusType::RecoverableError.into());
-                        state.notify(status.into());
+                        state.notify(status.clone().into());
                         eprintln!("{e}");
-                        return;
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        continue;
                     }
                 };
 
@@ -139,6 +162,7 @@ impl Mempool {
                 .fetcher
                 .get_raw_transaction(txid.clone(), Some(1))
                 .await?;
+            //process txid
             transactions.push((MempoolKey(txid), MempoolValue(transaction.into())));
         }
 
@@ -199,12 +223,12 @@ pub struct MempoolSubscriber {
 }
 
 impl MempoolSubscriber {
-    /// Returns all tx currently in the mempool and updates seen_txids.
+    /// Returns all tx currently in the mempool.
     pub async fn get_mempool(&self) -> Vec<(MempoolKey, MempoolValue)> {
         self.subscriber.get_filtered_state(&HashSet::new())
     }
 
-    /// Returns all tx currently in the mempool and updates seen_txids.
+    /// Returns all tx currently in the mempool filtered by [`exclude_list`].
     ///
     /// The transaction IDs in the Exclude list can be shortened to any number of bytes to make the request
     /// more bandwidth-efficient; if two or more transactions in the mempool
@@ -223,9 +247,17 @@ impl MempoolSubscriber {
 
         let mut txids_to_exclude: HashSet<MempoolKey> = HashSet::new();
         for exclude_txid in &exclude_list {
+            // Convert to big endian (server format).
+            let server_exclude_txid: String = exclude_txid
+                .chars()
+                .collect::<Vec<_>>()
+                .chunks(2)
+                .rev()
+                .map(|chunk| chunk.iter().collect::<String>())
+                .collect();
             let matching_txids: Vec<&String> = mempool_txids
                 .iter()
-                .filter(|txid| txid.starts_with(exclude_txid))
+                .filter(|txid| txid.starts_with(&server_exclude_txid))
                 .collect();
 
             if matching_txids.len() == 1 {
@@ -250,6 +282,7 @@ impl MempoolSubscriber {
         MempoolError,
     > {
         let mut subscriber = self.clone();
+        subscriber.seen_txids.clear();
         let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
 
         let streamer_handle = tokio::spawn(async move {
@@ -259,7 +292,23 @@ impl MempoolSubscriber {
                     match mempool_status {
                         StatusType::Ready => {
                             for (mempool_key, mempool_value) in mempool_updates {
-                                channel_tx.send(Ok((mempool_key, mempool_value))).await?;
+                                loop {
+                                    match channel_tx
+                                        .try_send(Ok((mempool_key.clone(), mempool_value.clone())))
+                                    {
+                                        Ok(_) => break,
+                                        Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                                            tokio::time::sleep(std::time::Duration::from_millis(
+                                                100,
+                                            ))
+                                            .await;
+                                            continue;
+                                        }
+                                        Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                                            return Ok(());
+                                        }
+                                    }
+                                }
                             }
                         }
                         StatusType::Syncing => {
@@ -269,6 +318,9 @@ impl MempoolSubscriber {
                             return Err(MempoolError::StatusError(StatusError(
                                 StatusType::Closing,
                             )));
+                        }
+                        StatusType::RecoverableError => {
+                            continue;
                         }
                         status => {
                             return Err(MempoolError::StatusError(StatusError(status)));
