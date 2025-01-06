@@ -2,6 +2,7 @@
 
 use zaino_fetch::jsonrpc::error::JsonRpcConnectorError;
 use zaino_serve::server::error::ServerError;
+use zaino_state::error::FetchServiceError;
 
 /// Zingo-Indexer errors.
 #[derive(Debug, thiserror::Error)]
@@ -15,6 +16,9 @@ pub enum IndexerError {
     /// JSON RPC connector errors.
     #[error("JSON RPC connector error: {0}")]
     JsonRpcConnectorError(#[from] JsonRpcConnectorError),
+    /// FetchService errors.
+    #[error("FetchService error: {0}")]
+    FetchServiceError(#[from] FetchServiceError),
     /// HTTP related errors due to invalid URI.
     #[error("HTTP error: Invalid URI {0}")]
     HttpError(#[from] http::Error),

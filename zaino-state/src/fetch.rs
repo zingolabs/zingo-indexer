@@ -4,7 +4,7 @@ use crate::{
     config::FetchServiceConfig,
     error::FetchServiceError,
     get_build_info,
-    indexer::{LightWalletIndexer, ZcashIndexer},
+    indexer::{IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService},
     mempool::{Mempool, MempoolSubscriber},
     status::{AtomicStatus, StatusType},
     stream::{
@@ -42,7 +42,7 @@ use zebra_rpc::methods::{
 pub struct FetchService {
     /// JsonRPC Client.
     fetcher: JsonRpcConnector,
-    // TODO: Add Internal Non-Finalised State
+    // TODO: Add internal compact block cache.
     /// Internal mempool.
     mempool: Mempool,
     /// Service metadata.
@@ -53,15 +53,21 @@ pub struct FetchService {
     status: AtomicStatus,
 }
 
-impl FetchService {
+#[async_trait]
+impl ZcashService for FetchService {
+    type Error = FetchServiceError;
+    type Subscriber = FetchServiceSubscriber;
+    type Config = FetchServiceConfig;
     /// Initializes a new StateService instance and starts sync process.
-    pub async fn spawn(config: FetchServiceConfig) -> Result<Self, FetchServiceError> {
+    async fn spawn(config: FetchServiceConfig, status: AtomicStatus) -> Result<Self, FetchServiceError> {
         let rpc_uri = test_node_and_return_uri(
             &config.validator_rpc_address.port(),
             Some(config.validator_rpc_user.clone()),
             Some(config.validator_rpc_password.clone()),
         )
         .await?;
+        let status = status.clone();
+        status.store(StatusType::Spawning.into());
 
         let fetcher = JsonRpcConnector::new(
             rpc_uri,
@@ -86,7 +92,7 @@ impl FetchService {
             mempool,
             data,
             config,
-            status: AtomicStatus::new(StatusType::Spawning.into()),
+            status,
         };
 
         state_service.status.store(StatusType::Syncing.into());
@@ -99,23 +105,24 @@ impl FetchService {
     }
 
     /// Returns a [`FetchServiceSubscriber`].
-    pub fn subscriber(&self) -> FetchServiceSubscriber {
-        FetchServiceSubscriber {
+    fn get_subscriber(&self) -> IndexerSubscriber<FetchServiceSubscriber> {
+        IndexerSubscriber::new(
+            FetchServiceSubscriber {
             fetcher: self.fetcher.clone(),
             mempool: self.mempool.subscriber(),
             data: self.data.clone(),
             config: self.config.clone(),
             status: self.status.clone(),
-        }
+        })
     }
 
     /// Fetches the current status
-    pub fn status(&self) -> StatusType {
+    fn status(&self) -> StatusType {
         self.status.load().into()
     }
 
     /// Shuts down the StateService.
-    pub fn close(&mut self) {
+    fn close(&mut self) {
         self.mempool.close();
     }
 }
@@ -1890,10 +1897,13 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+            ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap()
-        .subscriber();
+        .get_subscriber()
+        .inner();
 
         assert_eq!(fetch_service.status(), StatusType::Ready);
         dbg!(fetch_service.data.clone());
@@ -1940,10 +1950,13 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+            ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap()
-        .subscriber();
+        .get_subscriber()
+        .inner();
 
         let fetch_service_balance = fetch_service
             .z_get_address_balance(AddressStrings::new_valid(vec![recipient_address]).unwrap())
@@ -1982,10 +1995,13 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap()
-        .subscriber();
+        .get_subscriber()
+        .inner();
 
         dbg!(fetch_service
             .z_get_block("1".to_string(), Some(0))
@@ -2015,10 +2031,13 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap()
-        .subscriber();
+        .get_subscriber()
+        .inner();
 
         dbg!(fetch_service
             .z_get_block("1".to_string(), Some(1))
@@ -2055,10 +2074,14 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap();
-        let fetch_service_subscriber = fetch_service.subscriber();
+        let fetch_service_subscriber = fetch_service
+            .get_subscriber()
+            .inner();
 
         let json_service = JsonRpcConnector::new(
             zebra_uri,
@@ -2143,10 +2166,13 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap()
-        .subscriber();
+        .get_subscriber()
+        .inner();
 
         dbg!(fetch_service
             .z_get_treestate("2".to_string())
@@ -2195,10 +2221,13 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap()
-        .subscriber();
+        .get_subscriber()
+        .inner();
 
         dbg!(fetch_service
             .z_get_subtrees_by_index("orchard".to_string(), NoteCommitmentSubtreeIndex(0), None)
@@ -2247,10 +2276,13 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap()
-        .subscriber();
+        .get_subscriber()
+        .inner();
 
         dbg!(fetch_service
             .get_raw_transaction(tx.first().to_string(), Some(1))
@@ -2295,10 +2327,13 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap()
-        .subscriber();
+        .get_subscriber()
+        .inner();
 
         let fetch_service_txids = fetch_service
             .get_address_tx_ids(GetAddressTxIdsRequest::from_parts(
@@ -2352,10 +2387,13 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap()
-        .subscriber();
+        .get_subscriber()
+        .inner();
 
         let fetch_service_utxos = fetch_service
             .z_get_address_utxos(AddressStrings::new_valid(vec![recipient_address]).unwrap())
@@ -2393,10 +2431,13 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap()
-        .subscriber();
+        .get_subscriber()
+        .inner();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -2442,10 +2483,13 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap()
-        .subscriber();
+        .get_subscriber()
+        .inner();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -2492,10 +2536,13 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap()
-        .subscriber();
+        .get_subscriber()
+        .inner();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -2548,10 +2595,13 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap()
-        .subscriber();
+        .get_subscriber()
+        .inner();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -2619,10 +2669,13 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap()
-        .subscriber();
+        .get_subscriber()
+        .inner();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -2694,10 +2747,13 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap()
-        .subscriber();
+        .get_subscriber()
+        .inner();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -2766,10 +2822,13 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap()
-        .subscriber();
+        .get_subscriber()
+        .inner();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -2838,10 +2897,13 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap()
-        .subscriber();
+        .get_subscriber()
+        .inner();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -2929,10 +2991,13 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap()
-        .subscriber();
+        .get_subscriber()
+        .inner();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -2999,10 +3064,14 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap();
-        let fetch_service_subscriber = fetch_service.subscriber();
+        let fetch_service_subscriber = fetch_service
+            .get_subscriber()
+            .inner();
         
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
@@ -3136,10 +3205,14 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap();
-        let fetch_service_subscriber = fetch_service.subscriber();
+        let fetch_service_subscriber = fetch_service
+            .get_subscriber()
+            .inner();
         let grpc_service = zaino_serve::rpc::GrpcClient {
              zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -3235,10 +3308,13 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap()
-        .subscriber();
+        .get_subscriber()
+        .inner();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -3287,10 +3363,13 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap()
-        .subscriber();
+        .get_subscriber()
+        .inner();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -3332,10 +3411,13 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap()
-        .subscriber();
+        .get_subscriber()
+        .inner();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -3402,10 +3484,13 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap()
-        .subscriber();
+        .get_subscriber()
+        .inner();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -3477,10 +3562,13 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap()
-        .subscriber();
+        .get_subscriber()
+        .inner();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),
@@ -3550,10 +3638,13 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
-        ))
+        ),
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
         .await
         .unwrap()
-        .subscriber();
+        .get_subscriber()
+        .inner();
         let grpc_service = zaino_serve::rpc::GrpcClient {
             zebrad_rpc_uri: zebra_uri,
             online: test_manager.online.clone(),

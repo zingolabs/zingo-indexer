@@ -5287,6 +5287,7 @@ dependencies = [
  "zaino-fetch",
  "zaino-serve",
  "zaino-state",
+ "zebra-chain",
 ]
 
 [[package]]

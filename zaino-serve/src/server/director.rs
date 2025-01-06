@@ -16,13 +16,19 @@ use crate::server::{
     request::ZingoIndexerRequest,
     worker::{WorkerPool, WorkerPoolStatus},
 };
-use zaino_state::status::{AtomicStatus, StatusType};
+use zaino_state::{
+    fetch::FetchServiceSubscriber,
+    indexer::IndexerSubscriber,
+    status::{AtomicStatus, StatusType},
+};
 
 /// Holds the status of the server and all its components.
 #[derive(Debug, Clone)]
 pub struct ServerStatus {
     /// Status of the Server.
     pub server_status: AtomicStatus,
+    /// Status of the chain fetch service.
+    pub service_status: AtomicStatus,
     tcp_ingestor_status: AtomicStatus,
     workerpool_status: WorkerPoolStatus,
     request_queue_status: Arc<AtomicUsize>,
@@ -33,6 +39,7 @@ impl ServerStatus {
     pub fn new(max_workers: u16) -> Self {
         ServerStatus {
             server_status: AtomicStatus::new(StatusType::Offline.into()),
+            service_status: AtomicStatus::new(StatusType::Offline.into()),
             tcp_ingestor_status: AtomicStatus::new(StatusType::Offline.into()),
             workerpool_status: WorkerPoolStatus::new(max_workers),
             request_queue_status: Arc::new(AtomicUsize::new(0)),
@@ -53,6 +60,8 @@ impl ServerStatus {
 pub struct Server {
     /// Listens for incoming gRPC requests over HTTP.
     tcp_ingestor: Option<TcpIngestor>,
+    /// Chain fetch service subscriber.
+    _service_subscriber: IndexerSubscriber<FetchServiceSubscriber>,
     /// Dynamically sized pool of workers.
     worker_pool: WorkerPool,
     /// Request queue.
@@ -67,6 +76,7 @@ impl Server {
     /// Spawns a new Server.
     #[allow(clippy::too_many_arguments)]
     pub async fn spawn(
+        service_subscriber: IndexerSubscriber<FetchServiceSubscriber>,
         tcp_active: bool,
         tcp_ingestor_listen_addr: Option<SocketAddr>,
         zebrad_uri: Uri,
@@ -108,6 +118,8 @@ impl Server {
         };
         println!("Launching WorkerPool..");
         let worker_pool = WorkerPool::spawn(
+            service_subscriber.clone(),
+            status.service_status.clone(),
             max_worker_pool_size,
             idle_worker_pool_size,
             request_queue.rx().clone(),
@@ -118,6 +130,7 @@ impl Server {
         )
         .await;
         Ok(Server {
+            _service_subscriber: service_subscriber,
             tcp_ingestor,
             worker_pool,
             request_queue,

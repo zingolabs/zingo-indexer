@@ -14,7 +14,12 @@ use zaino_serve::server::{
     director::{Server, ServerStatus},
     error::ServerError,
 };
-use zaino_state::status::{AtomicStatus, StatusType};
+use zaino_state::{
+    config::FetchServiceConfig,
+    fetch::FetchService,
+    indexer::{IndexerService, ZcashService},
+    status::{AtomicStatus, StatusType},
+};
 
 use crate::{config::IndexerConfig, error::IndexerError};
 
@@ -22,16 +27,18 @@ use crate::{config::IndexerConfig, error::IndexerError};
 #[derive(Debug, Clone)]
 pub struct IndexerStatus {
     indexer_status: AtomicStatus,
+    service_status: AtomicStatus,
     server_status: ServerStatus,
-    // block_cache_status: BlockCacheStatus,
 }
 
 impl IndexerStatus {
     /// Creates a new IndexerStatus.
     pub fn new(max_workers: u16) -> Self {
+        let server_status = ServerStatus::new(max_workers);
         IndexerStatus {
             indexer_status: AtomicStatus::new(StatusType::Offline.into()),
-            server_status: ServerStatus::new(max_workers),
+            service_status: server_status.service_status.clone(),
+            server_status,
         }
     }
 
@@ -49,8 +56,8 @@ pub struct Indexer {
     config: IndexerConfig,
     /// GRPC server.
     server: Option<Server>,
-    // /// Internal block cache.
-    // block_cache: BlockCache,
+    /// Internal block cache.
+    _service: IndexerService<FetchService>,
     /// Indexers status.
     status: IndexerStatus,
     /// Online status of the indexer.
@@ -87,8 +94,24 @@ impl Indexer {
         )
         .await?;
         status.indexer_status.store(StatusType::Spawning.into());
+        let service = IndexerService::<FetchService>::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    config.zebrad_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                config.get_network()?,
+            ),
+            status.service_status.clone(),
+        )
+        .await?;
         let server = Some(
             Server::spawn(
+                service.inner_ref().get_subscriber(),
                 config.tcp_active,
                 tcp_ingestor_listen_addr,
                 zebrad_uri,
@@ -104,6 +127,7 @@ impl Indexer {
         Ok(Indexer {
             config,
             server,
+            _service: service,
             status,
             online,
         })

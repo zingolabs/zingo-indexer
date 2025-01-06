@@ -17,10 +17,113 @@ use zebra_rpc::methods::{
     GetBlockChainInfo, GetInfo, GetRawTransaction, SentTransactionHash,
 };
 
-use crate::stream::{
-    AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
-    SubtreeRootReplyStream, UtxoReplyStream,
+use crate::{
+    status::{AtomicStatus, StatusType},
+    stream::{
+        AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
+        SubtreeRootReplyStream, UtxoReplyStream,
+    },
 };
+
+/// Wrapper Struct for a ZainoState chain-fetch service (StateService, FetchService)
+///
+/// The future plan is to also add a TonicService and DarksideService to this to enable wallets to use a single unified chain fetch service.
+///
+/// NOTE: Work to implement a unified endpoint for IndexerService will be completed in Milestone 3 of the Zaino Dev Grant.
+#[derive(Clone)]
+pub struct IndexerService<Service: Clone + ZcashService> {
+    /// Underlying Service.
+    service: Service,
+}
+
+impl<Service> IndexerService<Service>
+where
+    Service: ZcashService + Clone,
+{
+    /// Creates a new `IndexerService` using the provided `config`.
+    pub async fn spawn(
+        config: Service::Config,
+        status: AtomicStatus,
+    ) -> Result<Self, Service::Error> {
+        Ok(IndexerService {
+            service: Service::spawn(config, status).await?,
+        })
+    }
+
+    /// Returns a reference to the inner service.
+    pub fn inner_ref(&self) -> &Service {
+        &self.service
+    }
+
+    /// Returns a clone of the inner service.
+    pub fn inner_clone(&self) -> Service {
+        self.service.clone()
+    }
+
+    /// Consumes the `IndexerService` and returns the inner service.
+    pub fn inner(self) -> Service {
+        self.service
+    }
+}
+
+/// Zcash Service functionality.
+#[async_trait]
+pub trait ZcashService: Sized {
+    /// Uses undelying error type of implementer.
+    type Error: std::error::Error + Send + Sync + 'static;
+
+    /// A subscriber to the service, used to fetch chain data.
+    type Subscriber: Clone + ZcashIndexer + LightWalletIndexer;
+
+    /// Service Config.
+    type Config: Clone;
+
+    /// Spawns a [`Service`].
+    async fn spawn(config: Self::Config, status: AtomicStatus) -> Result<Self, Self::Error>;
+
+    /// Returns a [`ServiceSubscriber`].
+    fn get_subscriber(&self) -> IndexerSubscriber<Self::Subscriber>;
+
+    /// Fetches the current status
+    fn status(&self) -> StatusType;
+
+    /// Shuts down the StateService.
+    fn close(&mut self);
+}
+
+/// Wrapper Struct for a ZainoState chain-fetch service subscriber (StateServiceSubscriber, FetchServiceSubscriber)
+///
+/// The future plan is to also add a TonicServiceSubscriber and DarksideServiceSubscriber to this to enable wallets to use a single unified chain fetch service.
+#[derive(Clone)]
+pub struct IndexerSubscriber<Subscriber: Clone + ZcashIndexer + LightWalletIndexer> {
+    /// Underlying Service Subscriber.
+    subscriber: Subscriber,
+}
+
+impl<Subscriber> IndexerSubscriber<Subscriber>
+where
+    Subscriber: Clone + ZcashIndexer + LightWalletIndexer,
+{
+    /// Creates a new [`IndexerSubscriber`].
+    pub fn new(subscriber: Subscriber) -> Self {
+        IndexerSubscriber { subscriber }
+    }
+
+    /// Returns a reference to the inner service.
+    pub fn inner_ref(&self) -> &Subscriber {
+        &self.subscriber
+    }
+
+    /// Returns a clone of the inner service.
+    pub fn inner_clone(&self) -> Subscriber {
+        self.subscriber.clone()
+    }
+
+    /// Consumes the `IndexerService` and returns the inner service.
+    pub fn inner(self) -> Subscriber {
+        self.subscriber
+    }
+}
 
 /// Zcash RPC method signatures.
 ///

@@ -23,3 +23,6 @@ max_worker_pool_size = 64
 
 # Minimum number of workers held in the worker pool when idle
 idle_worker_pool_size = 4
+
+# Network chain type (Mainnet, Testnet, Regtest)
+idle_worker_pool_size = "Testnet"

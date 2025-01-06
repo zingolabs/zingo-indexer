@@ -21,6 +21,8 @@ pub struct IndexerConfig {
     pub max_worker_pool_size: u16,
     /// Minimum number of workers held in the workerpool when idle.
     pub idle_worker_pool_size: u16,
+    /// StateService network type.
+    pub network: String,
 }
 
 impl IndexerConfig {
@@ -39,7 +41,29 @@ impl IndexerConfig {
                 "TCP is active but no address provided.".to_string(),
             ));
         }
+        if (self.network != "regtest") | (self.network != "testnet") | (self.network != "mainnet") {
+            return Err(IndexerError::ConfigError(
+                "Incorrect network name given.".to_string(),
+            ));
+        }
         Ok(())
+    }
+
+    ///
+    pub fn get_network(&self) -> Result<zebra_chain::parameters::Network, IndexerError> {
+        match self.network.as_str() {
+            "Regtest" => Ok(zebra_chain::parameters::Network::new_regtest(
+                Some(1),
+                Some(1),
+            )),
+            "Testnet" => Ok(zebra_chain::parameters::Network::new_default_testnet()),
+            "Mainnet" => Ok(zebra_chain::parameters::Network::Mainnet),
+            _ => {
+                return Err(IndexerError::ConfigError(
+                    "Incorrect network name given.".to_string(),
+                ));
+            }
+        }
     }
 }
 
@@ -54,6 +78,7 @@ impl Default for IndexerConfig {
             max_queue_size: 1024,
             max_worker_pool_size: 32,
             idle_worker_pool_size: 4,
+            network: "Regtest".to_string(),
         }
     }
 }
@@ -73,6 +98,7 @@ pub fn load_config(file_path: &std::path::PathBuf) -> IndexerConfig {
                 max_queue_size: parsed_config.max_queue_size,
                 max_worker_pool_size: parsed_config.max_worker_pool_size,
                 idle_worker_pool_size: parsed_config.idle_worker_pool_size,
+                network: parsed_config.network,
             };
         }
     }

@@ -16,13 +16,17 @@ use crate::{
     },
 };
 use zaino_proto::proto::service::compact_tx_streamer_server::CompactTxStreamerServer;
-use zaino_state::status::{AtomicStatus, StatusType};
+use zaino_state::{
+    fetch::FetchServiceSubscriber,
+    indexer::IndexerSubscriber,
+    status::{AtomicStatus, StatusType},
+};
 
 /// A queue working is the entity that takes requests from the queue and processes them.
 ///
 /// TODO: - Add JsonRpcConnector to worker and pass to underlying RPC services.
 ///       - Currently a new JsonRpcConnector is spawned for every new RPC serviced.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct Worker {
     /// Worker ID.
     _worker_id: usize,
@@ -30,6 +34,10 @@ pub(crate) struct Worker {
     queue: QueueReceiver<ZingoIndexerRequest>,
     /// Used to requeue requests.
     requeue: QueueSender<ZingoIndexerRequest>,
+    /// Chain fetch service subscriber.
+    _service_subscriber: IndexerSubscriber<FetchServiceSubscriber>,
+    /// Service status.
+    _service_status: AtomicStatus,
     /// gRPC client used for processing requests received over http.
     grpc_client: GrpcClient,
     /// Thread safe worker status.
@@ -45,11 +53,14 @@ impl Worker {
         _worker_id: usize,
         queue: QueueReceiver<ZingoIndexerRequest>,
         requeue: QueueSender<ZingoIndexerRequest>,
+        service_subscriber: IndexerSubscriber<FetchServiceSubscriber>,
+        service_status: AtomicStatus,
         zebrad_uri: Uri,
         atomic_status: AtomicStatus,
         online: Arc<AtomicBool>,
     ) -> Self {
         let grpc_client = GrpcClient {
+            service_subscriber: service_subscriber.clone(),
             zebrad_rpc_uri: zebrad_uri,
             online: online.clone(),
         };
@@ -57,6 +68,8 @@ impl Worker {
             _worker_id,
             queue,
             requeue,
+            _service_subscriber: service_subscriber,
+            _service_status: service_status,
             grpc_client,
             atomic_status,
             online,
@@ -179,8 +192,12 @@ impl WorkerPoolStatus {
 }
 
 /// Dynamically sized pool of workers.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct WorkerPool {
+    /// Chain fetch service subscriber.
+    service_subscriber: IndexerSubscriber<FetchServiceSubscriber>,
+    /// Service status.
+    service_status: AtomicStatus,
     /// Maximun number of concurrent workers allowed.
     max_size: u16,
     /// Minimum number of workers kept running on stanby.
@@ -197,6 +214,8 @@ impl WorkerPool {
     /// Creates a new worker pool containing [idle_workers] workers.
     #[allow(clippy::too_many_arguments)]
     pub(crate) async fn spawn(
+        service_subscriber: IndexerSubscriber<FetchServiceSubscriber>,
+        service_status: AtomicStatus,
         max_size: u16,
         idle_size: u16,
         queue: QueueReceiver<ZingoIndexerRequest>,
@@ -212,6 +231,8 @@ impl WorkerPool {
                     workers.len(),
                     queue.clone(),
                     _requeue.clone(),
+                    service_subscriber.clone(),
+                    service_status.clone(),
                     zebrad_uri.clone(),
                     status.statuses[workers.len()].clone(),
                     online.clone(),
@@ -221,6 +242,8 @@ impl WorkerPool {
         }
         status.workers.store(idle_size as usize, Ordering::SeqCst);
         WorkerPool {
+            service_subscriber,
+            service_status,
             max_size,
             idle_size,
             workers,
@@ -251,6 +274,8 @@ impl WorkerPool {
                     worker_index,
                     self.workers[0].queue.clone(),
                     self.workers[0].requeue.clone(),
+                    self.service_subscriber.clone(),
+                    self.service_status.clone(),
                     self.workers[0].grpc_client.zebrad_rpc_uri.clone(),
                     self.status.statuses[worker_index].clone(),
                     self.online.clone(),
