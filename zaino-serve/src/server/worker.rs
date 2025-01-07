@@ -1,6 +1,5 @@
 //! Holds the server worker implementation.
 
-use http::Uri;
 use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc,
@@ -55,13 +54,11 @@ impl Worker {
         requeue: QueueSender<ZingoIndexerRequest>,
         service_subscriber: IndexerSubscriber<FetchServiceSubscriber>,
         service_status: AtomicStatus,
-        zebrad_uri: Uri,
         atomic_status: AtomicStatus,
         online: Arc<AtomicBool>,
     ) -> Self {
         let grpc_client = GrpcClient {
             service_subscriber: service_subscriber.clone(),
-            zebrad_rpc_uri: zebrad_uri,
             online: online.clone(),
         };
         Worker {
@@ -220,7 +217,6 @@ impl WorkerPool {
         idle_size: u16,
         queue: QueueReceiver<ZingoIndexerRequest>,
         _requeue: QueueSender<ZingoIndexerRequest>,
-        zebrad_uri: Uri,
         status: WorkerPoolStatus,
         online: Arc<AtomicBool>,
     ) -> Self {
@@ -233,7 +229,6 @@ impl WorkerPool {
                     _requeue.clone(),
                     service_subscriber.clone(),
                     service_status.clone(),
-                    zebrad_uri.clone(),
                     status.statuses[workers.len()].clone(),
                     online.clone(),
                 )
@@ -276,7 +271,6 @@ impl WorkerPool {
                     self.workers[0].requeue.clone(),
                     self.service_subscriber.clone(),
                     self.service_status.clone(),
-                    self.workers[0].grpc_client.zebrad_rpc_uri.clone(),
                     self.status.statuses[worker_index].clone(),
                     self.online.clone(),
                 )

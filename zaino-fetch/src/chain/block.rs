@@ -1,21 +1,13 @@
 //! Block fetching and deserialization functionality.
 
-use crate::{
-    chain::{
-        error::{BlockCacheError, ParseError},
-        transaction::FullTransaction,
-        utils::{
-            display_txids_to_server, read_bytes, read_i32, read_u32, read_zcash_script_i64,
-            CompactSize, ParseFromSlice,
-        },
-    },
-    jsonrpc::{connector::JsonRpcConnector, response::GetBlockResponse},
+use crate::chain::{
+    error::ParseError,
+    transaction::FullTransaction,
+    utils::{read_bytes, read_i32, read_u32, read_zcash_script_i64, CompactSize, ParseFromSlice},
 };
 use sha2::{Digest, Sha256};
 use std::io::Cursor;
-use zaino_proto::proto::compact_formats::{
-    ChainMetadata, CompactBlock, CompactOrchardAction, CompactTx,
-};
+use zaino_proto::proto::compact_formats::{ChainMetadata, CompactBlock};
 
 /// A block header, containing metadata about a block.
 ///
@@ -420,113 +412,5 @@ impl FullBlock {
         }
 
         Ok(height_num as i32)
-    }
-}
-
-/// Returns a compact block.
-///
-/// Retrieves a full block from zebrad/zcashd using 2 get_block calls.
-/// This is because a get_block verbose = 1 call is require to fetch txids.
-/// TODO: Save retrieved CompactBlock to the BlockCache.
-/// TODO: Return more representative error type.
-pub async fn get_block_from_node(
-    zebra_uri: &http::Uri,
-    height: &u32,
-    user: Option<String>,
-    password: Option<String>,
-) -> Result<CompactBlock, BlockCacheError> {
-    let zebrad_client = JsonRpcConnector::new(zebra_uri.clone(), user, password).await?;
-    let block_1 = zebrad_client.get_block(height.to_string(), Some(1)).await;
-    match block_1 {
-        Ok(GetBlockResponse::Object {
-            hash,
-            confirmations: _,
-            height: _,
-            time: _,
-            tx,
-            trees,
-        }) => {
-            let block_0 = zebrad_client.get_block(hash.0.to_string(), Some(0)).await;
-            match block_0 {
-                Ok(GetBlockResponse::Object {
-                    hash: _,
-                    confirmations: _,
-                    height: _,
-                    time: _,
-                    tx: _,
-                    trees: _,
-                }) => Err(BlockCacheError::ParseError(ParseError::InvalidData(
-                    "Received object block type, this should not be possible here.".to_string(),
-                ))),
-                Ok(GetBlockResponse::Raw(block_hex)) => Ok(FullBlock::parse_from_hex(
-                    block_hex.as_ref(),
-                    Some(display_txids_to_server(tx)?),
-                )?
-                .into_compact(
-                    u32::try_from(trees.sapling()).map_err(ParseError::from)?,
-                    u32::try_from(trees.orchard()).map_err(ParseError::from)?,
-                )?),
-                Err(e) => Err(e.into()),
-            }
-        }
-        Ok(GetBlockResponse::Raw(_)) => Err(BlockCacheError::ParseError(ParseError::InvalidData(
-            "Received raw block type, this should not be possible here.".to_string(),
-        ))),
-        Err(e) => Err(e.into()),
-    }
-}
-
-/// Returns a compact block holding only action nullifiers.
-///
-/// Retrieves a full block from zebrad/zcashd using 2 get_block calls.
-/// This is because a get_block verbose = 1 call is require to fetch txids.
-///
-/// TODO / NOTE: This should be rewritten when the BlockCache is added.
-pub async fn get_nullifiers_from_node(
-    zebra_uri: &http::Uri,
-    height: &u32,
-) -> Result<CompactBlock, BlockCacheError> {
-    match get_block_from_node(
-        zebra_uri,
-        height,
-        Some("xxxxxx".to_string()),
-        Some("xxxxxx".to_string()),
-    )
-    .await
-    {
-        Ok(block) => Ok(CompactBlock {
-            proto_version: block.proto_version,
-            height: block.height,
-            hash: block.hash,
-            prev_hash: block.prev_hash,
-            time: block.time,
-            header: block.header,
-            vtx: block
-                .vtx
-                .into_iter()
-                .map(|tx| CompactTx {
-                    index: tx.index,
-                    hash: tx.hash,
-                    fee: tx.fee,
-                    spends: tx.spends,
-                    outputs: Vec::new(),
-                    actions: tx
-                        .actions
-                        .into_iter()
-                        .map(|action| CompactOrchardAction {
-                            nullifier: action.nullifier,
-                            cmx: Vec::new(),
-                            ephemeral_key: Vec::new(),
-                            ciphertext: Vec::new(),
-                        })
-                        .collect(),
-                })
-                .collect(),
-            chain_metadata: Some(ChainMetadata {
-                sapling_commitment_tree_size: 0,
-                orchard_commitment_tree_size: 0,
-            }),
-        }),
-        Err(e) => Err(e),
     }
 }

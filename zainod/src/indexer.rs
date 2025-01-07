@@ -87,7 +87,7 @@ impl Indexer {
             .listen_port
             .map(|port| SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST), port));
         println!("Checking connection with node..");
-        let zebrad_uri = test_node_and_return_uri(
+        let _zebrad_uri = test_node_and_return_uri(
             &config.zebrad_port,
             config.node_user.clone(),
             config.node_password.clone(),
@@ -114,7 +114,6 @@ impl Indexer {
                 service.inner_ref().get_subscriber(),
                 config.tcp_active,
                 tcp_ingestor_listen_addr,
-                zebrad_uri,
                 config.max_queue_size,
                 config.max_worker_pool_size,
                 config.idle_worker_pool_size,

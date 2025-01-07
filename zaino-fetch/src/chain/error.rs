@@ -1,7 +1,5 @@
 //! Hold error types for the BlockCache and related functionality.
 
-use crate::jsonrpc::error::JsonRpcConnectorError;
-
 /// Parser Error Type.
 #[derive(Debug, thiserror::Error)]
 pub enum ParseError {
@@ -32,23 +30,4 @@ pub enum ParseError {
     /// Integer conversion error.
     #[error("Integer conversion error: {0}")]
     TryFromIntError(#[from] std::num::TryFromIntError),
-}
-
-/// Parser Error Type.
-#[derive(Debug, thiserror::Error)]
-pub enum BlockCacheError {
-    /// Serialization and deserialization error.
-    #[error("Parser Error: {0}")]
-    ParseError(#[from] ParseError),
-    /// Errors from the JsonRPC client.
-    #[error("JsonRPC Connector Error: {0}")]
-    JsonRpcError(#[from] JsonRpcConnectorError),
-}
-
-/// Mempool Error struct.
-#[derive(thiserror::Error, Debug)]
-pub enum MempoolError {
-    /// Errors from the JsonRPC client.
-    #[error("JsonRPC Connector Error: {0}")]
-    JsonRpcError(#[from] JsonRpcConnectorError),
 }

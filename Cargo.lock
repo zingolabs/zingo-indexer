@@ -5244,7 +5244,6 @@ dependencies = [
  "whoami",
  "zaino-fetch",
  "zaino-proto",
- "zaino-serve",
  "zaino-testutils",
  "zcash_local_net",
  "zebra-chain",
