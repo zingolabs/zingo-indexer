@@ -5,10 +5,12 @@
 
 use zebra_chain::parameters::Network;
 
+pub mod config;
 pub mod error;
 pub mod indexer;
 pub mod state;
 pub mod status;
+pub mod stream;
 
 /// Zaino build info.
 #[derive(Debug, Clone)]

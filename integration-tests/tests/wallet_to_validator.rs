@@ -21,7 +21,7 @@ mod wallet_basic {
     }
 
     async fn connect_to_node_get_info(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
             .await
             .unwrap();
         let clients = test_manager
@@ -46,7 +46,7 @@ mod wallet_basic {
     }
 
     async fn send_to_orchard(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
             .await
             .unwrap();
         let clients = test_manager
@@ -101,7 +101,7 @@ mod wallet_basic {
     }
 
     async fn send_to_sapling(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
             .await
             .unwrap();
         let clients = test_manager
@@ -157,7 +157,7 @@ mod wallet_basic {
     }
 
     async fn send_to_transparent(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
             .await
             .unwrap();
         let clients = test_manager
@@ -261,7 +261,7 @@ mod wallet_basic {
     }
 
     async fn send_to_all(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
             .await
             .unwrap();
         let clients = test_manager
@@ -363,7 +363,7 @@ mod wallet_basic {
     }
 
     async fn shield(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
             .await
             .unwrap();
         let clients = test_manager
@@ -434,7 +434,7 @@ mod wallet_basic {
     }
 
     async fn monitor_unverified_mempool(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true)
             .await
             .unwrap();
         let clients = test_manager

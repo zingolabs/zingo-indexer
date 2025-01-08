@@ -385,7 +385,7 @@ impl FullBlock {
         let header = Vec::new();
 
         let compact_block = CompactBlock {
-            proto_version: 0,
+            proto_version: 4,
             height: self.height as u64,
             hash: self.hdr.cached_hash.clone(),
             prev_hash: self.hdr.raw_block_header.hash_prev_block.clone(),
@@ -432,13 +432,10 @@ impl FullBlock {
 pub async fn get_block_from_node(
     zebra_uri: &http::Uri,
     height: &u32,
+    user: Option<String>,
+    password: Option<String>,
 ) -> Result<CompactBlock, BlockCacheError> {
-    let zebrad_client = JsonRpcConnector::new(
-        zebra_uri.clone(),
-        Some("xxxxxx".to_string()),
-        Some("xxxxxx".to_string()),
-    )
-    .await?;
+    let zebrad_client = JsonRpcConnector::new(zebra_uri.clone(), user, password).await?;
     let block_1 = zebrad_client.get_block(height.to_string(), Some(1)).await;
     match block_1 {
         Ok(GetBlockResponse::Object {
@@ -489,7 +486,14 @@ pub async fn get_nullifiers_from_node(
     zebra_uri: &http::Uri,
     height: &u32,
 ) -> Result<CompactBlock, BlockCacheError> {
-    match get_block_from_node(zebra_uri, height).await {
+    match get_block_from_node(
+        zebra_uri,
+        height,
+        Some("xxxxxx".to_string()),
+        Some("xxxxxx".to_string()),
+    )
+    .await
+    {
         Ok(block) => Ok(CompactBlock {
             proto_version: block.proto_version,
             height: block.height,

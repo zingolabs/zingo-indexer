@@ -6,6 +6,9 @@ authors = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
 
+[features]
+state_service = []
+
 [dependencies]
 zaino-proto = { path = "../zaino-proto" }
 zaino-fetch = { path = "../zaino-fetch" }
@@ -13,6 +16,7 @@ zaino-state = { path = "../zaino-state" }
 
 # Zebra
 zebra-chain = { workspace = true }
+zebra-state = { workspace = true }
 zebra-rpc = { workspace = true }
 
 # Miscellaneous Workspace
@@ -24,7 +28,6 @@ thiserror = { workspace = true }
 # Miscellaneous Crate
 prost = { workspace = true }
 hex = { workspace = true, features = ["serde"] }
-tokio-stream = { workspace = true }
 futures = { workspace = true }
 async-stream = { workspace = true }
 crossbeam-channel = { workspace = true }

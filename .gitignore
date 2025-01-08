@@ -1,6 +1,7 @@
 /target
 /db
 /docs/cargo_docs/debug
+/.helix
 /test_binaries/bins/*
 /integration-tests/chain_cache/*
 !/integration-tests/chain_cache/testnet_get_subtree_roots_sapling
