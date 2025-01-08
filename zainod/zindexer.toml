@@ -25,4 +25,4 @@ max_worker_pool_size = 64
 idle_worker_pool_size = 4
 
 # Network chain type (Mainnet, Testnet, Regtest)
-idle_worker_pool_size = "Testnet"
+network = "Testnet"

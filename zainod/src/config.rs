@@ -41,7 +41,8 @@ impl IndexerConfig {
                 "TCP is active but no address provided.".to_string(),
             ));
         }
-        if (self.network != "regtest") | (self.network != "testnet") | (self.network != "mainnet") {
+        if (self.network != "Regtest") && (self.network != "Testnet") && (self.network != "Mainnet")
+        {
             return Err(IndexerError::ConfigError(
                 "Incorrect network name given.".to_string(),
             ));
