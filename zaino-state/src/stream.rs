@@ -3,7 +3,7 @@
 use tokio_stream::wrappers::ReceiverStream;
 use zaino_proto::proto::{
     compact_formats::{CompactBlock, CompactTx},
-    service::{GetAddressUtxosReply, RawTransaction, SubtreeRoot},
+    service::{Address, GetAddressUtxosReply, RawTransaction, SubtreeRoot},
 };
 
 /// Stream of RawTransactions, output type of get_taddress_txids.
@@ -156,6 +156,37 @@ impl futures::Stream for SubtreeRootReplyStream {
         let poll = std::pin::Pin::new(&mut self.inner).poll_next(cx);
         match poll {
             std::task::Poll::Ready(Some(Ok(raw_tx))) => std::task::Poll::Ready(Some(Ok(raw_tx))),
+            std::task::Poll::Ready(Some(Err(e))) => std::task::Poll::Ready(Some(Err(e))),
+            std::task::Poll::Ready(None) => std::task::Poll::Ready(None),
+            std::task::Poll::Pending => std::task::Poll::Pending,
+        }
+    }
+}
+
+/// Stream of `Address`, input type for `get_taddress_balance_stream`.
+pub struct AddressStream {
+    inner: ReceiverStream<Result<Address, tonic::Status>>,
+}
+
+impl AddressStream {
+    /// Creates a new `AddressStream` instance.
+    pub fn new(rx: tokio::sync::mpsc::Receiver<Result<Address, tonic::Status>>) -> Self {
+        AddressStream {
+            inner: ReceiverStream::new(rx),
+        }
+    }
+}
+
+impl futures::Stream for AddressStream {
+    type Item = Result<Address, tonic::Status>;
+
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        let poll = std::pin::Pin::new(&mut self.inner).poll_next(cx);
+        match poll {
+            std::task::Poll::Ready(Some(Ok(address))) => std::task::Poll::Ready(Some(Ok(address))),
             std::task::Poll::Ready(Some(Err(e))) => std::task::Poll::Ready(Some(Err(e))),
             std::task::Poll::Ready(None) => std::task::Poll::Ready(None),
             std::task::Poll::Pending => std::task::Poll::Pending,

@@ -2,6 +2,14 @@
 
 use async_trait::async_trait;
 
+use zaino_proto::proto::{
+    compact_formats::CompactBlock,
+    service::{
+        AddressList, Balance, BlockId, BlockRange, Duration, Exclude, GetAddressUtxosArg,
+        GetAddressUtxosReplyList, GetSubtreeRootsArg, LightdInfo, PingResponse, RawTransaction,
+        SendResponse, TransparentAddressBlockFilter, TreeState, TxFilter,
+    },
+};
 use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
 use zebra_rpc::methods::{
     trees::{GetSubtrees, GetTreestate},
@@ -9,11 +17,16 @@ use zebra_rpc::methods::{
     GetBlockChainInfo, GetInfo, GetRawTransaction, SentTransactionHash,
 };
 
+use crate::stream::{
+    AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
+    SubtreeRootReplyStream, UtxoReplyStream,
+};
+
 /// Zcash RPC method signatures.
 ///
 /// Doc comments taken from Zebra for consistency.
 #[async_trait]
-pub trait Indexer {
+pub trait ZcashIndexer: Send + Sync + 'static {
     /// Uses undelying error type of implementer.
     type Error: std::error::Error + Send + Sync + 'static;
 
@@ -67,7 +80,7 @@ pub trait Indexer {
     /// The RPC documentation says that the returned object has a string `balance` field, but
     /// zcashd actually [returns an
     /// integer](https://github.com/zcash/lightwalletd/blob/bdaac63f3ee0dbef62bde04f6817a9f90d483b00/common/common.go#L128-L130).
-    async fn get_address_balance(
+    async fn z_get_address_balance(
         &self,
         address_strings: AddressStrings,
     ) -> Result<AddressBalance, Self::Error>;
@@ -116,7 +129,7 @@ pub trait Indexer {
     /// use verbosity=3.
     ///
     /// The undocumented `chainwork` field is not returned.
-    async fn get_block(
+    async fn z_get_block(
         &self,
         hash_or_height: String,
         verbosity: Option<u8>,
@@ -233,8 +246,121 @@ pub trait Indexer {
     ///
     /// lightwalletd always uses the multi-address request, without chaininfo:
     /// <https://github.com/zcash/lightwalletd/blob/master/frontend/service.go#L402>
-    async fn get_address_utxos(
+    async fn z_get_address_utxos(
         &self,
         address_strings: AddressStrings,
     ) -> Result<Vec<GetAddressUtxos>, Self::Error>;
+}
+
+/// LightWallet RPC method signatures.
+///
+/// Doc comments taken from Zaino-Proto for consistency.
+#[async_trait]
+pub trait LightWalletIndexer: Send + Sync + 'static {
+    /// Uses undelying error type of implementer.
+    type Error: std::error::Error + Send + Sync + 'static + Into<tonic::Status>;
+
+    /// Return the height of the tip of the best chain
+    async fn get_latest_block(&self) -> Result<BlockId, Self::Error>;
+
+    /// Return the compact block corresponding to the given block identifier
+    async fn get_block(&self, request: BlockId) -> Result<CompactBlock, Self::Error>;
+
+    /// Same as GetBlock except actions contain only nullifiers
+    async fn get_block_nullifiers(&self, request: BlockId) -> Result<CompactBlock, Self::Error>;
+
+    /// Return a list of consecutive compact blocks
+    async fn get_block_range(&self, request: BlockRange)
+        -> Result<CompactBlockStream, Self::Error>;
+
+    /// Same as GetBlockRange except actions contain only nullifiers
+    async fn get_block_range_nullifiers(
+        &self,
+        request: BlockRange,
+    ) -> Result<CompactBlockStream, Self::Error>;
+
+    /// Return the requested full (not compact) transaction (as from zcashd)
+    async fn get_transaction(&self, request: TxFilter) -> Result<RawTransaction, Self::Error>;
+
+    /// Submit the given transaction to the Zcash network
+    async fn send_transaction(&self, request: RawTransaction) -> Result<SendResponse, Self::Error>;
+
+    /// Return the txids corresponding to the given t-address within the given block range
+    async fn get_taddress_txids(
+        &self,
+        request: TransparentAddressBlockFilter,
+    ) -> Result<RawTransactionStream, Self::Error>;
+
+    /// Returns the total balance for a list of taddrs
+    async fn get_taddress_balance(&self, request: AddressList) -> Result<Balance, Self::Error>;
+
+    /// Returns the total balance for a list of taddrs
+    ///
+    /// TODO: Update input type.
+    async fn get_taddress_balance_stream(
+        &self,
+        request: AddressStream,
+    ) -> Result<Balance, Self::Error>;
+
+    /// Return the compact transactions currently in the mempool; the results
+    /// can be a few seconds out of date. If the Exclude list is empty, return
+    /// all transactions; otherwise return all *except* those in the Exclude list
+    /// (if any); this allows the client to avoid receiving transactions that it
+    /// already has (from an earlier call to this rpc). The transaction IDs in the
+    /// Exclude list can be shortened to any number of bytes to make the request
+    /// more bandwidth-efficient; if two or more transactions in the mempool
+    /// match a shortened txid, they are all sent (none is excluded). Transactions
+    /// in the exclude list that don't exist in the mempool are ignored.
+    async fn get_mempool_tx(
+        &self,
+        request: Exclude,
+    ) -> Result<CompactTransactionStream, Self::Error>;
+
+    /// Return a stream of current Mempool transactions. This will keep the output stream open while
+    /// there are mempool transactions. It will close the returned stream when a new block is mined.
+    async fn get_mempool_stream(&self) -> Result<RawTransactionStream, Self::Error>;
+
+    /// GetTreeState returns the note commitment tree state corresponding to the given block.
+    /// See section 3.7 of the Zcash protocol specification. It returns several other useful
+    /// values also (even though they can be obtained using GetBlock).
+    /// The block can be specified by either height or hash.
+    async fn get_tree_state(&self, request: BlockId) -> Result<TreeState, Self::Error>;
+
+    /// GetLatestTreeState returns the note commitment tree state corresponding to the chain tip.
+    async fn get_latest_tree_state(&self) -> Result<TreeState, Self::Error>;
+
+    /// Returns a stream of information about roots of subtrees of the Sapling and Orchard
+    /// note commitment trees.
+    async fn get_subtree_roots(
+        &self,
+        request: GetSubtreeRootsArg,
+    ) -> Result<SubtreeRootReplyStream, Self::Error>;
+
+    /// Returns all unspent outputs for a list of addresses.
+    ///
+    /// Ignores all utxos below block height [GetAddressUtxosArg.start_height].
+    /// Returns max [GetAddressUtxosArg.max_entries] utxos, or unrestricted if [GetAddressUtxosArg.max_entries] = 0.
+    /// Utxos are collected and returned as a single Vec.
+    async fn get_address_utxos(
+        &self,
+        request: GetAddressUtxosArg,
+    ) -> Result<GetAddressUtxosReplyList, Self::Error>;
+
+    /// Returns all unspent outputs for a list of addresses.
+    ///
+    /// Ignores all utxos below block height [GetAddressUtxosArg.start_height].
+    /// Returns max [GetAddressUtxosArg.max_entries] utxos, or unrestricted if [GetAddressUtxosArg.max_entries] = 0.
+    /// Utxos are returned in a stream.
+    async fn get_address_utxos_stream(
+        &self,
+        request: GetAddressUtxosArg,
+    ) -> Result<UtxoReplyStream, Self::Error>;
+
+    /// Return information about this lightwalletd instance and the blockchain
+    async fn get_lightd_info(&self) -> Result<LightdInfo, Self::Error>;
+
+    /// Testing-only, requires lightwalletd --ping-very-insecure (do not enable in production)
+    ///
+    /// NOTE: Currently unimplemented in Zaino.
+    async fn ping(&self, request: Duration) -> Result<PingResponse, Self::Error>;
 }

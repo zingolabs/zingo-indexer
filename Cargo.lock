@@ -5219,6 +5219,7 @@ dependencies = [
  "http",
  "indexmap 2.7.0",
  "jsonrpc-core",
+ "lazy-regex",
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",

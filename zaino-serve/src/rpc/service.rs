@@ -613,34 +613,50 @@ impl CompactTxStreamer for GrpcClient {
             if hash.len() == 32 {
                 let reversed_hash = hash.iter().rev().copied().collect::<Vec<u8>>();
                 let hash_hex = hex::encode(reversed_hash);
-                let tx = JsonRpcConnector::new(
+                let zebra_client = JsonRpcConnector::new(
                     self.zebrad_rpc_uri.clone(),
                     Some("xxxxxx".to_string()),
                     Some("xxxxxx".to_string()),
                 )
-                .await?
-                .get_raw_transaction(hash_hex, Some(1))
-                .await
-                .map_err(|e| e.to_grpc_status())?;
+                .await?;
+
+                let tx = zebra_client
+                    .get_raw_transaction(hash_hex, Some(1))
+                    .await
+                    .map_err(|e| e.to_grpc_status())?;
 
                 let (hex, height) = if let GetTransactionResponse::Object { hex, height, .. } = tx {
                     (hex, height)
                 } else {
                     return Err(tonic::Status::not_found("Error: Transaction not received"));
                 };
-                // let height: u64 = height.try_into().map_err(|_e| {
-                //     tonic::Status::unknown(
-                //         "Error: Invalid response from server - Height conversion failed",
-                //     )
-                // })?;
                 let height: u64 = match height {
-                    Some(h) => h.try_into().map_err(|_e| {
-                    tonic::Status::unknown(
-                        "Error: Invalid response from server - Height conversion failed",
-                    )
-                })?,
-                    // Zebra returns None for mempool transactions, convert to -1.
-                    None => u64::MAX,
+                    Some(h) => {
+                        match h.try_into() {
+                            Ok(height) => height,
+                            Err(_) if h == -1 => {
+                                zebra_client
+                                    .get_blockchain_info()
+                                    .await
+                                    .map_err(|e| e.to_grpc_status())?
+                                    .blocks
+                                    .0 as u64
+                            }
+                            Err(_) => {
+                                return Err(tonic::Status::unknown(
+                                    "Error: Invalid response from server - Height conversion failed",
+                                ))
+                            }
+                        }
+                    }
+                    None => {
+                        zebra_client
+                            .get_blockchain_info()
+                            .await
+                            .map_err(|e| e.to_grpc_status())?
+                            .blocks
+                            .0 as u64
+                    }
                 };
 
                 Ok(tonic::Response::new(RawTransaction {
