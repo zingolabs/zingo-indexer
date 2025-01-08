@@ -53,7 +53,7 @@ pub struct StateService {
     /// Monitors changes in the chain tip.
     _chain_tip_change: ChainTipChange,
     /// Sync task handle.
-    sync_task_handle: tokio::task::JoinHandle<()>,
+    sync_task_handle: Option<tokio::task::JoinHandle<()>>,
     /// JsonRPC Client.
     _rpc_client: JsonRpcConnector,
     /// Service metadata.
@@ -102,7 +102,7 @@ impl StateService {
             read_state_service,
             latest_chain_tip,
             _chain_tip_change: chain_tip_change,
-            sync_task_handle,
+            sync_task_handle: Some(sync_task_handle),
             _rpc_client: rpc_client,
             data,
             config,
@@ -178,13 +178,34 @@ impl StateService {
 
     /// Shuts down the StateService.
     pub fn close(&mut self) {
-        self.sync_task_handle.abort();
+        if self.sync_task_handle.is_some() {
+            if let Some(handle) = self.sync_task_handle.take() {
+                handle.abort();
+            }
+        }
     }
 }
 
 impl Drop for StateService {
     fn drop(&mut self) {
-        self.close()
+        if let Some(handle) = self.sync_task_handle.take() {
+            handle.abort();
+        }
+    }
+}
+
+impl Clone for StateService {
+    fn clone(&self) -> Self {
+        Self {
+            read_state_service: self.read_state_service.clone(),
+            latest_chain_tip: self.latest_chain_tip.clone(),
+            _chain_tip_change: self._chain_tip_change.clone(),
+            sync_task_handle: None,
+            _rpc_client: self._rpc_client.clone(),
+            data: self.data.clone(),
+            config: self.config.clone(),
+            status: self.status.clone(),
+        }
     }
 }
 

@@ -85,6 +85,10 @@ pub enum FetchServiceError {
     #[error("JsonRpcConnector error: {0}")]
     JsonRpcConnectorError(#[from] zaino_fetch::jsonrpc::error::JsonRpcConnectorError),
 
+    /// Error from the mempool.
+    #[error("Mempool error: {0}")]
+    MempoolError(#[from] MempoolError),
+
     /// RPC error in compatibility with zcashd.
     #[error("RPC error: {0:?}")]
     RpcError(#[from] zaino_fetch::jsonrpc::connector::RpcError),
@@ -132,6 +136,9 @@ impl From<FetchServiceError> for tonic::Status {
             FetchServiceError::JsonRpcConnectorError(err) => {
                 tonic::Status::internal(format!("JsonRpcConnector error: {}", err))
             }
+            FetchServiceError::MempoolError(err) => {
+                tonic::Status::internal(format!("Mempool error: {}", err))
+            }
             FetchServiceError::RpcError(err) => {
                 tonic::Status::internal(format!("RPC error: {:?}", err))
             }
@@ -160,3 +167,45 @@ impl From<FetchServiceError> for tonic::Status {
         }
     }
 }
+
+/// Errors related to the `StateService`.
+#[derive(Debug, thiserror::Error)]
+pub enum MempoolError {
+    /// Custom Errors. *Remove before production.
+    #[error("Custom error: {0}")]
+    Custom(String),
+
+    /// Error from a Tokio JoinHandle.
+    #[error("Join error: {0}")]
+    JoinError(#[from] tokio::task::JoinError),
+
+    /// Error from JsonRpcConnector.
+    #[error("JsonRpcConnector error: {0}")]
+    JsonRpcConnectorError(#[from] zaino_fetch::jsonrpc::error::JsonRpcConnectorError),
+
+    /// Error from a Tokio Watch Reciever.
+    #[error("Join error: {0}")]
+    WatchRecvError(#[from] tokio::sync::watch::error::RecvError),
+
+    /// Unexpected status-related error.
+    #[error("Status error: {0:?}")]
+    StatusError(StatusError),
+
+    /// Error from sending to a Tokio MPSC channel.
+    #[error("Send error: {0}")]
+    SendError(
+        #[from]
+        tokio::sync::mpsc::error::SendError<
+            Result<(crate::mempool::MempoolKey, crate::mempool::MempoolValue), StatusError>,
+        >,
+    ),
+
+    /// A generic boxed error.
+    #[error("Generic error: {0}")]
+    Generic(#[from] Box<dyn std::error::Error + Send + Sync>),
+}
+
+/// A general error type to represent error StatusTypes.
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("Unexpected status error: {0:?}")]
+pub struct StatusError(pub crate::status::StatusType);
