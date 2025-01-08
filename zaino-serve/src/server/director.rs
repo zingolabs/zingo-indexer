@@ -15,8 +15,8 @@ use crate::server::{
     queue::Queue,
     request::ZingoIndexerRequest,
     worker::{WorkerPool, WorkerPoolStatus},
-    AtomicStatus, StatusType,
 };
+use zaino_state::status::{AtomicStatus, StatusType};
 
 /// Holds the status of the server and all its components.
 #[derive(Debug, Clone)]
@@ -32,8 +32,8 @@ impl ServerStatus {
     /// Creates a ServerStatus.
     pub fn new(max_workers: u16) -> Self {
         ServerStatus {
-            server_status: AtomicStatus::new(5),
-            tcp_ingestor_status: AtomicStatus::new(5),
+            server_status: AtomicStatus::new(StatusType::Offline.into()),
+            tcp_ingestor_status: AtomicStatus::new(StatusType::Offline.into()),
             workerpool_status: WorkerPoolStatus::new(max_workers),
             request_queue_status: Arc::new(AtomicUsize::new(0)),
         }
@@ -87,7 +87,7 @@ impl Server {
             ));
         }
         println!("Launching Server!\n");
-        status.server_status.store(0);
+        status.server_status.store(StatusType::Spawning.into());
         let request_queue: Queue<ZingoIndexerRequest> =
             Queue::new(max_queue_size as usize, status.request_queue_status.clone());
         status.request_queue_status.store(0, Ordering::SeqCst);
@@ -142,7 +142,7 @@ impl Server {
                 tcp_ingestor_handle = Some(ingestor.serve().await);
             }
             worker_handles = self.worker_pool.clone().serve().await;
-            self.status.server_status.store(1);
+            self.status.server_status.store(StatusType::Ready.into());
             loop {
                 if self.request_queue.queue_length() >= (self.request_queue.max_length() / 4)
                     && (self.worker_pool.workers() < self.worker_pool.max_size() as usize)
@@ -171,13 +171,13 @@ impl Server {
                 self.statuses();
                 // TODO: Implement check_statuses() and run here.
                 if self.check_for_shutdown().await {
-                    self.status.server_status.store(4);
+                    self.status.server_status.store(StatusType::Closing.into());
                     let worker_handle_options: Vec<
                         Option<tokio::task::JoinHandle<Result<(), WorkerError>>>,
                     > = worker_handles.into_iter().map(Some).collect();
                     self.shutdown_components(tcp_ingestor_handle, worker_handle_options)
                         .await;
-                    self.status.server_status.store(5);
+                    self.status.server_status.store(StatusType::Offline.into());
                     return Ok(());
                 }
                 interval.tick().await;
@@ -198,7 +198,7 @@ impl Server {
 
     /// Sets the servers to close gracefully.
     pub async fn shutdown(&mut self) {
-        self.status.server_status.store(4)
+        self.status.server_status.store(StatusType::Closing.into())
     }
 
     /// Sets the server's components to close gracefully.
@@ -208,7 +208,9 @@ impl Server {
         mut worker_handles: Vec<Option<tokio::task::JoinHandle<Result<(), WorkerError>>>>,
     ) {
         if let Some(handle) = tcp_ingestor_handle {
-            self.status.tcp_ingestor_status.store(4);
+            self.status
+                .tcp_ingestor_status
+                .store(StatusType::Closing.into());
             handle.await.ok();
         }
         self.worker_pool.shutdown(&mut worker_handles).await;

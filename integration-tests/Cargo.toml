@@ -9,6 +9,7 @@ repository = { workspace = true }
 [dependencies]
 # Test utility
 zaino-testutils = { path = "../zaino-testutils" }
+zaino-fetch = { path = "../zaino-fetch" }
 
 # Test fixtures
 zcash_local_net = { workspace = true, features = ["test_fixtures"] }
@@ -21,3 +22,6 @@ tokio = { workspace = true }
 
 # Logging
 tracing-subscriber = { workspace = true }
+
+# Url
+url = { workspace = true }

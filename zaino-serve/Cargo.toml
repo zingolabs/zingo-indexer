@@ -9,6 +9,7 @@ repository = { workspace = true }
 [dependencies]
 zaino-proto = { path = "../zaino-proto" }
 zaino-fetch = { path = "../zaino-fetch" }
+zaino-state = { path = "../zaino-state" }
 
 # Zebra
 zebra-chain = { workspace = true }

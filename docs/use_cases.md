@@ -10,7 +10,7 @@
 
 - Then to launch Zaino: [in seperate terminals]:
 3) Run `$ zebrad --config #PATH_TO_CONF/zebrad.toml start`
-4) Run `$ zainod --config #PATH_TO_CONF/zindexer.toml` 
+4) Run `$ zainod --config #PATH_TO_CONF/zindexer.toml`
 
 - To launch Zingo-Cli running through Zaino [from #PATH_TO/zingolib]:
 5) Run `$ cargo run --release --package zingo-cli -- --chain "CHAIN_TYPE" --server "ZAINO_LISTEN_ADDR" --data-dir #PATH_TO_WALLET_DATA_DIR`

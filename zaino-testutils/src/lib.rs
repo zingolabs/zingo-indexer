@@ -212,11 +212,19 @@ impl zcash_local_net::validator::Validator for LocalNet {
         }
     }
 
+    /// Prints the stdout log.
+    fn print_stdout(&self) {
+        match self {
+            LocalNet::Zcashd(net) => net.validator().print_stdout(),
+            LocalNet::Zebrad(net) => net.validator().print_stdout(),
+        }
+    }
+
     /// Chain_Cache PathBuf must contain validator bin name for this function to function.
     fn load_chain(
-    chain_cache: PathBuf,
-    validator_data_dir: PathBuf,
-    validator_network: zcash_local_net::network::Network,
+        chain_cache: PathBuf,
+        validator_data_dir: PathBuf,
+        validator_network: zcash_local_net::network::Network,
     ) -> PathBuf {
         if chain_cache.to_string_lossy().contains("zcashd") {
             zcash_local_net::validator::Zcashd::load_chain(
@@ -267,6 +275,10 @@ impl Clients {
 pub struct TestManager {
     /// Zcash-local-net.
     pub local_net: LocalNet,
+    /// Data directory for the validator.
+    pub data_dir: PathBuf,
+    /// Network (chain) type:
+    pub network: zcash_local_net::network::Network,
     /// Zebrad/Zcashd JsonRpc listen port.
     pub zebrad_rpc_listen_port: u16,
     /// Zaino Indexer JoinHandle.
@@ -330,6 +342,7 @@ impl TestManager {
             }
         };
         let local_net = LocalNet::launch(validator_config).await.unwrap();
+        let data_dir = local_net.data_dir().path().to_path_buf();
 
         // Launch Zaino:
         let (zaino_grpc_listen_port, zaino_handle) = if enable_zaino {
@@ -378,6 +391,8 @@ impl TestManager {
 
         Ok(Self {
             local_net,
+            data_dir,
+            network: zcash_local_net::network::Network::Regtest,
             zebrad_rpc_listen_port,
             zaino_handle,
             zaino_grpc_listen_port,
@@ -581,23 +596,15 @@ mod tests {
         clients.faucet.do_sync(true).await.unwrap();
         dbg!(clients.faucet.do_balance().await);
 
-        test_manager.local_net.generate_blocks(99).await.unwrap();
-        clients.faucet.do_sync(true).await.unwrap();
-        dbg!(clients.faucet.do_balance().await);
-
-        test_manager.local_net.generate_blocks(99).await.unwrap();
-        clients.faucet.do_sync(true).await.unwrap();
-        dbg!(clients.faucet.do_balance().await);
-
         test_manager.local_net.generate_blocks(100).await.unwrap();
         clients.faucet.do_sync(true).await.unwrap();
         dbg!(clients.faucet.do_balance().await);
-        
+
         assert!(
                 clients.faucet.do_balance().await.orchard_balance.unwrap() > 0
                     || clients.faucet.do_balance().await.transparent_balance.unwrap() > 0,
                 "No mining reward recieved from Zebrad. Faucet Orchard Balance: {:}. Faucet Transparent Balance: {:}.",
-                clients.faucet.do_balance().await.orchard_balance.unwrap(), 
+                clients.faucet.do_balance().await.orchard_balance.unwrap(),
                 clients.faucet.do_balance().await.transparent_balance.unwrap()
         );
 
@@ -621,7 +628,7 @@ mod tests {
                 clients.faucet.do_balance().await.orchard_balance.unwrap() > 0
                     || clients.faucet.do_balance().await.transparent_balance.unwrap() > 0,
                 "No mining reward recieved from Zcashd. Faucet Orchard Balance: {:}. Faucet Transparent Balance: {:}.",
-                clients.faucet.do_balance().await.orchard_balance.unwrap(), 
+                clients.faucet.do_balance().await.orchard_balance.unwrap(),
                 clients.faucet.do_balance().await.transparent_balance.unwrap()
             );
 
@@ -643,14 +650,24 @@ mod tests {
         dbg!(clients.faucet.do_balance().await);
 
         assert!(
-            clients.faucet.do_balance().await.transparent_balance.unwrap() > 0,
+            clients
+                .faucet
+                .do_balance()
+                .await
+                .transparent_balance
+                .unwrap()
+                > 0,
             "No mining reward recieved from Zebrad. Faucet Transparent Balance: {:}.",
-            clients.faucet.do_balance().await.transparent_balance.unwrap()
+            clients
+                .faucet
+                .do_balance()
+                .await
+                .transparent_balance
+                .unwrap()
         );
 
         // *Send all transparent funds to own orchard address.
         clients.faucet.quick_shield().await.unwrap();
-
         test_manager.local_net.generate_blocks(1).await.unwrap();
         clients.faucet.do_sync(true).await.unwrap();
         dbg!(clients.faucet.do_balance().await);
@@ -658,7 +675,7 @@ mod tests {
         assert!(
             clients.faucet.do_balance().await.orchard_balance.unwrap() > 0,
             "No funds recieved from shield. Faucet Orchard Balance: {:}. Faucet Transparent Balance: {:}.",
-            clients.faucet.do_balance().await.orchard_balance.unwrap(), 
+            clients.faucet.do_balance().await.orchard_balance.unwrap(),
             clients.faucet.do_balance().await.transparent_balance.unwrap()
         );
 
@@ -678,7 +695,12 @@ mod tests {
         dbg!(clients.recipient.do_balance().await);
 
         assert_eq!(
-            clients.recipient.do_balance().await.verified_sapling_balance.unwrap(), 
+            clients
+                .recipient
+                .do_balance()
+                .await
+                .verified_sapling_balance
+                .unwrap(),
             250_000
         );
 
@@ -699,9 +721,20 @@ mod tests {
         dbg!(clients.faucet.do_balance().await);
 
         assert!(
-            clients.faucet.do_balance().await.verified_orchard_balance.unwrap() > 0,
+            clients
+                .faucet
+                .do_balance()
+                .await
+                .verified_orchard_balance
+                .unwrap()
+                > 0,
             "No mining reward recieved from Zcashd. Faucet Orchard Balance: {:}.",
-            clients.faucet.do_balance().await.verified_orchard_balance.unwrap()
+            clients
+                .faucet
+                .do_balance()
+                .await
+                .verified_orchard_balance
+                .unwrap()
         );
 
         zingolib::testutils::lightclient::from_inputs::quick_send(
@@ -720,7 +753,12 @@ mod tests {
         dbg!(clients.recipient.do_balance().await);
 
         assert_eq!(
-            clients.recipient.do_balance().await.verified_sapling_balance.unwrap(), 
+            clients
+                .recipient
+                .do_balance()
+                .await
+                .verified_sapling_balance
+                .unwrap(),
             250_000
         );
 

@@ -13,16 +13,19 @@ use zaino_fetch::{
         transaction::FullTransaction,
         utils::ParseFromSlice,
     },
-    jsonrpc::{connector::JsonRpcConnector, response::{GetBlockResponse, GetTransactionResponse}},
+    jsonrpc::{
+        connector::JsonRpcConnector,
+        response::{GetBlockResponse, GetTransactionResponse},
+    },
 };
 use zaino_proto::proto::{
     compact_formats::{CompactBlock, CompactTx},
     service::{
-        compact_tx_streamer_server::CompactTxStreamer, Address, AddressList, Balance, BlockId, 
-        BlockRange, ChainSpec, Duration, Empty, Exclude, GetAddressUtxosArg, GetAddressUtxosReply, 
-        GetAddressUtxosReplyList, GetSubtreeRootsArg, LightdInfo, PingResponse, RawTransaction, 
-        SendResponse, ShieldedProtocol, SubtreeRoot, TransparentAddressBlockFilter, TreeState, 
-        TxFilter
+        compact_tx_streamer_server::CompactTxStreamer, Address, AddressList, Balance, BlockId,
+        BlockRange, ChainSpec, Duration, Empty, Exclude, GetAddressUtxosArg, GetAddressUtxosReply,
+        GetAddressUtxosReplyList, GetSubtreeRootsArg, LightdInfo, PingResponse, RawTransaction,
+        SendResponse, ShieldedProtocol, SubtreeRoot, TransparentAddressBlockFilter, TreeState,
+        TxFilter,
     },
 };
 
@@ -174,9 +177,7 @@ pub struct SubtreeRootReplyStream {
 
 impl SubtreeRootReplyStream {
     /// Returns new instanse of CompactBlockStream.
-    pub fn new(
-        rx: tokio::sync::mpsc::Receiver<Result<SubtreeRoot, tonic::Status>>,
-    ) -> Self {
+    pub fn new(rx: tokio::sync::mpsc::Receiver<Result<SubtreeRoot, tonic::Status>>) -> Self {
         SubtreeRootReplyStream {
             inner: ReceiverStream::new(rx),
         }
@@ -458,7 +459,7 @@ impl CompactTxStreamer for GrpcClient {
                         } else {
                             height
                         };
-                        println!("[TEST] Fetching block at height: {}.", height);
+                        // println!("[TEST] Fetching block at height: {}.", height);
                         match get_block_from_node(&zebrad_uri, &height).await {
                             Ok(block) => {
                                 if channel_tx.send(Ok(block)).await.is_err() {
@@ -473,7 +474,7 @@ impl CompactTxStreamer for GrpcClient {
                                             height, chain_height,
                                         ))))
                                         .await
-                                        
+
                                     {
                                         Ok(_) => break,
                                         Err(e) => {
@@ -617,7 +618,7 @@ impl CompactTxStreamer for GrpcClient {
                                             height, chain_height,
                                         ))))
                                         .await
-                                        
+
                                     {
                                         Ok(_) => break,
                                         Err(e) => {
@@ -1214,8 +1215,7 @@ impl CompactTxStreamer for GrpcClient {
                 })
                 .await;
                 match timeout {
-                    Ok(_) => {
-                    }
+                    Ok(_) => {}
                     Err(_) => {
                         channel_tx
                             .send(Err(tonic::Status::deadline_exceeded(
@@ -1354,8 +1354,7 @@ impl CompactTxStreamer for GrpcClient {
                 })
                 .await;
                 match timeout {
-                    Ok(_) => {
-                    }
+                    Ok(_) => {}
                     Err(_) => {
                         channel_tx
                             .send(Err(tonic::Status::deadline_exceeded(
@@ -1409,7 +1408,7 @@ impl CompactTxStreamer for GrpcClient {
             let hash_or_height = if block_id.height != 0 {
                 match u32::try_from(block_id.height) {
                     Ok(height) => {
-                        if height >= chain_info.blocks.0 {
+                        if height > chain_info.blocks.0 {
                             return Err(tonic::Status::out_of_range(
                             format!(
                                 "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
@@ -1506,7 +1505,6 @@ impl CompactTxStreamer for GrpcClient {
     #[doc = " Server streaming response type for the GetSubtreeRoots method."]
     type GetSubtreeRootsStream = std::pin::Pin<Box<SubtreeRootReplyStream>>;
 
-
     /// Returns a stream of information about roots of subtrees of the Sapling and Orchard
     /// note commitment trees.
     fn get_subtree_roots<'life0, 'async_trait>(
@@ -1529,7 +1527,7 @@ impl CompactTxStreamer for GrpcClient {
     {
         println!("[TEST] Received call of get_subtree_roots.");
         Box::pin(async move {
-            let zebrad_uri  =self.zebrad_rpc_uri.clone();
+            let zebrad_uri = self.zebrad_rpc_uri.clone();
             let zebrad_client = JsonRpcConnector::new(
                 zebrad_uri.clone(),
                 Some("xxxxxx".to_string()),
@@ -1539,21 +1537,35 @@ impl CompactTxStreamer for GrpcClient {
             let subtree_roots_args = request.into_inner();
             let pool = match ShieldedProtocol::try_from(subtree_roots_args.shielded_protocol) {
                 Ok(protocol) => protocol.as_str_name(),
-                Err(_) => return Err(tonic::Status::invalid_argument("Error: Invalid shielded protocol value.")),
+                Err(_) => {
+                    return Err(tonic::Status::invalid_argument(
+                        "Error: Invalid shielded protocol value.",
+                    ))
+                }
             };
             let start_index = match u16::try_from(subtree_roots_args.start_index) {
                 Ok(value) => value,
-                Err(_) => return Err(tonic::Status::invalid_argument("Error: start_index value exceeds u16 range.")),
+                Err(_) => {
+                    return Err(tonic::Status::invalid_argument(
+                        "Error: start_index value exceeds u16 range.",
+                    ))
+                }
             };
             let limit = if subtree_roots_args.max_entries == 0 {
                 None
             } else {
                 match u16::try_from(subtree_roots_args.max_entries) {
                     Ok(value) => Some(value),
-                    Err(_) => return Err(tonic::Status::invalid_argument("Error: max_entries value exceeds u16 range.")),
+                    Err(_) => {
+                        return Err(tonic::Status::invalid_argument(
+                            "Error: max_entries value exceeds u16 range.",
+                        ))
+                    }
                 }
             };
-            let subtrees = zebrad_client.get_subtrees_by_index(pool.to_string(), start_index, limit).await?;
+            let subtrees = zebrad_client
+                .get_subtrees_by_index(pool.to_string(), start_index, limit)
+                .await?;
             let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
                 // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
@@ -1588,7 +1600,7 @@ impl CompactTxStreamer for GrpcClient {
                                     Ok(hash) => hash,
                                     Err(e) => {
                                         match channel_tx
-                                            .send(Err(tonic::Status::unknown(format!("Error: Failed to hex decode root hash: {}.", 
+                                            .send(Err(tonic::Status::unknown(format!("Error: Failed to hex decode root hash: {}.",
                                                 e
                                             ))))
                                             .await
@@ -1606,7 +1618,7 @@ impl CompactTxStreamer for GrpcClient {
                                         root_hash: checked_root_hash,
                                         completing_block_hash: hash.0.bytes_in_display_order().to_vec(),
                                         completing_block_height: checked_height,
-                                    })).await.is_err() 
+                                    })).await.is_err()
                                 {
                                     break;
                                 }
@@ -1625,8 +1637,8 @@ impl CompactTxStreamer for GrpcClient {
                             Err(e) => {
                                 // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                                 if channel_tx
-                                    .send(Err(tonic::Status::unknown(format!("Error: Could not fetch block at height [{}] from node: {}", 
-                                        subtree.end_height.0, 
+                                    .send(Err(tonic::Status::unknown(format!("Error: Could not fetch block at height [{}] from node: {}",
+                                        subtree.end_height.0,
                                         e
                                     ))))
                                     .await
@@ -1640,8 +1652,7 @@ impl CompactTxStreamer for GrpcClient {
                 })
                 .await;
                 match timeout {
-                    Ok(_) => {
-                    }
+                    Ok(_) => {}
                     Err(_) => {
                         channel_tx
                             .send(Err(tonic::Status::deadline_exceeded(
@@ -1839,8 +1850,7 @@ impl CompactTxStreamer for GrpcClient {
                 })
                 .await;
                 match timeout {
-                    Ok(_) => {
-                    }
+                    Ok(_) => {}
                     Err(_) => {
                         channel_tx
                             .send(Err(tonic::Status::deadline_exceeded(

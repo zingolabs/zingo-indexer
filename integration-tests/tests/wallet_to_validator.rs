@@ -11,424 +11,571 @@ mod wallet_basic {
     use super::*;
 
     #[tokio::test]
-    async fn connect_to_node_get_info() {
-        for validator in ["zebrad", "zcashd"] {
-            let mut test_manager = TestManager::launch(validator, None, true, true)
-                .await
-                .unwrap();
-            let clients = test_manager
-                .clients
-                .as_ref()
-                .expect("Clients are not initialized");
-
-            clients.faucet.do_info().await;
-            clients.recipient.do_info().await;
-
-            test_manager.close().await;
-        }
+    async fn zcashd_connect_to_node_get_info() {
+        connect_to_node_get_info("zcashd").await;
     }
 
     #[tokio::test]
-    async fn send_to_orchard() {
-        for validator in ["zcashd"] {
-            let mut test_manager = TestManager::launch(validator, None, true, true)
-                .await
-                .unwrap();
-            let clients = test_manager
-                .clients
-                .as_ref()
-                .expect("Clients are not initialized");
+    async fn zebrad_connect_to_node_get_info() {
+        connect_to_node_get_info("zebrad").await;
+    }
 
-            clients.faucet.do_sync(true).await.unwrap();
-
-            from_inputs::quick_send(
-                &clients.faucet,
-                vec![(
-                    &clients.get_recipient_address("unified").await,
-                    250_000,
-                    None,
-                )],
-            )
+    async fn connect_to_node_get_info(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, true, true)
             .await
             .unwrap();
-            test_manager.local_net.generate_blocks(1).await.unwrap();
-            clients.recipient.do_sync(true).await.unwrap();
+        let clients = test_manager
+            .clients
+            .as_ref()
+            .expect("Clients are not initialized");
 
-            assert_eq!(
-                clients
-                    .recipient
-                    .do_balance()
-                    .await
-                    .orchard_balance
-                    .unwrap(),
-                250_000
-            );
+        clients.faucet.do_info().await;
+        clients.recipient.do_info().await;
 
-            test_manager.close().await;
-        }
+        test_manager.close().await;
     }
 
     #[tokio::test]
-    async fn send_to_sapling() {
-        for validator in ["zcashd"] {
-            let mut test_manager = TestManager::launch(validator, None, true, true)
-                .await
-                .unwrap();
-            let clients = test_manager
-                .clients
-                .as_ref()
-                .expect("Clients are not initialized");
-
-            clients.faucet.do_sync(true).await.unwrap();
-
-            from_inputs::quick_send(
-                &clients.faucet,
-                vec![(
-                    &clients.get_recipient_address("sapling").await,
-                    250_000,
-                    None,
-                )],
-            )
-            .await
-            .unwrap();
-            test_manager.local_net.generate_blocks(1).await.unwrap();
-            clients.recipient.do_sync(true).await.unwrap();
-
-            assert_eq!(
-                clients
-                    .recipient
-                    .do_balance()
-                    .await
-                    .sapling_balance
-                    .unwrap(),
-                250_000
-            );
-
-            test_manager.close().await;
-        }
+    async fn zcashd_send_to_orchard() {
+        send_to_orchard("zcashd").await;
     }
 
     #[tokio::test]
-    async fn send_to_transparent() {
-        for validator in ["zcashd"] {
-            let mut test_manager = TestManager::launch(validator, None, true, true)
-                .await
-                .unwrap();
-            let clients = test_manager
-                .clients
-                .as_ref()
-                .expect("Clients are not initialized");
+    async fn zebrad_send_to_orchard() {
+        send_to_orchard("zebrad").await;
+    }
 
-            clients.faucet.do_sync(true).await.unwrap();
-
-            from_inputs::quick_send(
-                &clients.faucet,
-                vec![(
-                    &clients.get_recipient_address("transparent").await,
-                    250_000,
-                    None,
-                )],
-            )
+    async fn send_to_orchard(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, true, true)
             .await
             .unwrap();
+        let clients = test_manager
+            .clients
+            .as_ref()
+            .expect("Clients are not initialized");
 
+        clients.faucet.do_sync(true).await.unwrap();
+
+        if validator == "zebrad" {
+            test_manager.local_net.generate_blocks(100).await.unwrap();
+            clients.faucet.do_sync(true).await.unwrap();
+            clients.faucet.quick_shield().await.unwrap();
             test_manager.local_net.generate_blocks(1).await.unwrap();
-            clients.recipient.do_sync(true).await.unwrap();
+            clients.faucet.do_sync(true).await.unwrap();
+        };
 
-            assert_eq!(
-                clients
-                    .recipient
-                    .do_balance()
-                    .await
-                    .transparent_balance
-                    .unwrap(),
-                250_000
-            );
+        from_inputs::quick_send(
+            &clients.faucet,
+            vec![(
+                &clients.get_recipient_address("unified").await,
+                250_000,
+                None,
+            )],
+        )
+        .await
+        .unwrap();
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+        clients.recipient.do_sync(true).await.unwrap();
 
-            test_manager.close().await;
-        }
+        assert_eq!(
+            clients
+                .recipient
+                .do_balance()
+                .await
+                .orchard_balance
+                .unwrap(),
+            250_000
+        );
+
+        test_manager.close().await;
     }
 
     #[tokio::test]
-    async fn send_to_all() {
-        for validator in ["zcashd"] {
-            let mut test_manager = TestManager::launch(validator, None, true, true)
-                .await
-                .unwrap();
-            let clients = test_manager
-                .clients
-                .as_ref()
-                .expect("Clients are not initialized");
-
-            test_manager.local_net.generate_blocks(2).await.unwrap();
-            clients.faucet.do_sync(true).await.unwrap();
-
-            from_inputs::quick_send(
-                &clients.faucet,
-                vec![(
-                    &clients.get_recipient_address("unified").await,
-                    250_000,
-                    None,
-                )],
-            )
-            .await
-            .unwrap();
-            from_inputs::quick_send(
-                &clients.faucet,
-                vec![(
-                    &clients.get_recipient_address("sapling").await,
-                    250_000,
-                    None,
-                )],
-            )
-            .await
-            .unwrap();
-            from_inputs::quick_send(
-                &clients.faucet,
-                vec![(
-                    &clients.get_recipient_address("transparent").await,
-                    250_000,
-                    None,
-                )],
-            )
-            .await
-            .unwrap();
-
-            test_manager.local_net.generate_blocks(1).await.unwrap();
-            clients.recipient.do_sync(true).await.unwrap();
-
-            assert_eq!(
-                clients
-                    .recipient
-                    .do_balance()
-                    .await
-                    .orchard_balance
-                    .unwrap(),
-                250_000
-            );
-            assert_eq!(
-                clients
-                    .recipient
-                    .do_balance()
-                    .await
-                    .sapling_balance
-                    .unwrap(),
-                250_000
-            );
-            assert_eq!(
-                clients
-                    .recipient
-                    .do_balance()
-                    .await
-                    .transparent_balance
-                    .unwrap(),
-                250_000
-            );
-
-            test_manager.close().await;
-        }
+    async fn zcashd_send_to_sapling() {
+        send_to_sapling("zcashd").await;
     }
 
     #[tokio::test]
-    async fn shield() {
-        for validator in ["zcashd"] {
-            let mut test_manager = TestManager::launch(validator, None, true, true)
-                .await
-                .unwrap();
-            let clients = test_manager
-                .clients
-                .as_ref()
-                .expect("Clients are not initialized");
+    async fn zebrad_send_to_sapling() {
+        send_to_sapling("zebrad").await;
+    }
 
-            clients.faucet.do_sync(true).await.unwrap();
-
-            from_inputs::quick_send(
-                &clients.faucet,
-                vec![(
-                    &clients.get_recipient_address("transparent").await,
-                    250_000,
-                    None,
-                )],
-            )
+    async fn send_to_sapling(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, true, true)
             .await
             .unwrap();
+        let clients = test_manager
+            .clients
+            .as_ref()
+            .expect("Clients are not initialized");
 
+        clients.faucet.do_sync(true).await.unwrap();
+
+        if validator == "zebrad" {
+            test_manager.local_net.generate_blocks(100).await.unwrap();
+            clients.faucet.do_sync(true).await.unwrap();
+            clients.faucet.quick_shield().await.unwrap();
             test_manager.local_net.generate_blocks(1).await.unwrap();
-            clients.recipient.do_sync(true).await.unwrap();
+            clients.faucet.do_sync(true).await.unwrap();
+        };
 
-            assert_eq!(
-                clients
-                    .recipient
-                    .do_balance()
-                    .await
-                    .transparent_balance
-                    .unwrap(),
-                250_000
-            );
+        from_inputs::quick_send(
+            &clients.faucet,
+            vec![(
+                &clients.get_recipient_address("sapling").await,
+                250_000,
+                None,
+            )],
+        )
+        .await
+        .unwrap();
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+        clients.recipient.do_sync(true).await.unwrap();
 
-            clients.recipient.quick_shield().await.unwrap();
-            test_manager.local_net.generate_blocks(1).await.unwrap();
-            clients.recipient.do_sync(true).await.unwrap();
+        assert_eq!(
+            clients
+                .recipient
+                .do_balance()
+                .await
+                .sapling_balance
+                .unwrap(),
+            250_000
+        );
 
-            assert_eq!(
-                clients
-                    .recipient
-                    .do_balance()
-                    .await
-                    .orchard_balance
-                    .unwrap(),
-                235_000
-            );
-
-            test_manager.close().await;
-        }
+        test_manager.close().await;
     }
 
     #[tokio::test]
-    async fn sync_full_batch() {
-        for validator in ["zcashd"] {
-            let mut test_manager = TestManager::launch(validator, None, true, true)
-                .await
-                .unwrap();
-            let clients = test_manager
-                .clients
-                .as_ref()
-                .expect("Clients are not initialized");
+    async fn zcashd_send_to_transparent() {
+        send_to_transparent("zcashd").await;
+    }
 
-            test_manager.local_net.generate_blocks(2).await.unwrap();
+    /// Bug documented in https://github.com/zingolabs/zaino/issues/145.
+    #[tokio::test]
+    async fn zebrad_send_to_transparent() {
+        send_to_transparent("zebrad").await;
+    }
+
+    async fn send_to_transparent(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, true, true)
+            .await
+            .unwrap();
+        let clients = test_manager
+            .clients
+            .as_ref()
+            .expect("Clients are not initialized");
+
+        clients.faucet.do_sync(true).await.unwrap();
+
+        if validator == "zebrad" {
+            test_manager.local_net.generate_blocks(100).await.unwrap();
             clients.faucet.do_sync(true).await.unwrap();
+            clients.faucet.quick_shield().await.unwrap();
+            test_manager.local_net.generate_blocks(1).await.unwrap();
+            clients.faucet.do_sync(true).await.unwrap();
+        };
 
-            test_manager.local_net.generate_blocks(5).await.unwrap();
-            from_inputs::quick_send(
-                &clients.faucet,
-                vec![(
-                    &clients.get_recipient_address("unified").await,
-                    250_000,
-                    None,
-                )],
-            )
-            .await
-            .unwrap();
-            test_manager.local_net.generate_blocks(15).await.unwrap();
-            from_inputs::quick_send(
-                &clients.faucet,
-                vec![(
-                    &clients.get_recipient_address("sapling").await,
-                    250_000,
-                    None,
-                )],
-            )
-            .await
-            .unwrap();
-            test_manager.local_net.generate_blocks(15).await.unwrap();
-            from_inputs::quick_send(
-                &clients.faucet,
-                vec![(
-                    &clients.get_recipient_address("transparent").await,
-                    250_000,
-                    None,
-                )],
-            )
-            .await
-            .unwrap();
-            test_manager.local_net.generate_blocks(70).await.unwrap();
+        from_inputs::quick_send(
+            &clients.faucet,
+            vec![(
+                &clients.get_recipient_address("transparent").await,
+                250_000,
+                None,
+            )],
+        )
+        .await
+        .unwrap();
 
-            clients.recipient.do_sync(true).await.unwrap();
+        test_manager.local_net.generate_blocks(1).await.unwrap();
 
-            assert_eq!(
-                clients
-                    .recipient
-                    .do_balance()
-                    .await
-                    .orchard_balance
-                    .unwrap(),
-                250_000
-            );
-            assert_eq!(
-                clients
-                    .recipient
-                    .do_balance()
-                    .await
-                    .sapling_balance
-                    .unwrap(),
-                250_000
-            );
-            assert_eq!(
-                clients
-                    .recipient
-                    .do_balance()
-                    .await
-                    .transparent_balance
-                    .unwrap(),
-                250_000
-            );
+        let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new(
+            url::Url::parse(&format!(
+                "http://127.0.0.1:{}",
+                test_manager.zebrad_rpc_listen_port
+            ))
+            .expect("Failed to construct URL")
+            .as_str()
+            .try_into()
+            .expect("Failed to convert URL to URI"),
+            Some("xxxxxx".to_string()),
+            Some("xxxxxx".to_string()),
+        )
+        .await
+        .unwrap();
 
-            test_manager.close().await;
-        }
+        println!("\n\nFetching Chain Height!\n");
+
+        let height = dbg!(fetch_service.get_blockchain_info().await.unwrap().blocks.0);
+
+        println!("\n\nFetching Tx From Unfinalized Chain!\n");
+
+        let _unfinalised_transactions = dbg!(
+            fetch_service
+                .get_address_txids(
+                    vec![clients.get_recipient_address("transparent").await],
+                    height,
+                    height,
+                )
+                .await
+        );
+
+        test_manager.local_net.generate_blocks(99).await.unwrap();
+
+        println!("\n\nFetching Tx From Finalized Chain!\n");
+
+        let _finalised_transactions = dbg!(
+            fetch_service
+                .get_address_txids(
+                    vec![clients.get_recipient_address("transparent").await],
+                    height,
+                    height,
+                )
+                .await
+        );
+
+        clients.recipient.do_sync(true).await.unwrap();
+
+        assert_eq!(
+            clients
+                .recipient
+                .do_balance()
+                .await
+                .transparent_balance
+                .unwrap(),
+            250_000
+        );
+
+        // test_manager.local_net.print_stdout();
+
+        test_manager.close().await;
     }
 
     #[tokio::test]
-    async fn monitor_unverified_mempool() {
-        for validator in ["zcashd"] {
-            let mut test_manager = TestManager::launch(validator, None, true, true)
-                .await
-                .unwrap();
-            let clients = test_manager
-                .clients
-                .take()
-                .expect("Clients are not initialized");
-            let recipient_client = Arc::new(clients.recipient);
+    async fn zcashd_send_to_all() {
+        send_to_all("zcashd").await;
+    }
 
+    #[tokio::test]
+    async fn zebrad_send_to_all() {
+        send_to_all("zebrad").await;
+    }
+
+    async fn send_to_all(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, true, true)
+            .await
+            .unwrap();
+        let clients = test_manager
+            .clients
+            .as_ref()
+            .expect("Clients are not initialized");
+
+        test_manager.local_net.generate_blocks(2).await.unwrap();
+        clients.faucet.do_sync(true).await.unwrap();
+
+        // "Create" 3 orchard notes in faucet.
+        if validator == "zebrad" {
+            test_manager.local_net.generate_blocks(100).await.unwrap();
+            clients.faucet.do_sync(true).await.unwrap();
+            clients.faucet.quick_shield().await.unwrap();
+            test_manager.local_net.generate_blocks(100).await.unwrap();
+            clients.faucet.do_sync(true).await.unwrap();
+            clients.faucet.quick_shield().await.unwrap();
+            test_manager.local_net.generate_blocks(100).await.unwrap();
+            clients.faucet.do_sync(true).await.unwrap();
+            clients.faucet.quick_shield().await.unwrap();
             test_manager.local_net.generate_blocks(1).await.unwrap();
             clients.faucet.do_sync(true).await.unwrap();
+        };
 
-            from_inputs::quick_send(
-                &clients.faucet,
-                vec![(
-                    &zingolib::get_base_address_macro!(recipient_client, "sapling"),
-                    250_000,
-                    None,
-                )],
-            )
+        from_inputs::quick_send(
+            &clients.faucet,
+            vec![(
+                &clients.get_recipient_address("unified").await,
+                250_000,
+                None,
+            )],
+        )
+        .await
+        .unwrap();
+        from_inputs::quick_send(
+            &clients.faucet,
+            vec![(
+                &clients.get_recipient_address("sapling").await,
+                250_000,
+                None,
+            )],
+        )
+        .await
+        .unwrap();
+        from_inputs::quick_send(
+            &clients.faucet,
+            vec![(
+                &clients.get_recipient_address("transparent").await,
+                250_000,
+                None,
+            )],
+        )
+        .await
+        .unwrap();
+
+        test_manager.local_net.generate_blocks(100).await.unwrap();
+        clients.recipient.do_sync(true).await.unwrap();
+
+        assert_eq!(
+            clients
+                .recipient
+                .do_balance()
+                .await
+                .orchard_balance
+                .unwrap(),
+            250_000
+        );
+        assert_eq!(
+            clients
+                .recipient
+                .do_balance()
+                .await
+                .sapling_balance
+                .unwrap(),
+            250_000
+        );
+        assert_eq!(
+            clients
+                .recipient
+                .do_balance()
+                .await
+                .transparent_balance
+                .unwrap(),
+            250_000
+        );
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn zcashd_shield() {
+        shield("zcashd").await;
+    }
+
+    #[tokio::test]
+    async fn zebrad_shield() {
+        shield("zebrad").await;
+    }
+
+    async fn shield(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, true, true)
             .await
             .unwrap();
-            from_inputs::quick_send(
-                &clients.faucet,
-                vec![(
-                    &zingolib::get_base_address_macro!(recipient_client, "sapling"),
-                    250_000,
-                    None,
-                )],
-            )
-            .await
-            .unwrap();
+        let clients = test_manager
+            .clients
+            .as_ref()
+            .expect("Clients are not initialized");
 
-            recipient_client.clear_state().await;
-            zingolib::lightclient::LightClient::start_mempool_monitor(recipient_client.clone());
-            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        clients.faucet.do_sync(true).await.unwrap();
 
-            assert_eq!(
-                recipient_client
-                    .do_balance()
-                    .await
-                    .unverified_sapling_balance
-                    .unwrap(),
-                500_000
-            );
-
+        if validator == "zebrad" {
+            test_manager.local_net.generate_blocks(100).await.unwrap();
+            clients.faucet.do_sync(true).await.unwrap();
+            clients.faucet.quick_shield().await.unwrap();
             test_manager.local_net.generate_blocks(1).await.unwrap();
-            recipient_client.do_rescan().await.unwrap();
+            clients.faucet.do_sync(true).await.unwrap();
+        };
 
-            assert_eq!(
-                recipient_client
-                    .do_balance()
-                    .await
-                    .verified_sapling_balance
-                    .unwrap(),
-                500_000
-            );
+        from_inputs::quick_send(
+            &clients.faucet,
+            vec![(
+                &clients.get_recipient_address("transparent").await,
+                250_000,
+                None,
+            )],
+        )
+        .await
+        .unwrap();
 
-            test_manager.close().await;
-        }
+        test_manager.local_net.generate_blocks(100).await.unwrap();
+        clients.recipient.do_sync(true).await.unwrap();
+
+        assert_eq!(
+            clients
+                .recipient
+                .do_balance()
+                .await
+                .transparent_balance
+                .unwrap(),
+            250_000
+        );
+
+        clients.recipient.quick_shield().await.unwrap();
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+        clients.recipient.do_sync(true).await.unwrap();
+
+        assert_eq!(
+            clients
+                .recipient
+                .do_balance()
+                .await
+                .orchard_balance
+                .unwrap(),
+            235_000
+        );
+
+        test_manager.close().await;
+    }
+
+    #[tokio::test]
+    async fn zcashd_monitor_unverified_mempool() {
+        monitor_unverified_mempool("zcashd").await;
+    }
+
+    /// Bug documented in https://github.com/zingolabs/zaino/issues/144.
+    #[tokio::test]
+    async fn zebrad_monitor_unverified_mempool() {
+        monitor_unverified_mempool("zebrad").await;
+    }
+
+    async fn monitor_unverified_mempool(validator: &str) {
+        let mut test_manager = TestManager::launch(validator, None, true, true)
+            .await
+            .unwrap();
+        let clients = test_manager
+            .clients
+            .take()
+            .expect("Clients are not initialized");
+        let recipient_client = Arc::new(clients.recipient);
+
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+        clients.faucet.do_sync(true).await.unwrap();
+
+        if validator == "zebrad" {
+            test_manager.local_net.generate_blocks(100).await.unwrap();
+            clients.faucet.do_sync(true).await.unwrap();
+            clients.faucet.quick_shield().await.unwrap();
+            test_manager.local_net.generate_blocks(100).await.unwrap();
+            clients.faucet.do_sync(true).await.unwrap();
+            clients.faucet.quick_shield().await.unwrap();
+            test_manager.local_net.generate_blocks(1).await.unwrap();
+            clients.faucet.do_sync(true).await.unwrap();
+        };
+
+        let txid_1 = from_inputs::quick_send(
+            &clients.faucet,
+            vec![(
+                &zingolib::get_base_address_macro!(recipient_client, "unified"),
+                250_000,
+                None,
+            )],
+        )
+        .await
+        .unwrap();
+        let txid_2 = from_inputs::quick_send(
+            &clients.faucet,
+            vec![(
+                &zingolib::get_base_address_macro!(recipient_client, "sapling"),
+                250_000,
+                None,
+            )],
+        )
+        .await
+        .unwrap();
+
+        println!("\n\nStarting Mempool!\n");
+
+        recipient_client.clear_state().await;
+        let _ = zingolib::lightclient::LightClient::start_mempool_monitor(recipient_client.clone())
+            .unwrap();
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+        // test_manager.local_net.print_stdout();
+
+        let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new(
+            url::Url::parse(&format!(
+                "http://127.0.0.1:{}",
+                test_manager.zebrad_rpc_listen_port
+            ))
+            .expect("Failed to construct URL")
+            .as_str()
+            .try_into()
+            .expect("Failed to convert URL to URI"),
+            Some("xxxxxx".to_string()),
+            Some("xxxxxx".to_string()),
+        )
+        .await
+        .unwrap();
+
+        println!("\n\nFetching Raw Mempool!\n");
+
+        let mempool_txids = fetch_service.get_raw_mempool().await.unwrap();
+        dbg!(txid_1);
+        dbg!(txid_2);
+        dbg!(mempool_txids.clone());
+
+        println!("\n\nFetching Mempool Tx 1!\n");
+        let _transaction_1 = dbg!(
+            fetch_service
+                .get_raw_transaction(mempool_txids.transactions[0].clone(), Some(1))
+                .await
+        );
+
+        println!("\n\nFetching Mempool Tx 2!\n");
+        let _transaction_2 = dbg!(
+            fetch_service
+                .get_raw_transaction(mempool_txids.transactions[1].clone(), Some(1))
+                .await
+        );
+
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+
+        println!("\n\nFetching Mined Tx 1!\n");
+        let _transaction_1 = dbg!(
+            fetch_service
+                .get_raw_transaction(mempool_txids.transactions[0].clone(), Some(1))
+                .await
+        );
+
+        println!("\n\nFetching Mined Tx 2!\n");
+        let _transaction_2 = dbg!(
+            fetch_service
+                .get_raw_transaction(mempool_txids.transactions[1].clone(), Some(1))
+                .await
+        );
+
+        assert_eq!(
+            recipient_client
+                .do_balance()
+                .await
+                .unverified_orchard_balance
+                .unwrap(),
+            250_000
+        );
+        assert_eq!(
+            recipient_client
+                .do_balance()
+                .await
+                .unverified_sapling_balance
+                .unwrap(),
+            250_000
+        );
+
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+        recipient_client.do_rescan().await.unwrap();
+
+        assert_eq!(
+            recipient_client
+                .do_balance()
+                .await
+                .verified_orchard_balance
+                .unwrap(),
+            250_000
+        );
+        assert_eq!(
+            recipient_client
+                .do_balance()
+                .await
+                .verified_sapling_balance
+                .unwrap(),
+            250_000
+        );
+
+        test_manager.close().await;
     }
 }

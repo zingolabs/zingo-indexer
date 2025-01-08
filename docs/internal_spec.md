@@ -16,7 +16,7 @@ The main crates are:
   - `tonic`
   - `http`
   - `thiserror`
-  
+
 Below is a detailed specification for each crate.
 
 A full specification of the public functionality and RPC services available in Zaino is availabe in [Cargo Docs](https://zingolabs.github.io/zaino/index.html) and [RPC API Spec](./rpc_api.md).
@@ -30,7 +30,7 @@ A full specification of the public functionality and RPC services available in Z
   - Parses command-line arguments and configuration files.
   - Initializes the gRPC server and internal caching systems using components from `zaino-serve` and `zaino-state` (backed by `zaino-fetch`).
   - Sets up logging and monitoring systems.
-  
+
 - Runtime Management:
   - Manages the asynchronous runtime using `Tokio`.
   - Handles graceful shutdowns and restarts.

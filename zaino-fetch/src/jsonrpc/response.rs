@@ -11,6 +11,12 @@ pub struct GetInfoResponse {
     pub subversion: String,
 }
 
+impl From<GetInfoResponse> for zebra_rpc::methods::GetInfo {
+    fn from(response: GetInfoResponse) -> Self {
+        zebra_rpc::methods::GetInfo::from_parts(response.build, response.subversion)
+    }
+}
+
 /// Response to a `getblockchaininfo` RPC request.
 ///
 /// This is used for the output parameter of [`JsonRpcConnector::get_blockchain_info`].
@@ -40,6 +46,20 @@ pub struct GetBlockchainInfoResponse {
 
     /// Branch IDs of the current and upcoming consensus rules
     pub consensus: zebra_rpc::methods::TipConsensusBranch,
+}
+
+impl From<GetBlockchainInfoResponse> for zebra_rpc::methods::GetBlockChainInfo {
+    fn from(response: GetBlockchainInfoResponse) -> Self {
+        zebra_rpc::methods::GetBlockChainInfo::new(
+            response.chain,
+            response.blocks,
+            response.best_block_hash,
+            response.estimated_height,
+            zebra_rpc::methods::types::ValuePoolBalance::zero_pools(),
+            response.upgrades,
+            response.consensus,
+        )
+    }
 }
 
 /// The transparent balance of a set of addresses.
@@ -213,6 +233,42 @@ pub enum GetBlockResponse {
         /// Information about the note commitment trees.
         trees: GetBlockTrees,
     },
+}
+
+impl From<GetBlockResponse> for zebra_rpc::methods::GetBlock {
+    fn from(response: GetBlockResponse) -> Self {
+        match response {
+            GetBlockResponse::Raw(serialized_block) => {
+                zebra_rpc::methods::GetBlock::Raw(serialized_block.0)
+            }
+            GetBlockResponse::Object {
+                hash,
+                confirmations,
+                height,
+                time,
+                tx,
+                trees,
+            } => zebra_rpc::methods::GetBlock::Object {
+                hash: zebra_rpc::methods::GetBlockHash(hash.0),
+                confirmations,
+                size: None,
+                height,
+                version: None,
+                merkle_root: None,
+                final_sapling_root: None,
+                final_orchard_root: None,
+                tx,
+                time,
+                nonce: None,
+                solution: None,
+                bits: None,
+                difficulty: None,
+                trees: trees.into(),
+                previous_block_hash: None,
+                next_block_hash: None,
+            },
+        }
+    }
 }
 
 /// Vec of transaction ids, as a JSON array.

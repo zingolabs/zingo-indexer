@@ -18,6 +18,9 @@ zainod = { path = "../zainod" }
 zcash_protocol = { workspace = true }
 zcash_client_backend = { workspace = true }
 
+# Zebra
+zebra-chain = { workspace = true }
+
 # ZingoLib
 zingolib = { workspace = true }
 
