@@ -628,11 +628,20 @@ impl CompactTxStreamer for GrpcClient {
                 } else {
                     return Err(tonic::Status::not_found("Error: Transaction not received"));
                 };
-                let height: u64 = height.try_into().map_err(|_e| {
+                // let height: u64 = height.try_into().map_err(|_e| {
+                //     tonic::Status::unknown(
+                //         "Error: Invalid response from server - Height conversion failed",
+                //     )
+                // })?;
+                let height: u64 = match height {
+                    Some(h) => h.try_into().map_err(|_e| {
                     tonic::Status::unknown(
                         "Error: Invalid response from server - Height conversion failed",
                     )
-                })?;
+                })?,
+                    // Zebra returns None for mempool transactions, convert to -1.
+                    None => u64::MAX,
+                };
 
                 Ok(tonic::Response::new(RawTransaction {
                     data: hex.as_ref().to_vec(),
@@ -763,6 +772,14 @@ impl CompactTxStreamer for GrpcClient {
                         let transaction = zebrad_client.get_raw_transaction(txid, Some(1)).await;
                         match transaction {
                             Ok(GetTransactionResponse::Object { hex, height, .. }) => {
+                                let height: u64 = match height {
+                                    Some(h) => h.try_into().map_err(|_e| {
+                                        tonic::Status::unknown(
+                                            "Error: Invalid response from server - Height conversion failed",
+                                        )
+                                    }).unwrap_or(u64::MAX),
+                                    None => u64::MAX,
+                                };
                                 if channel_tx
                                     .send(Ok(RawTransaction {
                                         data: hex.as_ref().to_vec(),

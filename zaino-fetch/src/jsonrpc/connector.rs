@@ -48,6 +48,20 @@ pub struct RpcError {
     pub data: Option<Value>,
 }
 
+impl RpcError {
+    /// Creates a new `RpcError` from a `LegacyCode`.
+    pub fn new_from_legacycode(
+        code: zebra_rpc::server::error::LegacyCode,
+        message: impl Into<String>,
+    ) -> Self {
+        RpcError {
+            code: code as i64,
+            message: message.into(),
+            data: None,
+        }
+    }
+}
+
 impl fmt::Display for RpcError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "RPC Error (code: {}): {}", self.code, self.message)
