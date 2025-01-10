@@ -168,6 +168,10 @@ impl CompactTxStreamer for GrpcClient {
         "Return a stream of current Mempool transactions. This will keep the output stream open while \
         there are mempool transactions. It will close the returned stream when a new block is mined."
         get_mempool_stream(Empty) -> Self::GetMempoolStreamStream as streamingempty,
+        "Testing-only, requires lightwalletd --ping-very-insecure (do not enable in production) [from zebrad] \
+        This RPC has not been implemented as it is not currently used by zingolib. \
+        If you require this RPC please open an issue or PR at the Zingo-Indexer github (https://github.com/zingolabs/zingo-indexer)."
+        ping(Duration) -> PingResponse,
     );
 
     /// Server streaming response type for the GetBlockRange method.
@@ -239,33 +243,4 @@ impl CompactTxStreamer for GrpcClient {
     /// Server streaming response type for the GetAddressUtxosStream method.
     #[doc = "Server streaming response type for the GetAddressUtxosStream method."]
     type GetAddressUtxosStreamStream = std::pin::Pin<Box<UtxoReplyStream>>;
-
-    /// Testing-only, requires lightwalletd --ping-very-insecure (do not enable in production) [from zebrad]
-    /// This RPC has not been implemented as it is not currently used by zingolib.
-    /// If you require this RPC please open an issue or PR at the Zingo-Indexer github (https://github.com/zingolabs/zingo-indexer).
-    fn ping<'life0, 'async_trait>(
-        &'life0 self,
-        request: tonic::Request<Duration>,
-    ) -> core::pin::Pin<
-        Box<
-            dyn core::future::Future<
-                    Output = std::result::Result<tonic::Response<PingResponse>, tonic::Status>,
-                > + core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        println!("[TEST] Received call of ping.");
-        Box::pin(async {
-            Ok(tonic::Response::new(
-                self.service_subscriber
-                    .inner_ref()
-                    .ping(request.into_inner())
-                    .await?,
-            ))
-        })
-    }
 }
