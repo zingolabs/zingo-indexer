@@ -444,13 +444,11 @@ pub async fn test_node_and_return_uri(
     for _ in 0..3 {
         match test_node_connection(ipv4_uri.clone(), user.clone(), password.clone()).await {
             Ok(_) => {
-                println!("Connected to node using IPv4 at address {}.", ipv4_uri);
                 return Ok(ipv4_uri.as_str().parse()?);
             }
             Err(_e_ipv4) => {
                 match test_node_connection(ipv6_uri.clone(), user.clone(), password.clone()).await {
                     Ok(_) => {
-                        println!("Connected to node using IPv6 at address {}.", ipv6_uri);
                         return Ok(ipv6_uri.as_str().parse()?);
                     }
                     Err(_e_ipv6) => {

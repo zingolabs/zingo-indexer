@@ -94,7 +94,7 @@ impl Server {
                 "TCP is active but no address provided.".to_string(),
             ));
         }
-        println!("Launching Server!\n");
+        println!("Launching Server..");
         status.server_status.store(StatusType::Spawning.into());
         let request_queue: Queue<ZingoIndexerRequest> =
             Queue::new(max_queue_size as usize, status.request_queue_status.clone());

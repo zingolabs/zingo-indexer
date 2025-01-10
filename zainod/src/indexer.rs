@@ -87,12 +87,16 @@ impl Indexer {
             .listen_port
             .map(|port| SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST), port));
         println!("Checking connection with node..");
-        let _zebrad_uri = test_node_and_return_uri(
+        let zebrad_uri = test_node_and_return_uri(
             &config.zebrad_port,
             config.node_user.clone(),
             config.node_password.clone(),
         )
         .await?;
+        println!(
+            " - Connected to node using JsonRPC at address {}.",
+            zebrad_uri
+        );
         status.indexer_status.store(StatusType::Spawning.into());
         let service = IndexerService::<FetchService>::spawn(
             FetchServiceConfig::new(
@@ -148,7 +152,12 @@ impl Indexer {
             };
 
             self.status.indexer_status.store(StatusType::Ready.into());
-            println!("Zaino listening on port {:?}.", self.config.listen_port);
+            println!(
+                "Zaino listening on port {:?}.",
+                self.config
+                    .listen_port
+                    .expect("Error fetching Zaino's listen prot from config.")
+            );
             loop {
                 self.status.load();
                 // indexer.log_status();

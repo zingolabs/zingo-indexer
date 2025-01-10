@@ -38,7 +38,7 @@ impl TcpIngestor {
     ) -> Result<Self, IngestorError> {
         status.store(StatusType::Spawning.into());
         let listener = TcpListener::bind(listen_addr).await?;
-        println!("TcpIngestor listening at: {}.", listen_addr);
+        println!(" - TcpIngestor listening at: {}.", listen_addr);
         Ok(TcpIngestor {
             ingestor: listener,
             queue,

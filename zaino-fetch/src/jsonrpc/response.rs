@@ -494,37 +494,32 @@ impl<'de> serde::Deserialize<'de> for GetTransactionResponse {
         D: serde::Deserializer<'de>,
     {
         let tx_value = serde_json::Value::deserialize(deserializer)?;
-        if tx_value.get("height").is_some() && tx_value.get("confirmations").is_some() {
-            let hex = serde_json::from_value(tx_value["hex"].clone())
-                .map_err(serde::de::Error::custom)?;
-            let height = tx_value["height"]
-                .as_i64()
-                .ok_or_else(|| serde::de::Error::custom("Missing or invalid height"))?
-                as i32;
-            let confirmations = tx_value["confirmations"]
-                .as_u64()
-                .ok_or_else(|| serde::de::Error::custom("Missing or invalid confirmations"))?
-                as u32;
-            let obj = GetTransactionResponse::Object {
-                hex,
-                height: Some(height),
-                confirmations: Some(confirmations),
+
+        if let Some(hex_value) = tx_value.get("hex") {
+            let hex =
+                serde_json::from_value(hex_value.clone()).map_err(serde::de::Error::custom)?;
+
+            // Convert `mempool tx height = -1` (Zcashd) to `None` (Zebrad).
+            let height = match tx_value.get("height").and_then(|v| v.as_i64()) {
+                Some(-1) | None => None,
+                Some(h) => Some(h as i32),
             };
-            Ok(obj)
-        } else if tx_value.get("hex").is_some() && tx_value.get("txid").is_some() {
-            let hex = serde_json::from_value(tx_value["hex"].clone())
-                .map_err(serde::de::Error::custom)?;
-            let obj = GetTransactionResponse::Object {
+
+            let confirmations = tx_value
+                .get("confirmations")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u32);
+
+            Ok(GetTransactionResponse::Object {
                 hex,
-                height: Some(-1),
-                confirmations: Some(0),
-            };
-            Ok(obj)
+                height,
+                confirmations,
+            })
+        } else if let Some(hex_str) = tx_value.as_str() {
+            let raw = SerializedTransaction::from_hex(hex_str).map_err(serde::de::Error::custom)?;
+            Ok(GetTransactionResponse::Raw(raw))
         } else {
-            let raw = GetTransactionResponse::Raw(
-                serde_json::from_value(tx_value.clone()).map_err(serde::de::Error::custom)?,
-            );
-            Ok(raw)
+            Err(serde::de::Error::custom("Unexpected transaction format"))
         }
     }
 }
@@ -542,7 +537,9 @@ impl From<GetTransactionResponse> for zebra_rpc::methods::GetRawTransaction {
             } => zebra_rpc::methods::GetRawTransaction::Object(
                 zebra_rpc::methods::TransactionObject {
                     hex: hex.0,
-                    height: height.and_then(|h| if h >= 0 { Some(h as u32) } else { None }),
+                    // Deserialised height is always positive or None so it is safe to convert here.
+                    // (see [`impl<'de> serde::Deserialize<'de> for GetTransactionResponse`]).
+                    height: height.map(|h| h as u32),
                     confirmations,
                 },
             ),

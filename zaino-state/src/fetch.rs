@@ -60,26 +60,23 @@ impl ZcashService for FetchService {
     type Config = FetchServiceConfig;
     /// Initializes a new StateService instance and starts sync process.
     async fn spawn(config: FetchServiceConfig, status: AtomicStatus) -> Result<Self, FetchServiceError> {
-        let rpc_uri = test_node_and_return_uri(
-            &config.validator_rpc_address.port(),
-            Some(config.validator_rpc_user.clone()),
-            Some(config.validator_rpc_password.clone()),
-        )
-        .await?;
+        println!("Launching Chain Fetch Service..");
         let status = status.clone();
         status.store(StatusType::Spawning.into());
 
         let fetcher = JsonRpcConnector::new(
-            rpc_uri,
+            test_node_and_return_uri(
+            &config.validator_rpc_address.port(),
+            Some(config.validator_rpc_user.clone()),
+            Some(config.validator_rpc_password.clone()),
+        )
+        .await?,
             Some(config.validator_rpc_user.clone()),
             Some(config.validator_rpc_password.clone()),
         )
         .await?;
 
-        let mempool = Mempool::spawn(&fetcher, None).await?;
-
         let zebra_build_data = fetcher.get_info().await?;
-
         let data = ServiceMetadata {
             build_info: get_build_info(),
             network: config.network.clone(),
@@ -87,21 +84,37 @@ impl ZcashService for FetchService {
             zebra_subversion: zebra_build_data.subversion,
         };
 
-        let state_service = Self {
+        // Wait for validator to sync before spawning Mempool.
+        //
+        // We compare estimated (network) chain height against the internal validator chain height and wait for the validator to syn with the network.
+        //
+        // NOTE: The internal compact block cache should start its sync process while the validator is syncing with the network.
+        status.store(StatusType::Syncing.into());
+        loop {
+            let blockchain_info = fetcher.get_blockchain_info().await?;
+            if (blockchain_info.blocks.0 as i64 - blockchain_info.estimated_height.0 as i64).abs() <= 10 {
+                break;
+            } else {
+                println!(" - Validator syncing with network. Validator chain height: {}, Estimated Network chain height: {}",
+                    &blockchain_info.blocks.0, 
+                    &blockchain_info.estimated_height.0 
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                continue;
+            }
+        }
+
+        let mempool = Mempool::spawn(&fetcher, None).await?;
+
+        status.store(StatusType::Ready.into());
+
+        Ok(Self {
             fetcher,
             mempool,
             data,
             config,
             status,
-        };
-
-        state_service.status.store(StatusType::Syncing.into());
-
-        // TODO: Wait for Non-Finalised state to sync.
-
-        state_service.status.store(StatusType::Ready.into());
-
-        Ok(state_service)
+        })
     }
 
     /// Returns a [`FetchServiceSubscriber`].
@@ -1240,7 +1253,6 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                                 return;
                             }
                         };
-                    loop {
                     while let Some(result) = mempool_stream.recv().await {
                         match result {
                             Ok((_mempool_key, mempool_value)) => {
@@ -1281,7 +1293,6 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                                 break;
                             }
                         }
-                    }
                     }
                 },
             )
