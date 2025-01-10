@@ -51,6 +51,17 @@ macro_rules! client_method_helper {
                 .await?,
         ))
     };
+    // for the no-input variant
+    (empty $self:ident $input:ident $method_name:ident) => {
+        tonic::Response::new($self.service_subscriber.inner_ref().$method_name().await?)
+    };
+    // WOMBO-COMBO!!
+    (streamingempty $self:ident $input:ident $method_name:ident) => {
+        // extra Box::pin here
+        tonic::Response::new(Box::pin(
+            $self.service_subscriber.inner_ref().$method_name().await?,
+        ))
+    };
 }
 
 /// A macro to remove the boilerplate of implementing 30-ish client
@@ -62,8 +73,10 @@ macro_rules! client_method_helper {
 /// [comment] A str literal to be used a doc-comment for the method.
 /// [method_name] The name of the method to implement
 /// [input_type] The type of the tonic Request to accept as an argument
-/// [as streaming] the optional literal characters 'as streaming'
-///     needed when the return type is a Streaming type
+/// [as streaming/empty] the optional literal characters
+///     'as streaming', 'as empty', or 'as streamingempty'
+///     needed when the return type is a Streaming type, and/or
+///     the argument type isn't used
 /// [return] the return type of the function
 macro_rules! implement_client_methods {
     ($($comment:literal $method_name:ident($input_type:ty ) -> $return:ty $( as $streaming:ident)? ,)+) => {
@@ -71,7 +84,7 @@ macro_rules! implement_client_methods {
             #[doc = $comment]
             fn $method_name<'life, 'async_trait>(
                 &'life self,
-                input: tonic::Request<$input_type>,
+                __input: tonic::Request<$input_type>,
             ) -> core::pin::Pin<
                 Box<
                     dyn core::future::Future<
@@ -90,7 +103,7 @@ macro_rules! implement_client_methods {
                         // here we pass in pinbox, to optionally add
                         // Box::pin to the returned response type for
                         // streaming
-                        client_method_helper!($($streaming)? self input $method_name)
+                        client_method_helper!($($streaming)? self __input $method_name)
                     )
                 })
             }
@@ -99,34 +112,9 @@ macro_rules! implement_client_methods {
 }
 
 impl CompactTxStreamer for GrpcClient {
-    /// Return the height of the tip of the best chain.
-    fn get_latest_block<'life0, 'async_trait>(
-        &'life0 self,
-        _request: tonic::Request<ChainSpec>,
-    ) -> core::pin::Pin<
-        Box<
-            dyn core::future::Future<
-                    Output = std::result::Result<tonic::Response<BlockId>, tonic::Status>,
-                > + core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        println!("[TEST] Received call of get_latest_block.");
-        Box::pin(async {
-            Ok(tonic::Response::new(
-                self.service_subscriber
-                    .inner_ref()
-                    .get_latest_block()
-                    .await?,
-            ))
-        })
-    }
-
     implement_client_methods!(
+        "Return the height of the tip of the best chain."
+        get_latest_block(ChainSpec) -> BlockId as empty,
         "Return the compact block corresponding to the given block identifier."
         get_block(BlockId) -> CompactBlock,
         "Same as GetBlock except actions contain only nullifiers."
@@ -173,7 +161,13 @@ impl CompactTxStreamer for GrpcClient {
         Returns max [GetAddressUtxosArg.max_entries] utxos, or unrestricted if [GetAddressUtxosArg.max_entries] = 0. \
         Utxos are returned in a stream."
         get_address_utxos_stream(GetAddressUtxosArg) -> Self::GetAddressUtxosStreamStream as streaming,
-
+        "Return information about this lightwalletd instance and the blockchain"
+        get_lightd_info(Empty) -> LightdInfo as empty,
+        "GetLatestTreeState returns the note commitment tree state corresponding to the chain tip."
+        get_latest_tree_state(Empty) -> TreeState as empty,
+        "Return a stream of current Mempool transactions. This will keep the output stream open while \
+        there are mempool transactions. It will close the returned stream when a new block is mined."
+        get_mempool_stream(Empty) -> Self::GetMempoolStreamStream as streamingempty,
     );
 
     /// Server streaming response type for the GetBlockRange method.
@@ -238,64 +232,6 @@ impl CompactTxStreamer for GrpcClient {
     #[doc = "Server streaming response type for the GetMempoolStream method."]
     type GetMempoolStreamStream = std::pin::Pin<Box<RawTransactionStream>>;
 
-    /// Return a stream of current Mempool transactions. This will keep the output stream open while
-    /// there are mempool transactions. It will close the returned stream when a new block is mined.
-    fn get_mempool_stream<'life0, 'async_trait>(
-        &'life0 self,
-        _request: tonic::Request<Empty>,
-    ) -> core::pin::Pin<
-        Box<
-            dyn core::future::Future<
-                    Output = std::result::Result<
-                        tonic::Response<Self::GetMempoolStreamStream>,
-                        tonic::Status,
-                    >,
-                > + core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        println!("[TEST] Received call of get_mempool_stream.");
-        Box::pin(async {
-            Ok(tonic::Response::new(Box::pin(
-                self.service_subscriber
-                    .inner_ref()
-                    .get_mempool_stream()
-                    .await?,
-            )))
-        })
-    }
-
-    /// GetLatestTreeState returns the note commitment tree state corresponding to the chain tip.
-    fn get_latest_tree_state<'life0, 'async_trait>(
-        &'life0 self,
-        _request: tonic::Request<Empty>,
-    ) -> core::pin::Pin<
-        Box<
-            dyn core::future::Future<
-                    Output = std::result::Result<tonic::Response<TreeState>, tonic::Status>,
-                > + core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        println!("[TEST] Received call of get_latest_tree_state.");
-        Box::pin(async {
-            Ok(tonic::Response::new(
-                self.service_subscriber
-                    .inner_ref()
-                    .get_latest_tree_state()
-                    .await?,
-            ))
-        })
-    }
-
     /// Server streaming response type for the GetSubtreeRoots method.
     #[doc = " Server streaming response type for the GetSubtreeRoots method."]
     type GetSubtreeRootsStream = std::pin::Pin<Box<SubtreeRootReplyStream>>;
@@ -303,33 +239,6 @@ impl CompactTxStreamer for GrpcClient {
     /// Server streaming response type for the GetAddressUtxosStream method.
     #[doc = "Server streaming response type for the GetAddressUtxosStream method."]
     type GetAddressUtxosStreamStream = std::pin::Pin<Box<UtxoReplyStream>>;
-
-    /// Return information about this lightwalletd instance and the blockchain
-    fn get_lightd_info<'life0, 'async_trait>(
-        &'life0 self,
-        _request: tonic::Request<Empty>,
-    ) -> core::pin::Pin<
-        Box<
-            dyn core::future::Future<
-                    Output = std::result::Result<tonic::Response<LightdInfo>, tonic::Status>,
-                > + core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        println!("[TEST] Received call of get_lightd_info.");
-        Box::pin(async {
-            Ok(tonic::Response::new(
-                self.service_subscriber
-                    .inner_ref()
-                    .get_lightd_info()
-                    .await?,
-            ))
-        })
-    }
 
     /// Testing-only, requires lightwalletd --ping-very-insecure (do not enable in production) [from zebrad]
     /// This RPC has not been implemented as it is not currently used by zingolib.
