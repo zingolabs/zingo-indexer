@@ -84,26 +84,27 @@ impl ZcashService for FetchService {
             zebra_subversion: zebra_build_data.subversion,
         };
 
-        // Wait for validator to sync before spawning Mempool.
+        // If Network is Mainnet or Testnet wait for validator to sync before spawning Mempool.
         //
         // We compare estimated (network) chain height against the internal validator chain height and wait for the validator to syn with the network.
         //
         // NOTE: The internal compact block cache should start its sync process while the validator is syncing with the network.
         status.store(StatusType::Syncing.into());
-        loop {
-            let blockchain_info = fetcher.get_blockchain_info().await?;
-            if (blockchain_info.blocks.0 as i64 - blockchain_info.estimated_height.0 as i64).abs() <= 10 {
-                break;
-            } else {
-                println!(" - Validator syncing with network. Validator chain height: {}, Estimated Network chain height: {}",
-                    &blockchain_info.blocks.0, 
-                    &blockchain_info.estimated_height.0 
-                );
-                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                continue;
+        if !config.network.is_regtest() {
+            loop {
+                let blockchain_info = fetcher.get_blockchain_info().await?;
+                if (blockchain_info.blocks.0 as i64 - blockchain_info.estimated_height.0 as i64).abs() <= 10 {
+                    break;
+                } else {
+                    println!(" - Validator syncing with network. Validator chain height: {}, Estimated Network chain height: {}",
+                        &blockchain_info.blocks.0, 
+                        &blockchain_info.estimated_height.0 
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    continue;
+                }
             }
         }
-
         let mempool = Mempool::spawn(&fetcher, None).await?;
 
         status.store(StatusType::Ready.into());
