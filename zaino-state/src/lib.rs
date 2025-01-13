@@ -17,6 +17,7 @@ pub mod indexer;
 // Core Indexer functionality
 // NOTE: This should possibly be made pub(crate) and moved to the indexer mod.
 pub mod fetch;
+pub mod local_cache;
 pub mod mempool;
 pub mod state;
 

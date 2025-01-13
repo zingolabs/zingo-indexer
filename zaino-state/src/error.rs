@@ -70,7 +70,7 @@ impl From<StateServiceError> for tonic::Status {
     }
 }
 
-/// Errors related to the `StateService`.
+/// Errors related to the `FetchService`.
 #[derive(Debug, thiserror::Error)]
 pub enum FetchServiceError {
     /// Custom Errors. *Remove before production.
@@ -168,7 +168,7 @@ impl From<FetchServiceError> for tonic::Status {
     }
 }
 
-/// Errors related to the `StateService`.
+/// Errors related to the `Mempool`.
 #[derive(Debug, thiserror::Error)]
 pub enum MempoolError {
     /// Custom Errors. *Remove before production.
@@ -199,6 +199,67 @@ pub enum MempoolError {
             Result<(crate::mempool::MempoolKey, crate::mempool::MempoolValue), StatusError>,
         >,
     ),
+
+    /// UTF-8 conversion error.
+    #[error("UTF-8 conversion error: {0}")]
+    Utf8Error(#[from] std::str::Utf8Error),
+
+    /// Integer parsing error.
+    #[error("Integer parsing error: {0}")]
+    ParseIntError(#[from] std::num::ParseIntError),
+
+    /// A generic boxed error.
+    #[error("Generic error: {0}")]
+    Generic(#[from] Box<dyn std::error::Error + Send + Sync>),
+}
+
+/// Errors related to the `NonFinalisedState`.
+#[derive(Debug, thiserror::Error)]
+pub enum NonFinalisedStateError {
+    /// Custom Errors. *Remove before production.
+    #[error("Custom error: {0}")]
+    Custom(String),
+
+    /// Error from a Tokio JoinHandle.
+    #[error("Join error: {0}")]
+    JoinError(#[from] tokio::task::JoinError),
+
+    /// Error from JsonRpcConnector.
+    #[error("JsonRpcConnector error: {0}")]
+    JsonRpcConnectorError(#[from] zaino_fetch::jsonrpc::error::JsonRpcConnectorError),
+
+    /// Error from a Tokio Watch Reciever.
+    #[error("Join error: {0}")]
+    WatchRecvError(#[from] tokio::sync::watch::error::RecvError),
+
+    /// Unexpected status-related error.
+    #[error("Status error: {0:?}")]
+    StatusError(StatusError),
+
+    /// Error from sending to a Tokio MPSC channel.
+    #[error("Send error: {0}")]
+    SendError(
+        #[from]
+        tokio::sync::mpsc::error::SendError<
+            Result<(crate::mempool::MempoolKey, crate::mempool::MempoolValue), StatusError>,
+        >,
+    ),
+
+    /// UTF-8 conversion error.
+    #[error("UTF-8 conversion error: {0}")]
+    Utf8Error(#[from] std::str::Utf8Error),
+
+    /// Integer parsing error.
+    #[error("Integer parsing error: {0}")]
+    ParseIntError(#[from] std::num::ParseIntError),
+
+    /// Integer conversion error.
+    #[error("Integer conversion error: {0}")]
+    TryFromIntError(#[from] std::num::TryFromIntError),
+
+    /// Chain parse error.
+    #[error("Chain parse error: {0}")]
+    ChainParseError(#[from] zaino_fetch::chain::error::ParseError),
 
     /// A generic boxed error.
     #[error("Generic error: {0}")]

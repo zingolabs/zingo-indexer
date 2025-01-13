@@ -35,11 +35,13 @@ impl<K: Eq + Hash + Clone, V: Clone> Broadcast<K, V> {
         }
     }
 
-    /// Inserts or updates an entry in the state and broadcasts an update.
+    /// Inserts or updates an entry in the state and optionally broadcasts an update.
     #[allow(dead_code)]
-    pub(crate) fn insert(&self, key: K, value: V, status: StatusType) {
+    pub(crate) fn insert(&self, key: K, value: V, status: Option<StatusType>) {
         self.state.insert(key, value);
-        let _ = self.notifier.send(status);
+        if let Some(status) = status {
+            let _ = self.notifier.send(status);
+        }
     }
 
     /// Inserts or updates an entry in the state and broadcasts an update.
