@@ -8,14 +8,14 @@ use crate::status::StatusType;
 
 /// A generic, thread-safe broadcaster that manages mutable state and notifies clients of updates.
 #[derive(Clone)]
-pub struct Broadcast<K, V> {
+pub(crate) struct Broadcast<K, V> {
     state: Arc<DashMap<K, V>>,
     notifier: watch::Sender<StatusType>,
 }
 
 impl<K: Eq + Hash + Clone, V: Clone> Broadcast<K, V> {
     /// Creates a new Broadcast instance, uses default dashmap spec.
-    pub fn new_default() -> Self {
+    pub(crate) fn new_default() -> Self {
         let (notifier, _) = watch::channel(StatusType::Spawning);
         Self {
             state: Arc::new(DashMap::new()),
@@ -24,7 +24,7 @@ impl<K: Eq + Hash + Clone, V: Clone> Broadcast<K, V> {
     }
 
     /// Creates a new Broadcast instance, exposes dashmap spec.
-    pub fn new_custom(capacity: usize, shard_amount: usize) -> Self {
+    pub(crate) fn new_custom(capacity: usize, shard_amount: usize) -> Self {
         let (notifier, _) = watch::channel(StatusType::Spawning);
         Self {
             state: Arc::new(DashMap::with_capacity_and_shard_amount(
@@ -36,13 +36,15 @@ impl<K: Eq + Hash + Clone, V: Clone> Broadcast<K, V> {
     }
 
     /// Inserts or updates an entry in the state and broadcasts an update.
-    pub fn insert(&self, key: K, value: V, status: StatusType) {
+    #[allow(dead_code)]
+    pub(crate) fn insert(&self, key: K, value: V, status: StatusType) {
         self.state.insert(key, value);
         let _ = self.notifier.send(status);
     }
 
     /// Inserts or updates an entry in the state and broadcasts an update.
-    pub fn insert_set(&self, set: Vec<(K, V)>, status: StatusType) {
+    #[allow(dead_code)]
+    pub(crate) fn insert_set(&self, set: Vec<(K, V)>, status: StatusType) {
         for (key, value) in set {
             self.state.insert(key, value);
         }
@@ -50,7 +52,7 @@ impl<K: Eq + Hash + Clone, V: Clone> Broadcast<K, V> {
     }
 
     /// Inserts only new entries from the set into the state and broadcasts an update.
-    pub fn insert_filtered_set(&self, set: Vec<(K, V)>, status: StatusType) {
+    pub(crate) fn insert_filtered_set(&self, set: Vec<(K, V)>, status: StatusType) {
         for (key, value) in set {
             // Check if the key is already in the map
             if self.state.get(&key).is_none() {
@@ -61,20 +63,23 @@ impl<K: Eq + Hash + Clone, V: Clone> Broadcast<K, V> {
     }
 
     /// Removes an entry from the state and broadcasts an update.
-    pub fn remove(&self, key: &K, status: StatusType) {
+    #[allow(dead_code)]
+    pub(crate) fn remove(&self, key: &K, status: StatusType) {
         self.state.remove(key);
         let _ = self.notifier.send(status);
     }
 
     /// Retrieves a value from the state by key.
-    pub fn get(&self, key: &K) -> Option<Arc<V>> {
+    #[allow(dead_code)]
+    pub(crate) fn get(&self, key: &K) -> Option<Arc<V>> {
         self.state
             .get(key)
             .map(|entry| Arc::new((*entry.value()).clone()))
     }
 
     /// Retrieves a set of values from the state by a list of keys.
-    pub fn get_set(&self, keys: &[K]) -> Vec<(K, Arc<V>)> {
+    #[allow(dead_code)]
+    pub(crate) fn get_set(&self, keys: &[K]) -> Vec<(K, Arc<V>)> {
         keys.iter()
             .filter_map(|key| {
                 self.state
@@ -85,17 +90,18 @@ impl<K: Eq + Hash + Clone, V: Clone> Broadcast<K, V> {
     }
 
     /// Checks if a key exists in the state.
-    pub fn contains_key(&self, key: &K) -> bool {
+    #[allow(dead_code)]
+    pub(crate) fn contains_key(&self, key: &K) -> bool {
         self.state.contains_key(key)
     }
 
     /// Returns a receiver to listen for state update notifications.
-    pub fn subscribe(&self) -> watch::Receiver<StatusType> {
+    pub(crate) fn subscribe(&self) -> watch::Receiver<StatusType> {
         self.notifier.subscribe()
     }
 
     /// Returns a [`BroadcastSubscriber`] to the [`Broadcast`].
-    pub fn subscriber(&self) -> BroadcastSubscriber<K, V> {
+    pub(crate) fn subscriber(&self) -> BroadcastSubscriber<K, V> {
         BroadcastSubscriber {
             state: self.get_state(),
             notifier: self.subscribe(),
@@ -103,12 +109,13 @@ impl<K: Eq + Hash + Clone, V: Clone> Broadcast<K, V> {
     }
 
     /// Provides read access to the internal state.
-    pub fn get_state(&self) -> Arc<DashMap<K, V>> {
+    pub(crate) fn get_state(&self) -> Arc<DashMap<K, V>> {
         Arc::clone(&self.state)
     }
 
     /// Returns the whole state excluding keys in the ignore list.
-    pub fn get_filtered_state(&self, ignore_list: &HashSet<K>) -> Vec<(K, V)> {
+    #[allow(dead_code)]
+    pub(crate) fn get_filtered_state(&self, ignore_list: &HashSet<K>) -> Vec<(K, V)> {
         self.state
             .iter()
             .filter(|entry| !ignore_list.contains(entry.key()))
@@ -117,22 +124,24 @@ impl<K: Eq + Hash + Clone, V: Clone> Broadcast<K, V> {
     }
 
     /// Clears all entries from the state.
-    pub fn clear(&self) {
+    pub(crate) fn clear(&self) {
         self.state.clear();
     }
 
     /// Returns the number of entries in the state.
-    pub fn len(&self) -> usize {
+    #[allow(dead_code)]
+    pub(crate) fn len(&self) -> usize {
         self.state.len()
     }
 
     /// Returns true if the state is empty.
-    pub fn is_empty(&self) -> bool {
+    #[allow(dead_code)]
+    pub(crate) fn is_empty(&self) -> bool {
         self.state.is_empty()
     }
 
     /// Broadcasts an update.
-    pub fn notify(&self, status: StatusType) {
+    pub(crate) fn notify(&self, status: StatusType) {
         if self.notifier.send(status).is_err() {
             eprintln!("No subscribers are currently listening for updates.");
         }
@@ -163,28 +172,30 @@ impl<K: Eq + Hash + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> std::fm
 
 /// A generic, thread-safe broadcaster that manages mutable state and notifies clients of updates.
 #[derive(Clone)]
-pub struct BroadcastSubscriber<K, V> {
+pub(crate) struct BroadcastSubscriber<K, V> {
     state: Arc<DashMap<K, V>>,
     notifier: watch::Receiver<StatusType>,
 }
 
 impl<K: Eq + Hash + Clone, V: Clone> BroadcastSubscriber<K, V> {
     /// Waits on notifier update and returns StatusType.
-    pub async fn wait_on_notifier(&mut self) -> Result<StatusType, watch::error::RecvError> {
+    pub(crate) async fn wait_on_notifier(&mut self) -> Result<StatusType, watch::error::RecvError> {
         self.notifier.changed().await?;
         let status = self.notifier.borrow().clone();
         Ok(status)
     }
 
     /// Retrieves a value from the state by key.
-    pub fn get(&self, key: &K) -> Option<Arc<V>> {
+    #[allow(dead_code)]
+    pub(crate) fn get(&self, key: &K) -> Option<Arc<V>> {
         self.state
             .get(key)
             .map(|entry| Arc::new((*entry.value()).clone()))
     }
 
     /// Retrieves a set of values from the state by a list of keys.
-    pub fn get_set(&self, keys: &[K]) -> Vec<(K, Arc<V>)> {
+    #[allow(dead_code)]
+    pub(crate) fn get_set(&self, keys: &[K]) -> Vec<(K, Arc<V>)> {
         keys.iter()
             .filter_map(|key| {
                 self.state
@@ -195,12 +206,13 @@ impl<K: Eq + Hash + Clone, V: Clone> BroadcastSubscriber<K, V> {
     }
 
     /// Checks if a key exists in the state.
-    pub fn contains_key(&self, key: &K) -> bool {
+    #[allow(dead_code)]
+    pub(crate) fn contains_key(&self, key: &K) -> bool {
         self.state.contains_key(key)
     }
 
     /// Returns the whole state excluding keys in the ignore list.
-    pub fn get_filtered_state(&self, ignore_list: &HashSet<K>) -> Vec<(K, V)> {
+    pub(crate) fn get_filtered_state(&self, ignore_list: &HashSet<K>) -> Vec<(K, V)> {
         self.state
             .iter()
             .filter(|entry| !ignore_list.contains(entry.key()))
@@ -209,12 +221,14 @@ impl<K: Eq + Hash + Clone, V: Clone> BroadcastSubscriber<K, V> {
     }
 
     /// Returns the number of entries in the state.
-    pub fn len(&self) -> usize {
+    #[allow(dead_code)]
+    pub(crate) fn len(&self) -> usize {
         self.state.len()
     }
 
     /// Returns true if the state is empty.
-    pub fn is_empty(&self) -> bool {
+    #[allow(dead_code)]
+    pub(crate) fn is_empty(&self) -> bool {
         self.state.is_empty()
     }
 }

@@ -31,10 +31,9 @@ use zebra_state::{ChainTipChange, HashOrHeight, LatestChainTip, ReadStateService
 use crate::{
     config::StateServiceConfig,
     error::StateServiceError,
-    get_build_info,
     status::{AtomicStatus, StatusType},
     stream::CompactBlockStream,
-    ServiceMetadata,
+    utils::{get_build_info, ServiceMetadata},
 };
 use zaino_fetch::jsonrpc::connector::{test_node_and_return_uri, JsonRpcConnector};
 use zaino_proto::proto::compact_formats::{
@@ -94,12 +93,12 @@ impl StateService {
 
         let zebra_build_data = rpc_client.get_info().await?;
 
-        let data = ServiceMetadata {
-            build_info: get_build_info(),
-            network: config.network.clone(),
-            zebra_build: zebra_build_data.build,
-            zebra_subversion: zebra_build_data.subversion,
-        };
+        let data = ServiceMetadata::new(
+            get_build_info(),
+            config.network.clone(),
+            zebra_build_data.build,
+            zebra_build_data.subversion,
+        );
 
         let mut state_service = Self {
             read_state_service,
@@ -361,7 +360,7 @@ impl StateService {
         const DEFAULT_GETBLOCK_VERBOSITY: u8 = 1;
 
         let verbosity = verbosity.unwrap_or(DEFAULT_GETBLOCK_VERBOSITY);
-        let network = self.data.network.clone();
+        let network = self.data.network().clone();
         let original_hash_or_height = hash_or_height.clone();
 
         // If verbosity requires a call to `get_block_header`, resolve it here
@@ -548,7 +547,7 @@ impl StateService {
         verbose: Option<bool>,
     ) -> Result<GetBlockHeader, StateServiceError> {
         let verbose = verbose.unwrap_or(true);
-        let network = self.data.network.clone();
+        let network = self.data.network().clone();
 
         let hash_or_height: HashOrHeight = hash_or_height.parse()?;
 

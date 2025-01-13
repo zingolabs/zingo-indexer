@@ -3,7 +3,6 @@
 use crate::{
     config::FetchServiceConfig,
     error::FetchServiceError,
-    get_build_info,
     indexer::{IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService},
     mempool::{Mempool, MempoolSubscriber},
     status::{AtomicStatus, StatusType},
@@ -11,7 +10,7 @@ use crate::{
         AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
         SubtreeRootReplyStream, UtxoReplyStream,
     },
-    ServiceMetadata,
+    utils::{ServiceMetadata, get_build_info},
 };
 use futures::StreamExt;
 use hex::FromHex;
@@ -81,12 +80,12 @@ impl ZcashService for FetchService {
         .await?;
 
         let zebra_build_data = fetcher.get_info().await?;
-        let data = ServiceMetadata {
-            build_info: get_build_info(),
-            network: config.network.clone(),
-            zebra_build: zebra_build_data.build,
-            zebra_subversion: zebra_build_data.subversion,
-        };
+        let data = ServiceMetadata::new(
+            get_build_info(),
+            config.network.clone(),
+            zebra_build_data.build,
+            zebra_build_data.subversion,
+        );
 
         // If Network is Mainnet or Testnet wait for validator to sync before spawning Mempool.
         //
@@ -1732,17 +1731,17 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         .to_string();
 
         Ok(LightdInfo {
-            version: self.data.build_info.version(),
+            version: self.data.build_info().version(),
             vendor: "ZingoLabs ZainoD".to_string(),
             taddr_support: true,
             chain_name: blockchain_info.chain(),
             sapling_activation_height: sapling_activation_height.0 as u64,
             consensus_branch_id,
             block_height: blockchain_info.blocks().0 as u64,
-            git_commit: self.data.build_info.commit_hash(),
-            branch: self.data.build_info.branch(),
-            build_date: self.data.build_info.build_date(),
-            build_user: self.data.build_info.build_user(),
+            git_commit: self.data.build_info().commit_hash(),
+            branch: self.data.build_info().branch(),
+            build_date: self.data.build_info().build_date(),
+            build_user: self.data.build_info().build_user(),
             estimated_height: blockchain_info.estimated_height().0 as u64,
             zcashd_build: self.data.zebra_build(),
             zcashd_subversion: self.data.zebra_subversion(),
