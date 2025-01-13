@@ -93,19 +93,21 @@ impl ZcashService for FetchService {
         // We compare estimated (network) chain height against the internal validator chain height and wait for the validator to syn with the network.
         //
         // NOTE: The internal compact block cache should start its sync process while the validator is syncing with the network.
-        status.store(StatusType::Syncing.into());
-        if !config.network.is_regtest() {
-            loop {
-                let blockchain_info = fetcher.get_blockchain_info().await?;
-                if (blockchain_info.blocks.0 as i64 - blockchain_info.estimated_height.0 as i64).abs() <= 10 {
-                    break;
-                } else {
-                    println!(" - Validator syncing with network. Validator chain height: {}, Estimated Network chain height: {}",
-                        &blockchain_info.blocks.0, 
-                        &blockchain_info.estimated_height.0 
-                    );
-                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                    continue;
+        if !config.no_sync {
+            status.store(StatusType::Syncing.into());
+            if !config.network.is_regtest() {
+                loop {
+                    let blockchain_info = fetcher.get_blockchain_info().await?;
+                    if (blockchain_info.blocks.0 as i64 - blockchain_info.estimated_height.0 as i64).abs() <= 10 {
+                        break;
+                    } else {
+                        println!(" - Validator syncing with network. Validator chain height: {}, Estimated Network chain height: {}",
+                            &blockchain_info.blocks.0, 
+                            &blockchain_info.estimated_height.0 
+                        );
+                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                        continue;
+                    }
                 }
             }
         }
@@ -1910,6 +1912,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -1963,6 +1966,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -2008,6 +2012,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
         ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -2044,6 +2049,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
         ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -2087,6 +2093,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
         ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -2179,6 +2186,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
         ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -2234,6 +2242,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
         ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -2289,6 +2298,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
         ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -2340,6 +2350,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
         ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -2400,6 +2411,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
         ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -2441,6 +2453,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
             )
@@ -2481,6 +2494,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
         ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -2522,6 +2536,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
         ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -2566,6 +2581,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
         ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -2622,6 +2638,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
         ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -2682,6 +2699,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
         ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -2745,6 +2763,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
         ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -2808,6 +2827,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
         ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -2882,6 +2902,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
         ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -2943,6 +2964,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
         ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -3051,6 +3073,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
         ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -3131,6 +3154,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
         ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -3174,6 +3198,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
         ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -3207,6 +3232,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
         ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -3263,6 +3289,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
         ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -3323,6 +3350,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
         ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -3382,6 +3410,7 @@ mod tests {
             None,
             None,
             Network::new_regtest(Some(1), Some(1)),
+            true,
         ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )

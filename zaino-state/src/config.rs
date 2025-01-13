@@ -57,6 +57,9 @@ pub struct FetchServiceConfig {
     pub service_channel_size: u32,
     /// StateService network type.
     pub network: zebra_chain::parameters::Network,
+    /// Disables internal sync and stops zaino waiting on server sync.
+    /// Used for testing.
+    pub no_sync: bool,
 }
 
 impl FetchServiceConfig {
@@ -68,6 +71,7 @@ impl FetchServiceConfig {
         service_timeout: Option<u32>,
         service_channel_size: Option<u32>,
         network: zebra_chain::parameters::Network,
+        no_sync: bool,
     ) -> Self {
         FetchServiceConfig {
             validator_rpc_address,
@@ -77,6 +81,7 @@ impl FetchServiceConfig {
             service_timeout: service_timeout.unwrap_or(60),
             service_channel_size: service_channel_size.unwrap_or(32),
             network,
+            no_sync,
         }
     }
 }
