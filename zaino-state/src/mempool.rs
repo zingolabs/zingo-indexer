@@ -334,6 +334,7 @@ impl MempoolSubscriber {
                             )));
                         }
                         StatusType::RecoverableError => {
+                            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                             continue;
                         }
                         status => {

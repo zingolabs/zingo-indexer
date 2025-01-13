@@ -19,7 +19,6 @@ use zebra_chain::{
     transaction::Transaction,
 };
 use zebra_rpc::{
-    // constants::{INVALID_ADDRESS_OR_KEY_ERROR_CODE, MISSING_BLOCK_ERROR_CODE},
     methods::{
         hex_data::HexData, types::ValuePoolBalance, ConsensusBranchIdHex, GetBlock,
         GetBlockChainInfo, GetBlockHash, GetBlockHeader, GetBlockHeaderObject, GetBlockTrees,
@@ -44,6 +43,10 @@ use zaino_proto::proto::compact_formats::{
 };
 
 /// Chain fetch service backed by Zebra's `ReadStateService` and `TrustedChainSync`.
+///
+/// NOTE: We currently dop not implement clone for chain fetch services as this service is responsible for maintainng and closing its child processes.
+///       ServiceSubscribers are used to create seperate chain fetch processes while allowing central state processes to be managed in a sibgle place.
+///       If we want the ability to clone Service all JoinHandle's should be converted to Arc<JoinHandle>.
 #[derive(Debug)]
 pub struct StateService {
     /// `ReadeStateService` from Zebra-State.
@@ -141,7 +144,6 @@ impl StateService {
         mut read_state_service: ReadStateService,
         req: zebra_state::ReadRequest,
     ) -> Result<zebra_state::ReadResponse, StateServiceError> {
-        // let mut read_state_service = self.read_state_service.clone();
         poll_fn(|cx| read_state_service.poll_ready(cx)).await?;
         read_state_service
             .call(req)
@@ -150,8 +152,7 @@ impl StateService {
     }
 
     /// Uses poll_ready to update the status of the `ReadStateService`.
-    #[allow(dead_code)]
-    pub(crate) async fn fetch_status_from_validator(&self) -> StatusType {
+    async fn fetch_status_from_validator(&self) -> StatusType {
         let mut read_state_service = self.read_state_service.clone();
         poll_fn(|cx| match read_state_service.poll_ready(cx) {
             std::task::Poll::Ready(Ok(())) => {
@@ -171,9 +172,16 @@ impl StateService {
         .await
     }
 
-    /// Fetches the current status
-    pub fn status(&self) -> StatusType {
-        self.status.load().into()
+    /// Returns the StateService's Status.
+    ///
+    /// We first check for `status = StatusType::Closing` as this signifies a shutdown order from an external process.
+    pub async fn status(&self) -> StatusType {
+        let current_status = self.status.load().into();
+        if current_status == StatusType::Closing {
+            current_status
+        } else {
+            self.fetch_status_from_validator().await
+        }
     }
 
     /// Shuts down the StateService.
@@ -190,21 +198,6 @@ impl Drop for StateService {
     fn drop(&mut self) {
         if let Some(handle) = self.sync_task_handle.take() {
             handle.abort();
-        }
-    }
-}
-
-impl Clone for StateService {
-    fn clone(&self) -> Self {
-        Self {
-            read_state_service: self.read_state_service.clone(),
-            latest_chain_tip: self.latest_chain_tip.clone(),
-            _chain_tip_change: self._chain_tip_change.clone(),
-            sync_task_handle: None,
-            _rpc_client: self._rpc_client.clone(),
-            data: self.data.clone(),
-            config: self.config.clone(),
-            status: self.status.clone(),
         }
     }
 }

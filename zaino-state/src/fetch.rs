@@ -38,7 +38,11 @@ use zebra_rpc::methods::{
 ///
 /// This service is a central service, [`FetchServiceSubscriber`] should be created to fetch data.
 /// This is done to enable large numbers of concurrent subscribers without significant slowdowns.
-#[derive(Debug, Clone)]
+///
+/// NOTE: We currently dop not implement clone for chain fetch services as this service is responsible for maintainng and closing its child processes.
+///       ServiceSubscribers are used to create seperate chain fetch processes while allowing central state processes to be managed in a sibgle place.
+///       If we want the ability to clone Service all JoinHandle's should be converted to Arc<JoinHandle>.
+#[derive(Debug)]
 pub struct FetchService {
     /// JsonRPC Client.
     fetcher: JsonRpcConnector,
@@ -910,17 +914,14 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                         match transaction {
                             Ok(GetRawTransaction::Object(transaction_obj)) => {
                                 let height: u64 = match transaction_obj.height {
-                                    Some(h) => h.try_into().map_err(|_e| {
-                                        tonic::Status::unknown(
-                                            "Error: Invalid response from server - Height conversion failed",
-                                        )
-                                    }).unwrap_or(u64::MAX),
-                                    None => u64::MAX,
+                                    Some(h) => h as u64,
+                                    // Zebra returns None for mempool transactions, convert to `Mempool Height`.
+                                    None => chain_height as u64,
                                 };
                                 if channel_tx
                                     .send(Ok(RawTransaction {
                                         data: transaction_obj.hex.as_ref().to_vec(),
-                                        height: height as u64,
+                                        height,
                                     }))
                                     .await
                                     .is_err()
@@ -1151,16 +1152,8 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                                     Some(vec!(txid_bytes)), None) 
                                 {
                                     Ok(transaction) => {
-                                        if !transaction.0.is_empty() {
-                                            // TODO: Hide server error from clients before release. Currently useful for dev purposes.
-                                            if channel_tx
-                                                .send(Err(tonic::Status::unknown("Error: ")))
-                                                .await
-                                                .is_err()
-                                            {
-                                                break;
-                                            }
-                                        } else {
+                                        // ParseFromSlice returns any data left after the conversion to a FullTransaction, If the conversion has succeeded this should be empty.
+                                        if transaction.0.is_empty() {
                                             match transaction.1.to_compact(0) {
                                                 Ok(compact_tx) => {
                                                     if channel_tx
@@ -1181,6 +1174,15 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                                                         break;
                                                     }
                                                 }
+                                            }
+                                        } else {
+                                            // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                                            if channel_tx
+                                                .send(Err(tonic::Status::unknown("Error: ")))
+                                                .await
+                                                .is_err()
+                                            {
+                                                break;
                                             }
                                         }
                                             }

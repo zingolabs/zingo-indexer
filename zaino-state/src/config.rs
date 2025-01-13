@@ -73,7 +73,8 @@ impl FetchServiceConfig {
             validator_rpc_address,
             validator_rpc_user: validator_rpc_user.unwrap_or("xxxxxx".to_string()),
             validator_rpc_password: validator_rpc_password.unwrap_or("xxxxxx".to_string()),
-            service_timeout: service_timeout.unwrap_or(30),
+            // NOTE: This timeout is currently long to ease development but should be reduced before production.
+            service_timeout: service_timeout.unwrap_or(60),
             service_channel_size: service_channel_size.unwrap_or(32),
             network,
         }
