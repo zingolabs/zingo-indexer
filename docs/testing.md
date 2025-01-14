@@ -5,11 +5,18 @@
 3) [Zcashd, Zcash-Cli](https://github.com/zcash/zcash)
 
 ### Unit Tests
-- To run Unit tests:
 1) Simlink or copy compiled `zebrad`, zcashd` and `zcash-cli` binaries to `$ zaino/test_binaries/bins/*`
+
+- To run Zaino-testutils tests:
+2) Run `$ cargo nextest run -p zaino_testutils`
+
+- To run Zaino-State FetchService tests:
+2) Run `$ cargo nextest run fetch_service`
+
+- To run Zaino-State StateService tests:
 2) Generate the zcashd chain cache `cargo nextest run generate_zcashd_chain_cache --run-ignored ignored-only`
 3) Generate the zebrad chain cache `cargo nextest run generate_zebrad_large_chain_cache --run-ignored ignored-only`
-4) Run `$ cargo nextest run tests`
+4) Run `$ cargo nextest run state_service --no-capture`
 
 *NOTE: As we currently have several bugs using Zebra's regtest mode for our tests, we are having to rely on loading cached chain-data instead of creating chain data dynamically. Due to this, and the fact that Zebra requires a lock on its chain cache, all unit tests in zaino-state (and any others relying on loading cached chain data) must be run sequentially. This can be done by running tests with the `--no-capture` flag. Eg. `cargo nextest run -p zaino-state --no-capture`.
 
@@ -35,3 +42,4 @@ See the `get_subtree_roots_sapling` test fixture doc comments in zcash_local_net
 2) copy the Zebrad mainnet `state` cache to `zaino/integration-tests/chain_cache/get_subtree_roots_orchard` directory.
 See the `get_subtree_roots_orchard` test fixture doc comments in zcash_local_net for more details.
 
+NOTE: These tests are currently not working and should be ignored until fixed in `zcash-local-net`.
