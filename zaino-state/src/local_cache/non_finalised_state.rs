@@ -284,6 +284,34 @@ impl NonFinalisedState {
         for block_height in (reorg_height.0 + 1)..self.fetcher.get_blockchain_info().await?.blocks.0
         {
             loop {
+                // Either pop the reorged block or pop the oldest block in non-finalised state.
+                //
+                // TODO: Block being popped from non-finalised state should be fetched and sent to finalised state.
+                if self.heights_to_hashes.contains_key(&Height(block_height)) {
+                    if let Some(hash) = self.heights_to_hashes.get(&Height(block_height)) {
+                        self.hashes_to_blocks.remove(&hash, None);
+                        self.heights_to_hashes.remove(&Height(block_height), None);
+                    }
+                } else {
+                    let pop_height = self
+                        .heights_to_hashes
+                        .get_state()
+                        .iter()
+                        .min_by_key(|entry| entry.key().0)
+                        .ok_or_else(|| {
+                            NonFinalisedStateError::MissingData(
+                                "Failed to find the minimum height in the non-finalised state."
+                                    .to_string(),
+                            )
+                        })?
+                        .key()
+                        .clone();
+                    if let Some(hash) = self.heights_to_hashes.get(&pop_height) {
+                        self.hashes_to_blocks.remove(&hash, None);
+                        self.heights_to_hashes.remove(&pop_height, None);
+                    }
+                }
+
                 match self.fetch_block_from_node(block_height).await {
                     Ok((hash, block)) => {
                         self.heights_to_hashes
@@ -299,34 +327,6 @@ impl NonFinalisedState {
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                         continue;
                     }
-                }
-            }
-
-            // Either pop the reorged block or pop the oldest block in non-finalised state.
-            //
-            // TODO: Block being popped from non-finalised state should be fetched and sent to finalised state.
-            if self.heights_to_hashes.contains_key(&Height(block_height)) {
-                if let Some(hash) = self.heights_to_hashes.get(&Height(block_height)) {
-                    self.hashes_to_blocks.remove(&hash, None);
-                    self.heights_to_hashes.remove(&Height(block_height), None);
-                }
-            } else {
-                let pop_height = self
-                    .heights_to_hashes
-                    .get_state()
-                    .iter()
-                    .min_by_key(|entry| entry.key().0)
-                    .ok_or_else(|| {
-                        NonFinalisedStateError::MissingData(
-                            "Failed to find the minimum height in the non-finalised state."
-                                .to_string(),
-                        )
-                    })?
-                    .key()
-                    .clone();
-                if let Some(hash) = self.heights_to_hashes.get(&pop_height) {
-                    self.hashes_to_blocks.remove(&hash, None);
-                    self.heights_to_hashes.remove(&pop_height, None);
                 }
             }
         }
