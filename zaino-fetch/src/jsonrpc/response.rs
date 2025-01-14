@@ -502,6 +502,9 @@ impl<'de> serde::Deserialize<'de> for GetTransactionResponse {
             // Convert `mempool tx height = -1` (Zcashd) to `None` (Zebrad).
             let height = match tx_value.get("height").and_then(|v| v.as_i64()) {
                 Some(-1) | None => None,
+                Some(h) if h < -1 => {
+                    return Err(serde::de::Error::custom("invalid height returned in block"))
+                }
                 Some(h) => Some(h as i32),
             };
 
