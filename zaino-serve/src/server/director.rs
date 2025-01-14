@@ -59,8 +59,6 @@ impl ServerStatus {
 pub struct Server {
     /// Listens for incoming gRPC requests over HTTP.
     tcp_ingestor: Option<TcpIngestor>,
-    /// Chain fetch service subscriber.
-    _service_subscriber: IndexerSubscriber<FetchServiceSubscriber>,
     /// Dynamically sized pool of workers.
     worker_pool: WorkerPool,
     /// Request queue.
@@ -127,7 +125,6 @@ impl Server {
         )
         .await;
         Ok(Server {
-            _service_subscriber: service_subscriber,
             tcp_ingestor,
             worker_pool,
             request_queue,

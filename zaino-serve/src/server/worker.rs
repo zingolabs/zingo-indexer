@@ -33,8 +33,6 @@ pub(crate) struct Worker {
     queue: QueueReceiver<ZingoIndexerRequest>,
     /// Used to requeue requests.
     requeue: QueueSender<ZingoIndexerRequest>,
-    /// Chain fetch service subscriber.
-    _service_subscriber: IndexerSubscriber<FetchServiceSubscriber>,
     /// Service status.
     _service_status: AtomicStatus,
     /// gRPC client used for processing requests received over http.
@@ -65,7 +63,6 @@ impl Worker {
             _worker_id,
             queue,
             requeue,
-            _service_subscriber: service_subscriber,
             _service_status: service_status,
             grpc_client,
             atomic_status,
