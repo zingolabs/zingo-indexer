@@ -73,26 +73,34 @@ impl Indexer {
         set_ctrlc(online.clone());
         startup_message();
         println!("Launching Zaino..");
-        let indexer: Indexer = Indexer::new(config, online.clone()).await?;
+        let indexer: Indexer = Indexer::new(config, online.clone(), false).await?;
         indexer.serve().await?.await?
     }
 
     /// Creates a new Indexer.
     ///
     /// Currently only takes an IndexerConfig.
-    pub async fn new(config: IndexerConfig, online: Arc<AtomicBool>) -> Result<Self, IndexerError> {
+    pub async fn new(
+        config: IndexerConfig,
+        online: Arc<AtomicBool>,
+        no_sync: bool,
+    ) -> Result<Self, IndexerError> {
         config.check_config()?;
         let status = IndexerStatus::new(config.max_worker_pool_size);
         let tcp_ingestor_listen_addr: Option<SocketAddr> = config
             .listen_port
             .map(|port| SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST), port));
         println!("Checking connection with node..");
-        let _zebrad_uri = test_node_and_return_uri(
+        let zebrad_uri = test_node_and_return_uri(
             &config.zebrad_port,
             config.node_user.clone(),
             config.node_password.clone(),
         )
         .await?;
+        println!(
+            " - Connected to node using JsonRPC at address {}.",
+            zebrad_uri
+        );
         status.indexer_status.store(StatusType::Spawning.into());
         let service = IndexerService::<FetchService>::spawn(
             FetchServiceConfig::new(
@@ -105,6 +113,7 @@ impl Indexer {
                 None,
                 None,
                 config.get_network()?,
+                no_sync,
             ),
             status.service_status.clone(),
         )
@@ -148,7 +157,12 @@ impl Indexer {
             };
 
             self.status.indexer_status.store(StatusType::Ready.into());
-            println!("Zaino listening on port {:?}.", self.config.listen_port);
+            println!(
+                "Zaino listening on port {:?}.",
+                self.config
+                    .listen_port
+                    .expect("Error fetching Zaino's listen prot from config.")
+            );
             loop {
                 self.status.load();
                 // indexer.log_status();

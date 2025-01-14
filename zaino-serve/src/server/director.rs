@@ -59,8 +59,6 @@ impl ServerStatus {
 pub struct Server {
     /// Listens for incoming gRPC requests over HTTP.
     tcp_ingestor: Option<TcpIngestor>,
-    /// Chain fetch service subscriber.
-    _service_subscriber: IndexerSubscriber<FetchServiceSubscriber>,
     /// Dynamically sized pool of workers.
     worker_pool: WorkerPool,
     /// Request queue.
@@ -94,7 +92,7 @@ impl Server {
                 "TCP is active but no address provided.".to_string(),
             ));
         }
-        println!("Launching Server!\n");
+        println!("Launching Server..");
         status.server_status.store(StatusType::Spawning.into());
         let request_queue: Queue<ZingoIndexerRequest> =
             Queue::new(max_queue_size as usize, status.request_queue_status.clone());
@@ -127,7 +125,6 @@ impl Server {
         )
         .await;
         Ok(Server {
-            _service_subscriber: service_subscriber,
             tcp_ingestor,
             worker_pool,
             request_queue,

@@ -31,14 +31,14 @@ use crate::{
 ///
 /// NOTE: Work to implement a unified endpoint for IndexerService will be completed in Milestone 3 of the Zaino Dev Grant.
 #[derive(Clone)]
-pub struct IndexerService<Service: Clone + ZcashService> {
+pub struct IndexerService<Service: ZcashService> {
     /// Underlying Service.
     service: Service,
 }
 
 impl<Service> IndexerService<Service>
 where
-    Service: ZcashService + Clone,
+    Service: ZcashService,
 {
     /// Creates a new `IndexerService` using the provided `config`.
     pub async fn spawn(
@@ -53,11 +53,6 @@ where
     /// Returns a reference to the inner service.
     pub fn inner_ref(&self) -> &Service {
         &self.service
-    }
-
-    /// Returns a clone of the inner service.
-    pub fn inner_clone(&self) -> Service {
-        self.service.clone()
     }
 
     /// Consumes the `IndexerService` and returns the inner service.

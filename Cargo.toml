@@ -37,8 +37,7 @@ zebra-state = { git = "https://github.com/idky137/zebra.git", branch = "add_publ
 zebra-rpc = { git = "https://github.com/idky137/zebra.git", branch = "add_public_func_for_zaino_pt2" }
 
 # Zcash-Local-Net
-# zcash_local_net = { git = "https://github.com/zingolabs/zcash-local-net.git", rev = "92b509aa152baf7c5b336bed9462dd751799ae76", features = [ "test_fixtures" ] }
-zcash_local_net = { git = "https://github.com/idky137/zcash-local-net.git", branch = "zaino_zebra_dep", features = [ "test_fixtures" ] }
+zcash_local_net = { git = "https://github.com/zingolabs/zcash-local-net.git", rev = "d64b76cab748455c5b9e1e4412f1689fb66f7d41", features = [ "test_fixtures" ] }
 
 # Miscellaneous
 tokio = { version = "1.38", features = ["full"] }

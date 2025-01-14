@@ -367,7 +367,7 @@ impl TestManager {
                 idle_worker_pool_size: 4,
                 network: network.to_string(),
             };
-            let handle = zainodlib::indexer::Indexer::new(indexer_config, online.clone())
+            let handle = zainodlib::indexer::Indexer::new(indexer_config, online.clone(), true)
                 .await
                 .unwrap()
                 .serve()
