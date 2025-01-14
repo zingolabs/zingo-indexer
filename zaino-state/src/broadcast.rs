@@ -66,9 +66,11 @@ impl<K: Eq + Hash + Clone, V: Clone> Broadcast<K, V> {
 
     /// Removes an entry from the state and broadcasts an update.
     #[allow(dead_code)]
-    pub(crate) fn remove(&self, key: &K, status: StatusType) {
+    pub(crate) fn remove(&self, key: &K, status: Option<StatusType>) {
         self.state.remove(key);
-        let _ = self.notifier.send(status);
+        if let Some(status) = status {
+            let _ = self.notifier.send(status);
+        }
     }
 
     /// Retrieves a value from the state by key.

@@ -1,8 +1,11 @@
 //! Compact Block Cache non-finalised state implementation.
 
+use std::collections::HashSet;
+
 use zaino_fetch::jsonrpc::connector::JsonRpcConnector;
 use zaino_proto::proto::compact_formats::CompactBlock;
 use zebra_chain::block::{Hash, Height};
+use zebra_state::HashOrHeight;
 
 use crate::{
     broadcast::{Broadcast, BroadcastSubscriber},
@@ -48,10 +51,7 @@ impl NonFinalisedState {
         let chain_height = fetcher.get_blockchain_info().await?.blocks.0;
         for height in chain_height.saturating_sub(101).max(1)..=chain_height {
             loop {
-                match non_finalised_state
-                    .fetch_compact_block_from_node(height)
-                    .await
-                {
+                match non_finalised_state.fetch_block_from_node(height).await {
                     Ok((hash, block)) => {
                         non_finalised_state
                             .heights_to_hashes
@@ -86,16 +86,188 @@ impl NonFinalisedState {
 
     async fn serve(&self) -> Result<tokio::task::JoinHandle<()>, NonFinalisedStateError> {
         let non_finalised_state = self.clone();
-        let status = self.status.clone();
-        loop {
-            todo!()
+
+        let sync_handle = tokio::spawn(async move {
+            let mut best_block_hash: Hash;
+            let mut check_block_hash: Hash;
+
+            loop {
+                match non_finalised_state.fetcher.get_blockchain_info().await {
+                    Ok(chain_info) => {
+                        best_block_hash = chain_info.best_block_hash.clone();
+                        non_finalised_state.status.store(StatusType::Ready.into());
+                        break;
+                    }
+                    Err(e) => {
+                        non_finalised_state
+                            .status
+                            .store(StatusType::RecoverableError.into());
+                        non_finalised_state
+                            .heights_to_hashes
+                            .notify(non_finalised_state.status.clone().into());
+                        non_finalised_state
+                            .heights_to_hashes
+                            .notify(non_finalised_state.status.clone().into());
+                        eprintln!("{e}");
+                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                        continue;
+                    }
+                }
+            }
+
+            loop {
+                if non_finalised_state.status.load() == StatusType::Closing as usize {
+                    non_finalised_state
+                        .heights_to_hashes
+                        .notify(non_finalised_state.status.clone().into());
+                    non_finalised_state
+                        .heights_to_hashes
+                        .notify(non_finalised_state.status.clone().into());
+                    return;
+                }
+
+                match non_finalised_state.fetcher.get_blockchain_info().await {
+                    Ok(chain_info) => {
+                        check_block_hash = chain_info.best_block_hash.clone();
+                    }
+                    Err(e) => {
+                        non_finalised_state
+                            .status
+                            .store(StatusType::RecoverableError.into());
+                        non_finalised_state
+                            .heights_to_hashes
+                            .notify(non_finalised_state.status.clone().into());
+                        non_finalised_state
+                            .heights_to_hashes
+                            .notify(non_finalised_state.status.clone().into());
+                        eprintln!("{e}");
+                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                        continue;
+                    }
+                }
+
+                if check_block_hash != best_block_hash {
+                    best_block_hash = check_block_hash;
+                    non_finalised_state.status.store(StatusType::Syncing.into());
+                    non_finalised_state
+                        .heights_to_hashes
+                        .notify(non_finalised_state.status.clone().into());
+                    non_finalised_state
+                        .heights_to_hashes
+                        .notify(non_finalised_state.status.clone().into());
+                    non_finalised_state.fill_from_reorg().await.unwrap();
+                }
+
+                non_finalised_state.status.store(StatusType::Ready.into());
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+        });
+
+        Ok(sync_handle)
+    }
+
+    /// Looks back through the chain to find reorg height and repopulates block cache.
+    ///
+    /// Newly mined blocks are treated as a reorg at chain_height[-0].
+    async fn fill_from_reorg(&self) -> Result<(), NonFinalisedStateError> {
+        let mut reorg_height = self
+            .heights_to_hashes
+            .get_state()
+            .iter()
+            .max_by_key(|entry| entry.key().0)
+            .unwrap()
+            .key()
+            .clone();
+
+        let mut reorg_hash = self.heights_to_hashes.get(&reorg_height).unwrap();
+        let mut check_hash = match self
+            .fetcher
+            .get_block(reorg_height.0.to_string(), Some(1))
+            .await?
+        {
+            zaino_fetch::jsonrpc::response::GetBlockResponse::Object { hash, .. } => hash.0,
+            _ => {
+                return Err(NonFinalisedStateError::Custom(
+                    "Unexpected block response type".to_string(),
+                ))
+            }
+        };
+
+        // Find reorg height.
+        //
+        // Here this is the latest height at which the internal block hash matches the server block hash.
+        while reorg_hash != check_hash.into() {
+            reorg_height = reorg_height.previous().unwrap();
+
+            reorg_hash = self.heights_to_hashes.get(&reorg_height).unwrap();
+            check_hash = match self
+                .fetcher
+                .get_block(reorg_height.0.to_string(), Some(1))
+                .await?
+            {
+                zaino_fetch::jsonrpc::response::GetBlockResponse::Object { hash, .. } => hash.0,
+                _ => {
+                    return Err(NonFinalisedStateError::Custom(
+                        "Unexpected block response type".to_string(),
+                    ))
+                }
+            };
         }
+
+        // Refill from reorg_height[+1].
+        for block_height in
+            (reorg_height.0 + 1)..self.fetcher.get_blockchain_info().await.unwrap().blocks.0
+        {
+            loop {
+                match self.fetch_block_from_node(block_height).await {
+                    Ok((hash, block)) => {
+                        self.heights_to_hashes
+                            .insert(Height(block_height), hash, None);
+                        self.hashes_to_blocks.insert(hash, block, None);
+                        break;
+                    }
+                    Err(e) => {
+                        self.status.store(StatusType::RecoverableError.into());
+                        self.heights_to_hashes.notify(self.status.clone().into());
+                        self.heights_to_hashes.notify(self.status.clone().into());
+                        eprintln!("{e}");
+                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                        continue;
+                    }
+                }
+            }
+
+            // Either pop the reorged block or pop the oldest block in non-finalised state.
+            //
+            // TODO: Block being popped from non-finalised state should be fetched and sent to finalised state.
+            if self.heights_to_hashes.contains_key(&Height(block_height)) {
+                self.hashes_to_blocks.remove(
+                    &self.heights_to_hashes.get(&Height(block_height)).unwrap(),
+                    None,
+                );
+                self.heights_to_hashes.remove(&Height(block_height), None);
+            } else {
+                let pop_height = self
+                    .heights_to_hashes
+                    .get_state()
+                    .iter()
+                    .min_by_key(|entry| entry.key().0)
+                    .unwrap()
+                    .key()
+                    .clone();
+                self.hashes_to_blocks
+                    .remove(&self.heights_to_hashes.get(&pop_height).unwrap(), None);
+                self.heights_to_hashes.remove(&pop_height, None);
+            }
+        }
+
+        Ok(())
     }
 
     /// Fetches CompactBlock from the validator.
     ///
     /// Uses 2 calls as z_get_block verbosity=1 is required to fetch txids from zcashd.
-    async fn fetch_compact_block_from_node(
+    async fn fetch_block_from_node(
         &self,
         height: u32,
     ) -> Result<(Hash, CompactBlock), NonFinalisedStateError> {
@@ -161,9 +333,9 @@ impl NonFinalisedState {
     /// Returns a [`NonFinalisedStateSubscriber`].
     pub fn subscriber(&self) -> NonFinalisedStateSubscriber {
         NonFinalisedStateSubscriber {
-            _heights_to_hashes: self.heights_to_hashes.subscriber(),
-            _hashes_to_blocks: self.hashes_to_blocks.subscriber(),
-            _status: self.status.clone(),
+            heights_to_hashes: self.heights_to_hashes.subscriber(),
+            hashes_to_blocks: self.hashes_to_blocks.subscriber(),
+            status: self.status.clone(),
         }
     }
 
@@ -209,7 +381,40 @@ impl Clone for NonFinalisedState {
 /// A subscriber to a [`NonFinalisedState`].
 #[derive(Debug, Clone)]
 pub struct NonFinalisedStateSubscriber {
-    _heights_to_hashes: BroadcastSubscriber<Height, Hash>,
-    _hashes_to_blocks: BroadcastSubscriber<Hash, CompactBlock>,
-    _status: AtomicStatus,
+    heights_to_hashes: BroadcastSubscriber<Height, Hash>,
+    hashes_to_blocks: BroadcastSubscriber<Hash, CompactBlock>,
+    status: AtomicStatus,
+}
+
+impl NonFinalisedStateSubscriber {
+    /// Returns a Compact Block from the non-finalised state.
+    pub async fn get_compact_block(
+        &self,
+        hash_or_height: String,
+    ) -> Result<CompactBlock, NonFinalisedStateError> {
+        let hash_or_height: HashOrHeight = hash_or_height.parse().unwrap();
+        let hash = match hash_or_height {
+            HashOrHeight::Hash(hash) => hash,
+            HashOrHeight::Height(height) => *self.heights_to_hashes.get(&height).unwrap(),
+        };
+
+        Ok(self.hashes_to_blocks.get(&hash).unwrap().as_ref().clone())
+    }
+
+    /// Returns the height of the latest block in the non-finalised state.
+    pub async fn get_chain_height(&self) -> Height {
+        let (height, _) = self
+            .heights_to_hashes
+            .get_filtered_state(&HashSet::new())
+            .iter()
+            .max_by_key(|(height, ..)| height.0)
+            .unwrap()
+            .clone();
+        height
+    }
+
+    /// Returns the status of the NonFinalisedState..
+    pub fn status(&self) -> StatusType {
+        self.status.load().into()
+    }
 }
