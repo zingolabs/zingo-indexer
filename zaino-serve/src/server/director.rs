@@ -1,6 +1,5 @@
 //! Zingo-Indexer gRPC server.
 
-use http::Uri;
 use std::{
     net::SocketAddr,
     sync::{
@@ -16,13 +15,19 @@ use crate::server::{
     request::ZingoIndexerRequest,
     worker::{WorkerPool, WorkerPoolStatus},
 };
-use zaino_state::status::{AtomicStatus, StatusType};
+use zaino_state::{
+    fetch::FetchServiceSubscriber,
+    indexer::IndexerSubscriber,
+    status::{AtomicStatus, StatusType},
+};
 
 /// Holds the status of the server and all its components.
 #[derive(Debug, Clone)]
 pub struct ServerStatus {
     /// Status of the Server.
     pub server_status: AtomicStatus,
+    /// Status of the chain fetch service.
+    pub service_status: AtomicStatus,
     tcp_ingestor_status: AtomicStatus,
     workerpool_status: WorkerPoolStatus,
     request_queue_status: Arc<AtomicUsize>,
@@ -33,6 +38,7 @@ impl ServerStatus {
     pub fn new(max_workers: u16) -> Self {
         ServerStatus {
             server_status: AtomicStatus::new(StatusType::Offline.into()),
+            service_status: AtomicStatus::new(StatusType::Offline.into()),
             tcp_ingestor_status: AtomicStatus::new(StatusType::Offline.into()),
             workerpool_status: WorkerPoolStatus::new(max_workers),
             request_queue_status: Arc::new(AtomicUsize::new(0)),
@@ -67,9 +73,9 @@ impl Server {
     /// Spawns a new Server.
     #[allow(clippy::too_many_arguments)]
     pub async fn spawn(
+        service_subscriber: IndexerSubscriber<FetchServiceSubscriber>,
         tcp_active: bool,
         tcp_ingestor_listen_addr: Option<SocketAddr>,
-        zebrad_uri: Uri,
         max_queue_size: u16,
         max_worker_pool_size: u16,
         idle_worker_pool_size: u16,
@@ -86,7 +92,7 @@ impl Server {
                 "TCP is active but no address provided.".to_string(),
             ));
         }
-        println!("Launching Server!\n");
+        println!("Launching Server..");
         status.server_status.store(StatusType::Spawning.into());
         let request_queue: Queue<ZingoIndexerRequest> =
             Queue::new(max_queue_size as usize, status.request_queue_status.clone());
@@ -108,11 +114,12 @@ impl Server {
         };
         println!("Launching WorkerPool..");
         let worker_pool = WorkerPool::spawn(
+            service_subscriber.clone(),
+            status.service_status.clone(),
             max_worker_pool_size,
             idle_worker_pool_size,
             request_queue.rx().clone(),
             request_queue.tx().clone(),
-            zebrad_uri,
             status.workerpool_status.clone(),
             online.clone(),
         )

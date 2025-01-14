@@ -44,6 +44,20 @@ impl Mempool {
         fetcher: &JsonRpcConnector,
         capacity_and_shard_amount: Option<(usize, usize)>,
     ) -> Result<Self, MempoolError> {
+        // Wait for mempool in validator to come online.
+        loop {
+            match fetcher.get_raw_mempool().await {
+                Ok(_) => {
+                    break;
+                }
+                Err(_) => {
+                    println!(" - Waiting for Validator mempool to come online..");
+                    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                }
+            }
+        }
+
+        println!("Launching Mempool..");
         let mut mempool = Mempool {
             fetcher: fetcher.clone(),
             state: match capacity_and_shard_amount {
@@ -67,6 +81,7 @@ impl Mempool {
                     mempool.status.store(StatusType::Spawning.into());
                     mempool.state.notify(mempool.status.clone().into());
                     eprintln!("{e}");
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     continue;
                 }
             };
@@ -96,7 +111,7 @@ impl Mempool {
                     Err(e) => {
                         state.notify(status.clone().into());
                         eprintln!("{e}");
-                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                         continue;
                     }
                 }
@@ -111,7 +126,7 @@ impl Mempool {
                         status.store(StatusType::RecoverableError.into());
                         state.notify(status.clone().into());
                         eprintln!("{e}");
-                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                         continue;
                     }
                 }
@@ -134,7 +149,7 @@ impl Mempool {
                         status.store(StatusType::RecoverableError.into());
                         state.notify(status.clone().into());
                         eprintln!("{e}");
-                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                         continue;
                     }
                 };
@@ -162,7 +177,6 @@ impl Mempool {
                 .fetcher
                 .get_raw_transaction(txid.clone(), Some(1))
                 .await?;
-            //process txid
             transactions.push((MempoolKey(txid), MempoolValue(transaction.into())));
         }
 
@@ -320,6 +334,7 @@ impl MempoolSubscriber {
                             )));
                         }
                         StatusType::RecoverableError => {
+                            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                             continue;
                         }
                         status => {

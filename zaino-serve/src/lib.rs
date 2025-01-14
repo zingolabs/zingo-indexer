@@ -9,4 +9,3 @@
 
 pub mod rpc;
 pub mod server;
-pub(crate) mod utils;

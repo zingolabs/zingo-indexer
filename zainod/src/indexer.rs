@@ -14,7 +14,12 @@ use zaino_serve::server::{
     director::{Server, ServerStatus},
     error::ServerError,
 };
-use zaino_state::status::{AtomicStatus, StatusType};
+use zaino_state::{
+    config::FetchServiceConfig,
+    fetch::FetchService,
+    indexer::{IndexerService, ZcashService},
+    status::{AtomicStatus, StatusType},
+};
 
 use crate::{config::IndexerConfig, error::IndexerError};
 
@@ -22,16 +27,18 @@ use crate::{config::IndexerConfig, error::IndexerError};
 #[derive(Debug, Clone)]
 pub struct IndexerStatus {
     indexer_status: AtomicStatus,
+    service_status: AtomicStatus,
     server_status: ServerStatus,
-    // block_cache_status: BlockCacheStatus,
 }
 
 impl IndexerStatus {
     /// Creates a new IndexerStatus.
     pub fn new(max_workers: u16) -> Self {
+        let server_status = ServerStatus::new(max_workers);
         IndexerStatus {
             indexer_status: AtomicStatus::new(StatusType::Offline.into()),
-            server_status: ServerStatus::new(max_workers),
+            service_status: server_status.service_status.clone(),
+            server_status,
         }
     }
 
@@ -49,8 +56,8 @@ pub struct Indexer {
     config: IndexerConfig,
     /// GRPC server.
     server: Option<Server>,
-    // /// Internal block cache.
-    // block_cache: BlockCache,
+    /// Internal block cache.
+    _service: IndexerService<FetchService>,
     /// Indexers status.
     status: IndexerStatus,
     /// Online status of the indexer.
@@ -66,14 +73,18 @@ impl Indexer {
         set_ctrlc(online.clone());
         startup_message();
         println!("Launching Zaino..");
-        let indexer: Indexer = Indexer::new(config, online.clone()).await?;
+        let indexer: Indexer = Indexer::new(config, online.clone(), false).await?;
         indexer.serve().await?.await?
     }
 
     /// Creates a new Indexer.
     ///
     /// Currently only takes an IndexerConfig.
-    pub async fn new(config: IndexerConfig, online: Arc<AtomicBool>) -> Result<Self, IndexerError> {
+    pub async fn new(
+        config: IndexerConfig,
+        online: Arc<AtomicBool>,
+        no_sync: bool,
+    ) -> Result<Self, IndexerError> {
         config.check_config()?;
         let status = IndexerStatus::new(config.max_worker_pool_size);
         let tcp_ingestor_listen_addr: Option<SocketAddr> = config
@@ -86,12 +97,32 @@ impl Indexer {
             config.node_password.clone(),
         )
         .await?;
+        println!(
+            " - Connected to node using JsonRPC at address {}.",
+            zebrad_uri
+        );
         status.indexer_status.store(StatusType::Spawning.into());
+        let service = IndexerService::<FetchService>::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    config.zebrad_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                config.get_network()?,
+                no_sync,
+            ),
+            status.service_status.clone(),
+        )
+        .await?;
         let server = Some(
             Server::spawn(
+                service.inner_ref().get_subscriber(),
                 config.tcp_active,
                 tcp_ingestor_listen_addr,
-                zebrad_uri,
                 config.max_queue_size,
                 config.max_worker_pool_size,
                 config.idle_worker_pool_size,
@@ -104,6 +135,7 @@ impl Indexer {
         Ok(Indexer {
             config,
             server,
+            _service: service,
             status,
             online,
         })
@@ -125,7 +157,12 @@ impl Indexer {
             };
 
             self.status.indexer_status.store(StatusType::Ready.into());
-            println!("Zaino listening on port {:?}.", self.config.listen_port);
+            println!(
+                "Zaino listening on port {:?}.",
+                self.config
+                    .listen_port
+                    .expect("Error fetching Zaino's listen prot from config.")
+            );
             loop {
                 self.status.load();
                 // indexer.log_status();
