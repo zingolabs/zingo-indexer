@@ -32,6 +32,7 @@ tonic = { workspace = true }
 http = { workspace = true }
 lazy-regex = { workspace = true }
 dashmap = { workspace = true }
+lmdb = { workspace = true }
 
 [dev-dependencies]
 zaino-testutils = { path = "../zaino-testutils" }

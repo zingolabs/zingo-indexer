@@ -18,10 +18,15 @@ use crate::{
 /// NOTE: We hold the last 102 blocks to ensure there are no gaps in the block cache.
 #[derive(Debug)]
 pub struct NonFinalisedState {
+    /// Chain fetch service.
     fetcher: JsonRpcConnector,
+    /// Broadcast containing `<block_height, block_hash>`.
     heights_to_hashes: Broadcast<Height, Hash>,
+    /// Broadcast containing `<block_hash, compact_block>`.
     hashes_to_blocks: Broadcast<Hash, CompactBlock>,
+    /// Sync task handle.
     sync_task_handle: Option<tokio::task::JoinHandle<()>>,
+    /// Non-finalised state status.
     status: AtomicStatus,
 }
 
