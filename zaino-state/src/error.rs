@@ -220,6 +220,14 @@ pub enum NonFinalisedStateError {
     #[error("Custom error: {0}")]
     Custom(String),
 
+    /// The provided Hash or Height is invalid.
+    #[error("Invalid hash or height: {0}")]
+    InvalidHashOrHeight(String),
+
+    /// Required data is missing from the non-finalised state.
+    #[error("Missing data: {0}")]
+    MissingData(String),
+
     /// Error from a Tokio JoinHandle.
     #[error("Join error: {0}")]
     JoinError(#[from] tokio::task::JoinError),

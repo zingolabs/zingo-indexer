@@ -11,7 +11,7 @@ use non_finalised_state::NonFinalisedState;
 /// Zaino's internal compact block cache.
 ///
 /// Used by the FetchService for efficiency.
-pub struct CompactBlockCache {
+pub struct BlockCache {
     _non_finalised_state: NonFinalisedState,
     _finalised_state: FinalisedState,
     _status: (AtomicStatus, AtomicStatus),
