@@ -67,18 +67,9 @@ impl NonFinalisedState {
                         break;
                     }
                     Err(e) => {
-                        non_finalised_state
-                            .status
-                            .store(StatusType::RecoverableError.into());
-                        non_finalised_state
-                            .heights_to_hashes
-                            .notify(non_finalised_state.status.clone().into());
-                        non_finalised_state
-                            .heights_to_hashes
-                            .notify(non_finalised_state.status.clone().into());
+                        non_finalised_state.update_status_and_notify(StatusType::RecoverableError);
                         eprintln!("{e}");
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                        continue;
                     }
                 }
             }
@@ -104,30 +95,16 @@ impl NonFinalisedState {
                         break;
                     }
                     Err(e) => {
-                        non_finalised_state
-                            .status
-                            .store(StatusType::RecoverableError.into());
-                        non_finalised_state
-                            .heights_to_hashes
-                            .notify(non_finalised_state.status.clone().into());
-                        non_finalised_state
-                            .heights_to_hashes
-                            .notify(non_finalised_state.status.clone().into());
+                        non_finalised_state.update_status_and_notify(StatusType::RecoverableError);
                         eprintln!("{e}");
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                        continue;
                     }
                 }
             }
 
             loop {
                 if non_finalised_state.status.load() == StatusType::Closing as usize {
-                    non_finalised_state
-                        .heights_to_hashes
-                        .notify(non_finalised_state.status.clone().into());
-                    non_finalised_state
-                        .heights_to_hashes
-                        .notify(non_finalised_state.status.clone().into());
+                    non_finalised_state.update_status_and_notify(StatusType::Closing);
                     return;
                 }
 
@@ -136,15 +113,7 @@ impl NonFinalisedState {
                         check_block_hash = chain_info.best_block_hash.clone();
                     }
                     Err(e) => {
-                        non_finalised_state
-                            .status
-                            .store(StatusType::RecoverableError.into());
-                        non_finalised_state
-                            .heights_to_hashes
-                            .notify(non_finalised_state.status.clone().into());
-                        non_finalised_state
-                            .heights_to_hashes
-                            .notify(non_finalised_state.status.clone().into());
+                        non_finalised_state.update_status_and_notify(StatusType::RecoverableError);
                         eprintln!("{e}");
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                         continue;
@@ -158,24 +127,16 @@ impl NonFinalisedState {
                         .heights_to_hashes
                         .notify(non_finalised_state.status.clone().into());
                     non_finalised_state
-                        .heights_to_hashes
+                        .hashes_to_blocks
                         .notify(non_finalised_state.status.clone().into());
                     loop {
                         match non_finalised_state.fill_from_reorg().await {
                             Ok(_) => break,
                             Err(e) => {
                                 non_finalised_state
-                                    .status
-                                    .store(StatusType::RecoverableError.into());
-                                non_finalised_state
-                                    .heights_to_hashes
-                                    .notify(non_finalised_state.status.clone().into());
-                                non_finalised_state
-                                    .heights_to_hashes
-                                    .notify(non_finalised_state.status.clone().into());
+                                    .update_status_and_notify(StatusType::RecoverableError);
                                 eprintln!("{e}");
                                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                                continue;
                             }
                         }
                     }
@@ -246,12 +207,9 @@ impl NonFinalisedState {
                                 break;
                             }
                             Err(e) => {
-                                self.status.store(StatusType::RecoverableError.into());
-                                self.heights_to_hashes.notify(self.status.clone().into());
-                                self.heights_to_hashes.notify(self.status.clone().into());
+                                self.update_status_and_notify(StatusType::RecoverableError);
                                 eprintln!("{e}");
                                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                                continue;
                             }
                         }
                     }
@@ -283,35 +241,34 @@ impl NonFinalisedState {
         // Refill from reorg_height[+1].
         for block_height in (reorg_height.0 + 1)..self.fetcher.get_blockchain_info().await?.blocks.0
         {
-            loop {
-                // Either pop the reorged block or pop the oldest block in non-finalised state.
-                //
-                // TODO: Block being popped from non-finalised state should be fetched and sent to finalised state.
-                if self.heights_to_hashes.contains_key(&Height(block_height)) {
-                    if let Some(hash) = self.heights_to_hashes.get(&Height(block_height)) {
-                        self.hashes_to_blocks.remove(&hash, None);
-                        self.heights_to_hashes.remove(&Height(block_height), None);
-                    }
-                } else {
-                    let pop_height = self
-                        .heights_to_hashes
-                        .get_state()
-                        .iter()
-                        .min_by_key(|entry| entry.key().0)
-                        .ok_or_else(|| {
-                            NonFinalisedStateError::MissingData(
-                                "Failed to find the minimum height in the non-finalised state."
-                                    .to_string(),
-                            )
-                        })?
-                        .key()
-                        .clone();
-                    if let Some(hash) = self.heights_to_hashes.get(&pop_height) {
-                        self.hashes_to_blocks.remove(&hash, None);
-                        self.heights_to_hashes.remove(&pop_height, None);
-                    }
+            // Either pop the reorged block or pop the oldest block in non-finalised state.
+            //
+            // TODO: Block being popped from non-finalised state should be fetched and sent to finalised state.
+            if self.heights_to_hashes.contains_key(&Height(block_height)) {
+                if let Some(hash) = self.heights_to_hashes.get(&Height(block_height)) {
+                    self.hashes_to_blocks.remove(&hash, None);
+                    self.heights_to_hashes.remove(&Height(block_height), None);
                 }
-
+            } else {
+                let pop_height = self
+                    .heights_to_hashes
+                    .get_state()
+                    .iter()
+                    .min_by_key(|entry| entry.key().0)
+                    .ok_or_else(|| {
+                        NonFinalisedStateError::MissingData(
+                            "Failed to find the minimum height in the non-finalised state."
+                                .to_string(),
+                        )
+                    })?
+                    .key()
+                    .clone();
+                if let Some(hash) = self.heights_to_hashes.get(&pop_height) {
+                    self.hashes_to_blocks.remove(&hash, None);
+                    self.heights_to_hashes.remove(&pop_height, None);
+                }
+            }
+            loop {
                 match self.fetch_block_from_node(block_height).await {
                     Ok((hash, block)) => {
                         self.heights_to_hashes
@@ -320,12 +277,9 @@ impl NonFinalisedState {
                         break;
                     }
                     Err(e) => {
-                        self.status.store(StatusType::RecoverableError.into());
-                        self.heights_to_hashes.notify(self.status.clone().into());
-                        self.heights_to_hashes.notify(self.status.clone().into());
+                        self.update_status_and_notify(StatusType::RecoverableError);
                         eprintln!("{e}");
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                        continue;
                     }
                 }
             }
@@ -414,11 +368,16 @@ impl NonFinalisedState {
         self.status.load().into()
     }
 
+    /// Updates the status of the non-finalised state and notifies subscribers.
+    fn update_status_and_notify(&self, status: StatusType) {
+        self.status.store(status.into());
+        self.heights_to_hashes.notify(self.status.clone().into());
+        self.hashes_to_blocks.notify(self.status.clone().into());
+    }
+
     /// Sets the non-finalised state to close gracefully.
     pub fn close(&mut self) {
-        self.status.store(StatusType::Closing.into());
-        self.heights_to_hashes.notify(self.status());
-        self.heights_to_hashes.notify(self.status());
+        self.update_status_and_notify(StatusType::Closing);
         if let Some(handle) = self.sync_task_handle.take() {
             handle.abort();
         }
@@ -427,9 +386,7 @@ impl NonFinalisedState {
 
 impl Drop for NonFinalisedState {
     fn drop(&mut self) {
-        self.status.store(StatusType::Closing.into());
-        self.heights_to_hashes.notify(self.status());
-        self.heights_to_hashes.notify(self.status());
+        self.update_status_and_notify(StatusType::Closing);
         if let Some(handle) = self.sync_task_handle.take() {
             handle.abort();
         }
