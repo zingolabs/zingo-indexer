@@ -244,9 +244,9 @@ impl ZcashIndexer for FetchServiceSubscriber {
     ) -> Result<AddressBalance, Self::Error> {
         Ok(self
             .fetcher
-            .get_address_balance(address_strings.valid_address_strings().map_err(|code| {
+            .get_address_balance(address_strings.valid_address_strings().map_err(|error| {
                 FetchServiceError::RpcError(zaino_fetch::jsonrpc::connector::RpcError {
-                    code: code as i32 as i64,
+                    code: error.code() as i32 as i64,
                     message: "Invalid address provided".to_string(),
                     data: None,
                 })
@@ -472,9 +472,9 @@ impl ZcashIndexer for FetchServiceSubscriber {
     ) -> Result<Vec<GetAddressUtxos>, Self::Error> {
         Ok(self
             .fetcher
-            .get_address_utxos(address_strings.valid_address_strings().map_err(|code| {
+            .get_address_utxos(address_strings.valid_address_strings().map_err(|error| {
                 FetchServiceError::RpcError(zaino_fetch::jsonrpc::connector::RpcError {
-                    code: code as i32 as i64,
+                    code: error.code() as i32 as i64,
                     message: "Invalid address provided".to_string(),
                     data: None,
                 })
@@ -972,14 +972,16 @@ impl LightWalletIndexer for FetchServiceSubscriber {
 
     /// Returns the total balance for a list of taddrs
     async fn get_taddress_balance(&self, request: AddressList) -> Result<Balance, Self::Error> {
-        let taddrs = AddressStrings::new_valid(request.addresses).map_err(|legacy_code| {
-            FetchServiceError::RpcError(
-                zaino_fetch::jsonrpc::connector::RpcError::new_from_legacycode(
-                    legacy_code,
-                    "Error in Validator.",
-                ),
-            )
-        })?;
+        let taddrs = AddressStrings::new_valid(request.addresses).map_err(
+            |err_obj| {
+                FetchServiceError::RpcError(
+                    zaino_fetch::jsonrpc::connector::RpcError::new_from_errorobject(
+                        err_obj,
+                        "Error in Validator",
+                    ),
+                )
+            }
+        )?;
         let balance = self.z_get_address_balance(taddrs).await?;
         let checked_balance: i64 = match i64::try_from(balance.balance) {
             Ok(balance) => balance,
@@ -1012,14 +1014,14 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                         match channel_rx.recv().await {
                             Some(taddr) => {
                                 let taddrs = AddressStrings::new_valid(vec![taddr]).map_err(
-                                    |legacy_code| {
+                                    |err_obj| {
                                         FetchServiceError::RpcError(
-                                            zaino_fetch::jsonrpc::connector::RpcError::new_from_legacycode(
-                                                legacy_code,
-                                                "Error in Validator.",
+                                            zaino_fetch::jsonrpc::connector::RpcError::new_from_errorobject(
+                                                err_obj,
+                                                "Error in Validator",
                                             ),
                                         )
-                                    },
+                                    }
                                 )?;
                                 let balance = fetch_service_clone
                                         .z_get_address_balance(taddrs)
@@ -1569,14 +1571,15 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         &self,
         request: GetAddressUtxosArg,
     ) -> Result<GetAddressUtxosReplyList, Self::Error> {
-        let taddrs = AddressStrings::new_valid(request.addresses).map_err(|legacy_code| {
-            FetchServiceError::RpcError(
-                zaino_fetch::jsonrpc::connector::RpcError::new_from_legacycode(
-                    legacy_code,
-                    "Error in Validator.",
-                ),
-            )
-        })?;
+        let taddrs = AddressStrings::new_valid(request.addresses)
+            .map_err(|err_obj| {
+                FetchServiceError::RpcError(
+                    zaino_fetch::jsonrpc::connector::RpcError::new_from_errorobject(
+                        err_obj,
+                        "Error in Validator",
+                    ),
+                )
+            })?;
         let utxos = self.z_get_address_utxos(taddrs).await?;
         let mut address_utxos: Vec<GetAddressUtxosReply> = Vec::new();
         let mut entries: u32 = 0;
@@ -1627,14 +1630,15 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         &self,
         request: GetAddressUtxosArg,
     ) -> Result<UtxoReplyStream, Self::Error> {
-        let taddrs = AddressStrings::new_valid(request.addresses).map_err(|legacy_code| {
-            FetchServiceError::RpcError(
-                zaino_fetch::jsonrpc::connector::RpcError::new_from_legacycode(
-                    legacy_code,
-                    "Error in Validator.",
-                ),
-            )
-        })?;
+        let taddrs = AddressStrings::new_valid(request.addresses)
+            .map_err(|err_obj| {
+                FetchServiceError::RpcError(
+                    zaino_fetch::jsonrpc::connector::RpcError::new_from_errorobject(
+                        err_obj,
+                        "Error in Validator",
+                    ),
+                )
+            })?;
         let utxos = self.z_get_address_utxos(taddrs).await?;
         let service_timeout = self.config.service_timeout;
         let (channel_tx, channel_rx) =

@@ -34,4 +34,5 @@ indexmap = { workspace = true, features = ["serde"] }
 base64 = { workspace = true }
 byteorder = { workspace = true }
 sha2 = { workspace = true }
+jsonrpsee-types = { workspace = true }
 
