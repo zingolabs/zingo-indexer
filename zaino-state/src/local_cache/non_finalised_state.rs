@@ -26,6 +26,8 @@ pub struct NonFinalisedState {
     hashes_to_blocks: Broadcast<Hash, CompactBlock>,
     /// Sync task handle.
     sync_task_handle: Option<tokio::task::JoinHandle<()>>,
+    /// Used to send blocks to the finalised state.
+    block_sender: tokio::sync::mpsc::Sender<(Height, Hash, CompactBlock)>,
     /// Non-finalised state status.
     status: AtomicStatus,
 }
@@ -35,6 +37,7 @@ impl NonFinalisedState {
     pub async fn spawn(
         fetcher: &JsonRpcConnector,
         capacity_and_shard_amount: Option<(usize, usize)>,
+        block_sender: tokio::sync::mpsc::Sender<(Height, Hash, CompactBlock)>,
     ) -> Result<Self, NonFinalisedStateError> {
         println!("Launching Non-Finalised State..");
         let (heights_to_hashes, hashes_to_blocks) = match capacity_and_shard_amount {
@@ -50,6 +53,7 @@ impl NonFinalisedState {
             heights_to_hashes,
             hashes_to_blocks,
             sync_task_handle: None,
+            block_sender,
             status: AtomicStatus::new(StatusType::Spawning.into()),
         };
 
@@ -242,14 +246,14 @@ impl NonFinalisedState {
         for block_height in (reorg_height.0 + 1)..self.fetcher.get_blockchain_info().await?.blocks.0
         {
             // Either pop the reorged block or pop the oldest block in non-finalised state.
-            //
-            // TODO: Block being popped from non-finalised state should be fetched and sent to finalised state.
+            // If we pop the oldest (valid) block we send it to the finalised state to be saved to disk.
             if self.heights_to_hashes.contains_key(&Height(block_height)) {
                 if let Some(hash) = self.heights_to_hashes.get(&Height(block_height)) {
                     self.hashes_to_blocks.remove(&hash, None);
                     self.heights_to_hashes.remove(&Height(block_height), None);
                 }
             } else {
+                // TODO: Fetch block and send to finalised_state.
                 let pop_height = self
                     .heights_to_hashes
                     .get_state()
@@ -400,6 +404,7 @@ impl Clone for NonFinalisedState {
             heights_to_hashes: self.heights_to_hashes.clone(),
             hashes_to_blocks: self.hashes_to_blocks.clone(),
             sync_task_handle: None,
+            block_sender: self.block_sender.clone(),
             status: self.status.clone(),
         }
     }

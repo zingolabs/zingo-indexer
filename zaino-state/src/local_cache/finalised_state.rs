@@ -104,7 +104,6 @@ impl FinalisedState {
         db_path: &str,
         db_size: Option<usize>,
         block_receiver: tokio::sync::mpsc::Receiver<(Height, Hash, CompactBlock)>,
-        status: AtomicStatus,
     ) -> Result<Self, FinalisedStateError> {
         let db_size = db_size.unwrap_or(8);
         if !std::path::Path::new(db_path).exists() {
@@ -142,7 +141,7 @@ impl FinalisedState {
             request_sender: request_tx,
             read_task_handle: None,
             write_task_handle: None,
-            status,
+            status: AtomicStatus::new(StatusType::Spawning.into()),
         };
 
         finalised_state.write_task_handle =

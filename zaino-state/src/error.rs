@@ -213,6 +213,22 @@ pub enum MempoolError {
     Generic(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
+/// Errors related to the `BlockCache`.
+#[derive(Debug, thiserror::Error)]
+pub enum BlockCacheError {
+    /// Custom Errors. *Remove before production.
+    #[error("Custom error: {0}")]
+    Custom(String),
+
+    /// Errors from the NonFinalisedState.
+    #[error("NonFinalisedState Error: {0}")]
+    NonFinalisedStateError(#[from] NonFinalisedStateError),
+
+    /// Errors from the FinalisedState.
+    #[error("FinalisedState Error: {0}")]
+    FinalisedStateError(#[from] FinalisedStateError),
+}
+
 /// Errors related to the `NonFinalisedState`.
 #[derive(Debug, thiserror::Error)]
 pub enum NonFinalisedStateError {
