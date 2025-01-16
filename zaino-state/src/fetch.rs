@@ -1749,10 +1749,6 @@ impl LightWalletIndexer for FetchServiceSubscriber {
     }
 }
 
-macro_rules! send_tonic_error {
-    ($transmitter:ident, error) => {};
-}
-
 impl FetchServiceSubscriber {
     /// Fetches CompactBlock from the validator.
     ///
