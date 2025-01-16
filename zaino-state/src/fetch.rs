@@ -1,5 +1,7 @@
 //! Zcash chain fetch and tx submission service backed by zcashds JsonRPC service.
 
+use std::time;
+
 use crate::{
     config::FetchServiceConfig,
     error::FetchServiceError,
@@ -15,9 +17,12 @@ use crate::{
 };
 use futures::StreamExt;
 use hex::FromHex;
-use tokio::time::timeout;
+use tokio::{sync::mpsc, time::timeout};
 use tonic::async_trait;
-use zaino_fetch::jsonrpc::connector::{test_node_and_return_uri, JsonRpcConnector};
+use zaino_fetch::{
+    chain::{transaction::FullTransaction, utils::ParseFromSlice},
+    jsonrpc::connector::{test_node_and_return_uri, JsonRpcConnector, RpcError},
+};
 use zaino_proto::proto::{
     compact_formats::{ChainMetadata, CompactBlock, CompactOrchardAction, CompactTx},
     service::{
@@ -111,7 +116,7 @@ impl ZcashService for FetchService {
                             &blockchain_info.blocks.0,
                             &blockchain_info.estimated_height.0
                         );
-                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                        tokio::time::sleep(time::Duration::from_millis(500)).await;
                         continue;
                     }
                 }
@@ -251,7 +256,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
         Ok(self
             .fetcher
             .get_address_balance(address_strings.valid_address_strings().map_err(|code| {
-                FetchServiceError::RpcError(zaino_fetch::jsonrpc::connector::RpcError {
+                FetchServiceError::RpcError(RpcError {
                     code: code as i32 as i64,
                     message: "Invalid address provided".to_string(),
                     data: None,
@@ -479,7 +484,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
         Ok(self
             .fetcher
             .get_address_utxos(address_strings.valid_address_strings().map_err(|code| {
-                FetchServiceError::RpcError(zaino_fetch::jsonrpc::connector::RpcError {
+                FetchServiceError::RpcError(RpcError {
                     code: code as i32 as i64,
                     message: "Invalid address provided".to_string(),
                     data: None,
@@ -635,10 +640,9 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         let chain_height = self.get_blockchain_info().await?.blocks().0;
         let fetch_service_clone = self.clone();
         let service_timeout = self.config.service_timeout;
-        let (channel_tx, channel_rx) =
-            tokio::sync::mpsc::channel(self.config.service_channel_size as usize);
+        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
         tokio::spawn(async move {
-            let timeout = timeout(std::time::Duration::from_secs((service_timeout*4) as u64), async {
+            let timeout = timeout(time::Duration::from_secs((service_timeout*4) as u64), async {
                     for height in start..=end {
                         let height = if rev_order {
                             end - (height - start)
@@ -749,10 +753,9 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         let chain_height = self.get_blockchain_info().await?.blocks().0;
         let fetch_service_clone = self.clone();
         let service_timeout = self.config.service_timeout;
-        let (channel_tx, channel_rx) =
-            tokio::sync::mpsc::channel(self.config.service_channel_size as usize);
+        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
         tokio::spawn(async move {
-            let timeout = timeout(std::time::Duration::from_secs((service_timeout*4) as u64), async {
+            let timeout = timeout(time::Duration::from_secs((service_timeout*4) as u64), async {
                     for height in start..=end {
                         let height = if rev_order {
                             end - (height - start)
@@ -912,11 +915,10 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             .await?;
         let fetch_service_clone = self.clone();
         let service_timeout = self.config.service_timeout;
-        let (channel_tx, channel_rx) =
-            tokio::sync::mpsc::channel(self.config.service_channel_size as usize);
+        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
         tokio::spawn(async move {
             let timeout = timeout(
-                std::time::Duration::from_secs((service_timeout * 4) as u64),
+                time::Duration::from_secs((service_timeout * 4) as u64),
                 async {
                     for txid in txids {
                         let transaction =
@@ -983,12 +985,10 @@ impl LightWalletIndexer for FetchServiceSubscriber {
     /// Returns the total balance for a list of taddrs
     async fn get_taddress_balance(&self, request: AddressList) -> Result<Balance, Self::Error> {
         let taddrs = AddressStrings::new_valid(request.addresses).map_err(|legacy_code| {
-            FetchServiceError::RpcError(
-                zaino_fetch::jsonrpc::connector::RpcError::new_from_legacycode(
-                    legacy_code,
-                    "Error in Validator.",
-                ),
-            )
+            FetchServiceError::RpcError(RpcError::new_from_legacycode(
+                legacy_code,
+                "Error in Validator.",
+            ))
         })?;
         let balance = self.z_get_address_balance(taddrs).await?;
         let checked_balance: i64 = match i64::try_from(balance.balance) {
@@ -1012,10 +1012,10 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         let fetch_service_clone = self.clone();
         let service_timeout = self.config.service_timeout;
         let (channel_tx, mut channel_rx) =
-            tokio::sync::mpsc::channel::<String>(self.config.service_channel_size as usize);
+            mpsc::channel::<String>(self.config.service_channel_size as usize);
         let fetcher_task_handle = tokio::spawn(async move {
             let fetcher_timeout = timeout(
-                std::time::Duration::from_secs((service_timeout*4) as u64),
+                time::Duration::from_secs((service_timeout * 4) as u64),
                 async {
                     let mut total_balance: u64 = 0;
                     loop {
@@ -1023,17 +1023,14 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                             Some(taddr) => {
                                 let taddrs = AddressStrings::new_valid(vec![taddr]).map_err(
                                     |legacy_code| {
-                                        FetchServiceError::RpcError(
-                                            zaino_fetch::jsonrpc::connector::RpcError::new_from_legacycode(
-                                                legacy_code,
-                                                "Error in Validator.",
-                                            ),
-                                        )
+                                        FetchServiceError::RpcError(RpcError::new_from_legacycode(
+                                            legacy_code,
+                                            "Error in Validator.",
+                                        ))
                                     },
                                 )?;
-                                let balance = fetch_service_clone
-                                        .z_get_address_balance(taddrs)
-                                        .await?;
+                                let balance =
+                                    fetch_service_clone.z_get_address_balance(taddrs).await?;
                                 total_balance += balance.balance;
                             }
                             None => {
@@ -1054,7 +1051,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
         // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [mempool_rpc_timout = 4*rpc_timeout]
         let addr_recv_timeout = timeout(
-            std::time::Duration::from_secs((service_timeout * 4) as u64),
+            time::Duration::from_secs((service_timeout * 4) as u64),
             async {
                 while let Some(address_result) = request.next().await {
                     // TODO: Hide server error from clients before release. Currently useful for dev purposes.
@@ -1135,11 +1132,10 @@ impl LightWalletIndexer for FetchServiceSubscriber {
 
         let mempool = self.mempool.clone();
         let service_timeout = self.config.service_timeout;
-        let (channel_tx, channel_rx) =
-            tokio::sync::mpsc::channel(self.config.service_channel_size as usize);
+        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
         tokio::spawn(async move {
             let timeout = timeout(
-                std::time::Duration::from_secs((service_timeout*4) as u64),
+                time::Duration::from_secs((service_timeout*4) as u64),
                 async {
                     for (txid, transaction) in mempool.get_filtered_mempool(exclude_txids).await {
                         match transaction.0 {
@@ -1158,26 +1154,26 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                                         }
                                     }
                                 };
-                                match <zaino_fetch::chain::transaction::FullTransaction as zaino_fetch::chain::utils::ParseFromSlice>::parse_from_slice(
+                                match <FullTransaction as ParseFromSlice>::parse_from_slice(
                                     transaction_object.hex.as_ref(),
                                     Some(vec!(txid_bytes)), None)
                                 {
                                     Ok(transaction) => {
-                                        // ParseFromSlice returns any data left after the conversion to a FullTransaction, If the conversion has succeeded this should be empty.
+                                        // ParseFromSlice returns any data left after the conversion to a
+                                        // FullTransaction, If the conversion has succeeded this should be empty.
                                         if transaction.0.is_empty() {
- if                                            channel_tx.send(
-                                                     transaction
-                                                         .1
-                                                         .to_compact(0)
-                                                         .map_err(|e| {
-                                                             tonic::Status::unknown(
-                                                                 e.to_string()
-                                                             )
-                                                         })
-                                                 ).await.is_err() {
-                                                     break
-                                                 }
-
+                                            if channel_tx.send(
+                                                transaction
+                                                .1
+                                                .to_compact(0)
+                                                .map_err(|e| {
+                                                    tonic::Status::unknown(
+                                                        e.to_string()
+                                                    )
+                                                })
+                                            ).await.is_err() {
+                                                break
+                                            }
                                         } else {
                                             // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                                             if channel_tx
@@ -1238,12 +1234,11 @@ impl LightWalletIndexer for FetchServiceSubscriber {
     async fn get_mempool_stream(&self) -> Result<RawTransactionStream, Self::Error> {
         let mut mempool = self.mempool.clone();
         let service_timeout = self.config.service_timeout;
-        let (channel_tx, channel_rx) =
-            tokio::sync::mpsc::channel(self.config.service_channel_size as usize);
+        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
         let mempool_height = self.fetcher.get_blockchain_info().await?.blocks.0;
         tokio::spawn(async move {
             let timeout = timeout(
-                std::time::Duration::from_secs((service_timeout*6) as u64),
+                time::Duration::from_secs((service_timeout*6) as u64),
                 async {
                     let (mut mempool_stream, _mempool_handle) =
                         match mempool.get_mempool_stream().await {
@@ -1449,11 +1444,10 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             .await?;
         let fetch_service_clone = self.clone();
         let service_timeout = self.config.service_timeout;
-        let (channel_tx, channel_rx) =
-            tokio::sync::mpsc::channel(self.config.service_channel_size as usize);
+        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
         tokio::spawn(async move {
             let timeout = timeout(
-                std::time::Duration::from_secs((service_timeout * 4) as u64),
+                time::Duration::from_secs((service_timeout * 4) as u64),
                 async {
                     for subtree in subtrees.subtrees {
                         match fetch_service_clone
@@ -1572,12 +1566,10 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         request: GetAddressUtxosArg,
     ) -> Result<GetAddressUtxosReplyList, Self::Error> {
         let taddrs = AddressStrings::new_valid(request.addresses).map_err(|legacy_code| {
-            FetchServiceError::RpcError(
-                zaino_fetch::jsonrpc::connector::RpcError::new_from_legacycode(
-                    legacy_code,
-                    "Error in Validator.",
-                ),
-            )
+            FetchServiceError::RpcError(RpcError::new_from_legacycode(
+                legacy_code,
+                "Error in Validator.",
+            ))
         })?;
         let utxos = self.z_get_address_utxos(taddrs).await?;
         let mut address_utxos: Vec<GetAddressUtxosReply> = Vec::new();
@@ -1630,20 +1622,17 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         request: GetAddressUtxosArg,
     ) -> Result<UtxoReplyStream, Self::Error> {
         let taddrs = AddressStrings::new_valid(request.addresses).map_err(|legacy_code| {
-            FetchServiceError::RpcError(
-                zaino_fetch::jsonrpc::connector::RpcError::new_from_legacycode(
-                    legacy_code,
-                    "Error in Validator.",
-                ),
-            )
+            FetchServiceError::RpcError(RpcError::new_from_legacycode(
+                legacy_code,
+                "Error in Validator.",
+            ))
         })?;
         let utxos = self.z_get_address_utxos(taddrs).await?;
         let service_timeout = self.config.service_timeout;
-        let (channel_tx, channel_rx) =
-            tokio::sync::mpsc::channel(self.config.service_channel_size as usize);
+        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
         tokio::spawn(async move {
             let timeout = timeout(
-                std::time::Duration::from_secs((service_timeout * 4) as u64),
+                time::Duration::from_secs((service_timeout * 4) as u64),
                 async {
                     let mut entries: u32 = 0;
                     for utxo in utxos {
@@ -1758,6 +1747,10 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             "Ping not yet implemented. If you require this RPC please open an issue or PR at the Zaino github (https://github.com/zingolabs/zaino.git)."
         )))
     }
+}
+
+macro_rules! send_tonic_error {
+    ($transmitter:ident, error) => {};
 }
 
 impl FetchServiceSubscriber {
