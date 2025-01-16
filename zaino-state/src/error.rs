@@ -274,6 +274,62 @@ pub enum NonFinalisedStateError {
     Generic(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
+/// Errors related to the `FinalisedState`.
+#[derive(Debug, thiserror::Error)]
+pub enum FinalisedStateError {
+    /// Custom Errors. *Remove before production.
+    #[error("Custom error: {0}")]
+    Custom(String),
+
+    /// The provided Hash or Height is invalid.
+    #[error("Invalid hash or height: {0}")]
+    InvalidHashOrHeight(String),
+
+    /// Required data is missing from the non-finalised state.
+    #[error("Missing data: {0}")]
+    MissingData(String),
+
+    /// Error from a Tokio JoinHandle.
+    #[error("Join error: {0}")]
+    JoinError(#[from] tokio::task::JoinError),
+
+    /// Error from the LLDM database.
+    #[error("LMDB database error: {0}")]
+    LmdbError(#[from] lmdb::Error),
+
+    /// Serde Json serialisation / deserialisation errors.
+    #[error("LMDB database error: {0}")]
+    SerdeJsonError(#[from] serde_json::Error),
+
+    /// Unexpected status-related error.
+    #[error("Status error: {0:?}")]
+    StatusError(StatusError),
+
+    /// Error from JsonRpcConnector.
+    #[error("JsonRpcConnector error: {0}")]
+    JsonRpcConnectorError(#[from] zaino_fetch::jsonrpc::error::JsonRpcConnectorError),
+
+    /// UTF-8 conversion error.
+    #[error("UTF-8 conversion error: {0}")]
+    Utf8Error(#[from] std::str::Utf8Error),
+
+    /// Integer parsing error.
+    #[error("Integer parsing error: {0}")]
+    ParseIntError(#[from] std::num::ParseIntError),
+
+    /// Integer conversion error.
+    #[error("Integer conversion error: {0}")]
+    TryFromIntError(#[from] std::num::TryFromIntError),
+
+    /// Chain parse error.
+    #[error("Chain parse error: {0}")]
+    ChainParseError(#[from] zaino_fetch::chain::error::ParseError),
+
+    /// A generic boxed error.
+    #[error("Generic error: {0}")]
+    Generic(#[from] Box<dyn std::error::Error + Send + Sync>),
+}
+
 /// A general error type to represent error StatusTypes.
 #[derive(Debug, Clone, thiserror::Error)]
 #[error("Unexpected status error: {0:?}")]

@@ -25,7 +25,6 @@ chrono = { workspace = true }
 indexmap = { workspace = true }
 url = { workspace = true }
 hex = { workspace = true, features = ["serde"] }
-jsonrpc-core = { workspace = true }
 tokio-stream = { workspace = true }
 futures = { workspace = true }
 tonic = { workspace = true }
@@ -33,6 +32,10 @@ http = { workspace = true }
 lazy-regex = { workspace = true }
 dashmap = { workspace = true }
 lmdb = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order"] }
+jsonrpc-core = { workspace = true }
+prost = { workspace = true }
 
 [dev-dependencies]
 zaino-testutils = { path = "../zaino-testutils" }
