@@ -1,11 +1,10 @@
 //! Compact Block Cache finalised state implementation.
 
-use std::sync::Arc;
+use std::{fs, sync::Arc};
 
 use lmdb::{Database, Environment, Transaction};
 use prost::Message;
 use serde::{Deserialize, Serialize};
-use tokio::sync::oneshot::error::TryRecvError;
 use zaino_fetch::jsonrpc::connector::JsonRpcConnector;
 use zaino_proto::proto::compact_formats::CompactBlock;
 use zebra_chain::block::{Hash, Height};
@@ -71,16 +70,16 @@ impl DbRequest {
     }
 }
 
-/// Fanalised part of the chain, held in an LLDB database.
+/// Fanalised part of the chain, held in an LMDB database.
 pub struct FinalisedState {
     /// Chain fetch service.
     fetcher: JsonRpcConnector,
     /// LMDB Database Environmant.
     database: Arc<Environment>,
     /// LMDB Databas containing `<block_height, block_hash>`.
-    heights_to_hashes: Arc<Database>,
+    heights_to_hashes: Database,
     /// LMDB Databas containing `<block_hash, compact_block>`.
-    hashes_to_blocks: Arc<Database>,
+    hashes_to_blocks: Database,
     /// Database reader request sender.
     request_sender: tokio::sync::mpsc::Sender<DbRequest>,
     /// Database reader task handle.
@@ -94,13 +93,12 @@ pub struct FinalisedState {
 impl FinalisedState {
     /// Spawns a new [`NonFinalisedState`] and syncs the FinalisedState to the servers finalised state.
     ///
-    /// Waits for server to sync with p2p network durin initial sync.
-    ///
-    /// Inputs:.
+    /// Inputs:
+    /// - fetcher: Json RPC client.
     /// - db_path: File path of the db.
     /// - db_size: Max size of the db in gb.
     /// - block_reciever: Channel that recieves new blocks to add to the db.
-    /// - FinalisedState status.
+    /// - status: FinalisedState status.
     pub async fn spawn(
         fetcher: &JsonRpcConnector,
         db_path: &str,
@@ -108,9 +106,10 @@ impl FinalisedState {
         block_receiver: tokio::sync::mpsc::Receiver<(Height, Hash, CompactBlock)>,
         status: AtomicStatus,
     ) -> Result<Self, FinalisedStateError> {
-        let status = status.clone();
-
         let db_size = db_size.unwrap_or(8);
+        if !std::path::Path::new(db_path).exists() {
+            fs::create_dir_all(db_path)?;
+        }
         let database = Arc::new(
             Environment::new()
                 .set_max_dbs(2)
@@ -118,12 +117,22 @@ impl FinalisedState {
                 .open(std::path::Path::new(db_path))?,
         );
 
-        let heights_to_hashes =
-            Arc::new(database.create_db(Some("heights_to_hashes"), lmdb::DatabaseFlags::empty())?);
-        let hashes_to_blocks =
-            Arc::new(database.create_db(Some("hashes_to_blocks"), lmdb::DatabaseFlags::empty())?);
+        let heights_to_hashes = match database.open_db(Some("heights_to_hashes")) {
+            Ok(db) => db,
+            Err(lmdb::Error::NotFound) => {
+                database.create_db(Some("heights_to_hashes"), lmdb::DatabaseFlags::empty())?
+            }
+            Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+        };
+        let hashes_to_blocks = match database.open_db(Some("hashes_to_blocks")) {
+            Ok(db) => db,
+            Err(lmdb::Error::NotFound) => {
+                database.create_db(Some("hashes_to_blocks"), lmdb::DatabaseFlags::empty())?
+            }
+            Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+        };
 
-        let (request_tx, request_rx) = tokio::sync::mpsc::channel(100);
+        let (request_tx, request_rx) = tokio::sync::mpsc::channel(124);
 
         let mut finalised_state = FinalisedState {
             fetcher: fetcher.clone(),
@@ -280,18 +289,28 @@ impl FinalisedState {
         let block_value = serde_json::to_vec(&DbCompactBlock(compact_block))?;
 
         let mut txn = self.database.begin_rw_txn()?;
-        txn.put(
-            *self.heights_to_hashes,
-            &height_key,
-            &hash_key,
-            lmdb::WriteFlags::NO_OVERWRITE,
-        )?;
-        txn.put(
-            *self.hashes_to_blocks,
-            &hash_key,
-            &block_value,
-            lmdb::WriteFlags::NO_OVERWRITE,
-        )?;
+        if txn
+            .put(
+                self.heights_to_hashes,
+                &height_key,
+                &hash_key,
+                lmdb::WriteFlags::NO_OVERWRITE,
+            )
+            .is_err()
+            || txn
+                .put(
+                    self.hashes_to_blocks,
+                    &hash_key,
+                    &block_value,
+                    lmdb::WriteFlags::NO_OVERWRITE,
+                )
+                .is_err()
+        {
+            txn.abort();
+            return Err(FinalisedStateError::Custom(
+                "Transaction failed.".to_string(),
+            ));
+        }
         txn.commit()?;
         Ok(())
     }
@@ -303,8 +322,8 @@ impl FinalisedState {
         let hash_key = serde_json::to_vec(&DbHash(hash))?;
 
         let mut txn = self.database.begin_rw_txn()?;
-        txn.del(*self.heights_to_hashes, &height_key, None)?;
-        txn.del(*self.hashes_to_blocks, &hash_key, None)?;
+        txn.del(self.heights_to_hashes, &height_key, None)?;
+        txn.del(self.hashes_to_blocks, &hash_key, None)?;
         txn.commit()?;
         Ok(())
     }
@@ -318,13 +337,13 @@ impl FinalisedState {
         let hash_key = match height_or_hash {
             HashOrHeight::Height(height) => {
                 let height_key = serde_json::to_vec(&DbHeight(height))?;
-                let hash_bytes: &[u8] = txn.get(*self.heights_to_hashes, &height_key)?;
+                let hash_bytes: &[u8] = txn.get(self.heights_to_hashes, &height_key)?;
                 hash_bytes.to_vec()
             }
             HashOrHeight::Hash(hash) => serde_json::to_vec(&DbHash(hash))?,
         };
 
-        let block_bytes: &[u8] = txn.get(*self.hashes_to_blocks, &hash_key)?;
+        let block_bytes: &[u8] = txn.get(self.hashes_to_blocks, &hash_key)?;
         let block: DbCompactBlock = serde_json::from_slice(block_bytes)?;
         Ok(block.0)
     }
@@ -335,7 +354,7 @@ impl FinalisedState {
 
         let height_key = serde_json::to_vec(&DbHeight(Height(height)))?;
 
-        let hash_bytes: &[u8] = match txn.get(*self.heights_to_hashes, &height_key) {
+        let hash_bytes: &[u8] = match txn.get(self.heights_to_hashes, &height_key) {
             Ok(bytes) => bytes,
             Err(lmdb::Error::NotFound) => {
                 return Err(FinalisedStateError::MissingData(format!(
@@ -435,8 +454,12 @@ impl FinalisedState {
         if let Some(handle) = self.read_task_handle.take() {
             handle.abort();
         }
-        if let Some(handle) = self.read_task_handle.take() {
+        if let Some(handle) = self.write_task_handle.take() {
             handle.abort();
+        }
+
+        if let Err(e) = self.database.sync(true) {
+            eprintln!("❌ Error syncing LMDB before shutdown: {:?}", e);
         }
     }
 }
@@ -447,8 +470,12 @@ impl Drop for FinalisedState {
         if let Some(handle) = self.read_task_handle.take() {
             handle.abort();
         }
-        if let Some(handle) = self.read_task_handle.take() {
+        if let Some(handle) = self.write_task_handle.take() {
             handle.abort();
+        }
+
+        if let Err(e) = self.database.sync(true) {
+            eprintln!("❌ Error syncing LMDB before shutdown: {:?}", e);
         }
     }
 }
@@ -458,8 +485,8 @@ impl Clone for FinalisedState {
         Self {
             fetcher: self.fetcher.clone(),
             database: Arc::clone(&self.database),
-            heights_to_hashes: Arc::clone(&self.heights_to_hashes),
-            hashes_to_blocks: Arc::clone(&self.hashes_to_blocks),
+            heights_to_hashes: self.heights_to_hashes,
+            hashes_to_blocks: self.hashes_to_blocks,
             request_sender: self.request_sender.clone(),
             read_task_handle: None,
             write_task_handle: None,
@@ -488,7 +515,7 @@ impl FinalisedStateSubscriber {
             ))
         })?;
 
-        let (channel_tx, mut channel_rx) = tokio::sync::oneshot::channel();
+        let (channel_tx, channel_rx) = tokio::sync::oneshot::channel();
         if self
             .request_sender
             .send(DbRequest::new(hash_or_height, channel_tx))
@@ -500,19 +527,15 @@ impl FinalisedStateSubscriber {
             ));
         }
 
-        loop {
-            match channel_rx.try_recv() {
-                Ok(compact_block) => return compact_block,
-                Err(TryRecvError::Empty) => {
-                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                    continue;
-                }
-                Err(TryRecvError::Closed) => {
-                    return Err(FinalisedStateError::Custom(
-                        "Error receiving block from db reader".to_string(),
-                    ))
-                }
-            }
+        let result = tokio::time::timeout(std::time::Duration::from_secs(30), channel_rx).await;
+        match result {
+            Ok(Ok(compact_block)) => compact_block,
+            Ok(Err(_)) => Err(FinalisedStateError::Custom(
+                "Error receiving block from db reader".to_string(),
+            )),
+            Err(_) => Err(FinalisedStateError::Custom(
+                "Timeout while waiting for compact block".to_string(),
+            )),
         }
     }
 

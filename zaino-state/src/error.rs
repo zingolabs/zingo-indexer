@@ -321,6 +321,10 @@ pub enum FinalisedStateError {
     #[error("Integer conversion error: {0}")]
     TryFromIntError(#[from] std::num::TryFromIntError),
 
+    /// std::io::Error
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
+
     /// Chain parse error.
     #[error("Chain parse error: {0}")]
     ChainParseError(#[from] zaino_fetch::chain::error::ParseError),

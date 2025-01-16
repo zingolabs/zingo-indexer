@@ -14,5 +14,22 @@ use non_finalised_state::NonFinalisedState;
 pub struct BlockCache {
     _non_finalised_state: NonFinalisedState,
     _finalised_state: FinalisedState,
-    _status: (AtomicStatus, AtomicStatus),
 }
+
+impl BlockCache {
+    // spawn
+
+    // subscriber
+
+    // status
+
+    // close
+}
+
+// drop
+
+// block cache subscriber
+
+// get chain height
+
+// get compact block
