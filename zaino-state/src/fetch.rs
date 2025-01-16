@@ -759,6 +759,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                                             height, chain_height,
                                         ))
                                         } else {
+                                            // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                                             tonic::Status::unknown(e.to_string())
                                         }
                                     },
