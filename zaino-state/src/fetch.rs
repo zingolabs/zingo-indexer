@@ -5,7 +5,7 @@ use crate::{
     error::FetchServiceError,
     get_build_info,
     indexer::{IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService},
-    mempool::{Mempool, MempoolKey, MempoolSubscriber, MempoolValue},
+    mempool::{Mempool, MempoolSubscriber},
     status::{AtomicStatus, StatusType},
     stream::{
         AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
@@ -14,7 +14,7 @@ use crate::{
     ServiceMetadata,
 };
 use futures::StreamExt;
-use hex::{FromHex, FromHexError};
+use hex::FromHex;
 use tokio::time::timeout;
 use tonic::async_trait;
 use zaino_fetch::jsonrpc::connector::{test_node_and_return_uri, JsonRpcConnector};
@@ -1165,27 +1165,19 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                                     Ok(transaction) => {
                                         // ParseFromSlice returns any data left after the conversion to a FullTransaction, If the conversion has succeeded this should be empty.
                                         if transaction.0.is_empty() {
-                                            match transaction.1.to_compact(0) {
-                                                Ok(compact_tx) => {
-                                                    if channel_tx
-                                                        .send(Ok(compact_tx))
-                                                        .await
-                                                        .is_err()
-                                                    {
-                                                        break;
-                                                    }
-                                                }
-                                                Err(e) => {
-                                                    // TODO: Hide server error from clients before release. Currently useful for dev purposes.
-                                                    if channel_tx
-                                                        .send(Err(tonic::Status::unknown(e.to_string())))
-                                                        .await
-                                                        .is_err()
-                                                    {
-                                                        break;
-                                                    }
-                                                }
-                                            }
+ if                                            channel_tx.send(
+                                                     transaction
+                                                         .1
+                                                         .to_compact(0)
+                                                         .map_err(|e| {
+                                                             tonic::Status::unknown(
+                                                                 e.to_string()
+                                                             )
+                                                         })
+                                                 ).await.is_err() {
+                                                     break
+                                                 }
+
                                         } else {
                                             // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                                             if channel_tx
