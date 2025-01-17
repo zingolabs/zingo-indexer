@@ -227,6 +227,10 @@ pub enum BlockCacheError {
     /// Errors from the FinalisedState.
     #[error("FinalisedState Error: {0}")]
     FinalisedStateError(#[from] FinalisedStateError),
+
+    /// Serialization error.
+    #[error("Serialization error: {0}")]
+    SerializationError(#[from] zebra_chain::serialization::SerializationError),
 }
 
 /// Errors related to the `NonFinalisedState`.

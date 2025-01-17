@@ -58,7 +58,7 @@ impl NonFinalisedState {
         };
 
         let chain_height = fetcher.get_blockchain_info().await?.blocks.0;
-        for height in chain_height.saturating_sub(101).max(1)..=chain_height {
+        for height in chain_height.saturating_sub(99)..=chain_height {
             loop {
                 match non_finalised_state.fetch_block_from_node(height).await {
                     Ok((hash, block)) => {
@@ -422,15 +422,8 @@ impl NonFinalisedStateSubscriber {
     /// Returns a Compact Block from the non-finalised state.
     pub async fn get_compact_block(
         &self,
-        hash_or_height: String,
+        hash_or_height: HashOrHeight,
     ) -> Result<CompactBlock, NonFinalisedStateError> {
-        let hash_or_height: HashOrHeight = hash_or_height.parse().map_err(|_| {
-            NonFinalisedStateError::InvalidHashOrHeight(format!(
-                "Failed to parse hash_or_height: {}",
-                hash_or_height
-            ))
-        })?;
-
         let hash = match hash_or_height {
             HashOrHeight::Hash(hash) => hash,
             HashOrHeight::Height(height) => {
@@ -464,6 +457,14 @@ impl NonFinalisedStateSubscriber {
             .clone();
 
         Ok(height)
+    }
+
+    ///
+    pub async fn conatins_hash_or_height(&self, hash_or_height: HashOrHeight) -> bool {
+        match hash_or_height {
+            HashOrHeight::Height(height) => self.heights_to_hashes.contains_key(&height),
+            HashOrHeight::Hash(hash) => self.hashes_to_blocks.contains_key(&hash),
+        }
     }
 
     /// Returns the status of the NonFinalisedState..

@@ -8,6 +8,9 @@ pub mod non_finalised_state;
 use finalised_state::{FinalisedState, FinalisedStateSubscriber};
 use non_finalised_state::{NonFinalisedState, NonFinalisedStateSubscriber};
 use zaino_fetch::jsonrpc::connector::JsonRpcConnector;
+use zaino_proto::proto::compact_formats::CompactBlock;
+use zebra_chain::block::Height;
+use zebra_state::HashOrHeight;
 
 /// Zaino's internal compact block cache.
 ///
@@ -28,8 +31,6 @@ impl BlockCache {
         let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(100);
 
         let finalised_state = FinalisedState::spawn(fetcher, db_path, db_size, channel_rx).await?;
-
-        // TODO: sync db to server and wait for server to sync to p2p network.
 
         let non_finalised_state =
             NonFinalisedState::spawn(fetcher, capacity_and_shard_amount, channel_tx).await?;
@@ -74,7 +75,44 @@ pub struct BlockCacheSubscriber {
 }
 
 impl BlockCacheSubscriber {
-    // get chain height
+    /// Returns a Compact Block from the [`BlockCache`].
+    pub async fn get_compact_block(
+        &self,
+        hash_or_height: String,
+    ) -> Result<CompactBlock, BlockCacheError> {
+        let hash_or_height: HashOrHeight = hash_or_height.parse()?;
 
-    // get compact block
+        match self
+            .non_finalised_state
+            .conatins_hash_or_height(hash_or_height)
+            .await
+        {
+            true => self
+                .non_finalised_state
+                .get_compact_block(hash_or_height)
+                .await
+                .map_err(|e| BlockCacheError::NonFinalisedStateError(e)),
+            false => self
+                .finalised_state
+                .get_compact_block(hash_or_height)
+                .await
+                .map_err(|e| BlockCacheError::FinalisedStateError(e)),
+        }
+    }
+
+    /// Returns the height of the latest block in the [`BlockCache`].
+    pub async fn get_chain_height(&self) -> Result<Height, BlockCacheError> {
+        self.non_finalised_state
+            .get_chain_height()
+            .await
+            .map_err(|e| BlockCacheError::NonFinalisedStateError(e))
+    }
+
+    /// Returns the status of the [`BlockCache`]..
+    pub fn status(&self) -> (StatusType, StatusType) {
+        (
+            self.non_finalised_state.status(),
+            self.finalised_state.status(),
+        )
+    }
 }

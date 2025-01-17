@@ -147,6 +147,8 @@ impl FinalisedState {
         finalised_state.write_task_handle =
             Some(finalised_state.spawn_writer(block_receiver).await?);
 
+        // TODO: Sync to server!
+
         finalised_state.read_task_handle = Some(finalised_state.spawn_reader(request_rx).await?);
 
         Ok(finalised_state)
@@ -505,15 +507,8 @@ impl FinalisedStateSubscriber {
     /// Returns a Compact Block from the non-finalised state.
     pub async fn get_compact_block(
         &self,
-        hash_or_height: String,
+        hash_or_height: HashOrHeight,
     ) -> Result<CompactBlock, FinalisedStateError> {
-        let hash_or_height: HashOrHeight = hash_or_height.parse().map_err(|_| {
-            FinalisedStateError::InvalidHashOrHeight(format!(
-                "Failed to parse hash_or_height: {}",
-                hash_or_height
-            ))
-        })?;
-
         let (channel_tx, channel_rx) = tokio::sync::oneshot::channel();
         if self
             .request_sender
