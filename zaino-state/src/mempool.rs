@@ -105,7 +105,7 @@ impl Mempool {
             loop {
                 match mempool.fetcher.get_blockchain_info().await {
                     Ok(chain_info) => {
-                        best_block_hash = chain_info.best_block_hash.clone();
+                        best_block_hash = chain_info.best_block_hash;
                         break;
                     }
                     Err(e) => {
@@ -120,7 +120,7 @@ impl Mempool {
             loop {
                 match mempool.fetcher.get_blockchain_info().await {
                     Ok(chain_info) => {
-                        check_block_hash = chain_info.best_block_hash.clone();
+                        check_block_hash = chain_info.best_block_hash;
                     }
                     Err(e) => {
                         status.store(StatusType::RecoverableError.into());
@@ -404,7 +404,7 @@ impl MempoolSubscriber {
                 Ok((StatusType::Syncing, self.get_mempool_and_update_seen()))
             }
             StatusType::Closing => Ok((StatusType::Closing, Vec::new())),
-            status => return Err(MempoolError::StatusError(StatusError(status))),
+            status => Err(MempoolError::StatusError(StatusError(status))),
         }
     }
 

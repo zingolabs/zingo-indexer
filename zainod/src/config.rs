@@ -60,9 +60,9 @@ impl IndexerConfig {
             "Testnet" => Ok(zebra_chain::parameters::Network::new_default_testnet()),
             "Mainnet" => Ok(zebra_chain::parameters::Network::Mainnet),
             _ => {
-                return Err(IndexerError::ConfigError(
+                Err(IndexerError::ConfigError(
                     "Incorrect network name given.".to_string(),
-                ));
+                ))
             }
         }
     }

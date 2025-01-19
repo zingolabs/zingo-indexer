@@ -397,7 +397,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .get_subtrees_by_index(
                 pool,
                 start_index.0,
-                limit.and_then(|limit_index| Some(limit_index.0)),
+                limit.map(|limit_index| limit_index.0),
             )
             .await?
             .into())
@@ -1408,7 +1408,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             .z_get_subtrees_by_index(
                 pool.to_string(),
                 NoteCommitmentSubtreeIndex(start_index),
-                limit.and_then(|limit| Some(NoteCommitmentSubtreeIndex(limit))),
+                limit.map(NoteCommitmentSubtreeIndex),
             )
             .await?;
         let fetch_service_clone = self.clone();
@@ -1756,12 +1756,12 @@ impl FetchServiceSubscriber {
                         u32::try_from(trees.orchard())?,
                     )?)
                 }
-                Err(e) => Err(e.into()),
+                Err(e) => Err(e),
             },
             Ok(GetBlock::Raw(_)) => Err(FetchServiceError::TonicStatusError(
                 tonic::Status::internal("Received raw block hex instead of block object."),
             )),
-            Err(e) => Err(e.into()),
+            Err(e) => Err(e),
         }
     }
 
