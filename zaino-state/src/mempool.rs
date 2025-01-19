@@ -21,7 +21,7 @@ pub struct MempoolKey(pub String);
 ///
 /// NOTE: Currently holds a copy of txid,
 ///       this could be updated to store the corresponding transaction as the value,
-///       this would enable the serving of mempool trasactions directly, significantly increasing efficiency.
+///       this would enable the serving of mempool transactions directly, significantly increasing efficiency.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MempoolValue(pub GetRawTransaction);
 

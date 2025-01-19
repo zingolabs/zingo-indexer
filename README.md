@@ -29,7 +29,7 @@ Currently Zebra's `ReadStateService` only enables direct access to chain data (b
 
 ## Documentation
 - [Use Cases](./docs/use_cases.md): Holds instructions and example use cases.
-- [Testing](./docs/testing.md): Hold intructions fo running tests.
+- [Testing](./docs/testing.md): Hold instructions fo running tests.
 - [Live Service System Architecture](./docs/live_system_architecture.pdf): Holds the Zcash system architecture diagram for the Zaino live service.
 - [Library System Architecture](./docs/lib_system_architecture.pdf): Holds the Zcash system architecture diagram for the Zaino client library.
 - [Internal Architecture](./docs/internal_architecture.pdf): Holds an internal Zaino system architecture diagram.

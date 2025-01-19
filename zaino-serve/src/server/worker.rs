@@ -114,7 +114,7 @@ impl Worker {
                             Err(_e) => {
                                 self.atomic_status.store(StatusType::Offline.into());
                                 eprintln!("Queue closed, worker shutting down.");
-                                // TODO: Handle queue closed error here. (return correct error / undate status to correct err code.)
+                                // TODO: Handle queue closed error here. (return correct error / update status to correct err code.)
                                 return Ok(());
                             }
                         }
@@ -192,9 +192,9 @@ pub(crate) struct WorkerPool {
     service_subscriber: IndexerSubscriber<FetchServiceSubscriber>,
     /// Service status.
     service_status: AtomicStatus,
-    /// Maximun number of concurrent workers allowed.
+    /// Maximum number of concurrent workers allowed.
     max_size: u16,
-    /// Minimum number of workers kept running on stanby.
+    /// Minimum number of workers kept running on standby.
     idle_size: u16,
     /// Workers currently in the pool
     workers: Vec<Worker>,

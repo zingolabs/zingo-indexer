@@ -183,7 +183,7 @@ pub enum MempoolError {
     #[error("JsonRpcConnector error: {0}")]
     JsonRpcConnectorError(#[from] zaino_fetch::jsonrpc::error::JsonRpcConnectorError),
 
-    /// Error from a Tokio Watch Reciever.
+    /// Error from a Tokio Watch Receiver.
     #[error("Join error: {0}")]
     WatchRecvError(#[from] tokio::sync::watch::error::RecvError),
 

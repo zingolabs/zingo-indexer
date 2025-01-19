@@ -26,7 +26,7 @@ Zaino Currently Serves the following gRPC services as defined in the [LightWalle
 
 
 ## Zcash RPC Services
-Zaino has commited to taking over responsibility for serving the following [Zcash RPCs](https://zcash.github.io/rpc/) from Zcashd:
+Zaino has committed to taking over responsibility for serving the following [Zcash RPCs](https://zcash.github.io/rpc/) from Zcashd:
   - [getaddressbalance](https://zcash.github.io/rpc/getaddressbalance.html)
   - [getaddressdeltas](https://zcash.github.io/rpc/getaddressdeltas.html)
   - [getaddressmempool](https://zcash.github.io/rpc/getaddressmempool.html) (**MARKED FOR DEPRECATION**)

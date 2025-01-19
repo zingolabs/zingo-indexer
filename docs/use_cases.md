@@ -8,7 +8,7 @@
 1) Run `$ cargo build --release`
 2) Add compiled binary held at `#PATH_TO/zaino/target/release/zainod` to PATH.
 
-- Then to launch Zaino: [in seperate terminals]:
+- Then to launch Zaino: [in separate terminals]:
 3) Run `$ zebrad --config #PATH_TO_CONF/zebrad.toml start`
 4) Run `$ zainod --config #PATH_TO_CONF/zindexer.toml`
 
@@ -30,4 +30,3 @@ A system architecture diagram for this service can be seen at [Library System Ar
 **Currently Unimplemented, documentation will be added here as this functionality becomes available.**
 
 A system architecture diagram for this service can be seen at [Library System Architecture](./lib_system_architecture.pdf).
-
