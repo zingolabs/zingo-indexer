@@ -9,7 +9,9 @@ use zebra_state::HashOrHeight;
 
 use crate::{
     broadcast::{Broadcast, BroadcastSubscriber},
+    config::BlockCacheConfig,
     error::NonFinalisedStateError,
+    local_cache::fetch_block_from_node,
     status::{AtomicStatus, StatusType},
 };
 
@@ -30,23 +32,26 @@ pub struct NonFinalisedState {
     block_sender: tokio::sync::mpsc::Sender<(Height, Hash, CompactBlock)>,
     /// Non-finalised state status.
     status: AtomicStatus,
+    /// BlockCache config data.
+    config: BlockCacheConfig,
 }
 
 impl NonFinalisedState {
     /// Spawns a new [`NonFinalisedState`].
     pub async fn spawn(
         fetcher: &JsonRpcConnector,
-        capacity_and_shard_amount: Option<(usize, usize)>,
         block_sender: tokio::sync::mpsc::Sender<(Height, Hash, CompactBlock)>,
+        config: BlockCacheConfig,
     ) -> Result<Self, NonFinalisedStateError> {
         println!("Launching Non-Finalised State..");
-        let (heights_to_hashes, hashes_to_blocks) = match capacity_and_shard_amount {
-            Some((capacity, shard_amount)) => (
-                Broadcast::new_custom(capacity, shard_amount),
-                Broadcast::new_custom(capacity, shard_amount),
-            ),
-            None => (Broadcast::new_default(), Broadcast::new_default()),
-        };
+        let (heights_to_hashes, hashes_to_blocks) =
+            match (config.map_capacity, config.map_shard_amount) {
+                (Some(capacity), Some(shard_amount)) => (
+                    Broadcast::new_custom(capacity, shard_amount),
+                    Broadcast::new_custom(capacity, shard_amount),
+                ),
+                _ => (Broadcast::new_default(), Broadcast::new_default()),
+            };
 
         let mut non_finalised_state = NonFinalisedState {
             fetcher: fetcher.clone(),
@@ -55,12 +60,18 @@ impl NonFinalisedState {
             sync_task_handle: None,
             block_sender,
             status: AtomicStatus::new(StatusType::Spawning.into()),
+            config,
         };
 
         let chain_height = fetcher.get_blockchain_info().await?.blocks.0;
         for height in chain_height.saturating_sub(99)..=chain_height {
             loop {
-                match non_finalised_state.fetch_block_from_node(height).await {
+                match fetch_block_from_node(
+                    &non_finalised_state.fetcher,
+                    HashOrHeight::Height(Height(height)),
+                )
+                .await
+                {
                     Ok((hash, block)) => {
                         non_finalised_state
                             .heights_to_hashes
@@ -75,6 +86,27 @@ impl NonFinalisedState {
                         eprintln!("{e}");
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     }
+                }
+            }
+        }
+
+        // If no_db is active wait for server to sync with p2p network.
+        if non_finalised_state.config.no_db
+            && !non_finalised_state.config.network.is_regtest()
+            && !non_finalised_state.config.no_sync
+        {
+            non_finalised_state.status.store(StatusType::Syncing.into());
+            loop {
+                let blockchain_info = fetcher.get_blockchain_info().await?;
+                if (blockchain_info.blocks.0 as i64 - blockchain_info.estimated_height.0 as i64).abs() <= 10 {
+                    break;
+                } else {
+                    println!(" - Validator syncing with network. Validator chain height: {}, Estimated Network chain height: {}",
+                        &blockchain_info.blocks.0, 
+                        &blockchain_info.estimated_height.0 
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    continue;
                 }
             }
         }
@@ -136,6 +168,12 @@ impl NonFinalisedState {
                     loop {
                         match non_finalised_state.fill_from_reorg().await {
                             Ok(_) => break,
+                            Err(NonFinalisedStateError::Critical(e)) => {
+                                non_finalised_state
+                                    .update_status_and_notify(StatusType::CriticalError);
+                                eprintln!("{e}");
+                                return;
+                            }
                             Err(e) => {
                                 non_finalised_state
                                     .update_status_and_notify(StatusType::RecoverableError);
@@ -204,7 +242,12 @@ impl NonFinalisedState {
                     self.heights_to_hashes.clear();
                     self.hashes_to_blocks.clear();
                     loop {
-                        match self.fetch_block_from_node(reorg_height.0).await {
+                        match fetch_block_from_node(
+                            &self.fetcher,
+                            HashOrHeight::Height(reorg_height),
+                        )
+                        .await
+                        {
                             Ok((hash, block)) => {
                                 self.heights_to_hashes.insert(reorg_height, hash, None);
                                 self.hashes_to_blocks.insert(hash, block, None);
@@ -253,7 +296,6 @@ impl NonFinalisedState {
                     self.heights_to_hashes.remove(&Height(block_height), None);
                 }
             } else {
-                // TODO: Fetch block and send to finalised_state.
                 let pop_height = self
                     .heights_to_hashes
                     .get_state()
@@ -268,12 +310,30 @@ impl NonFinalisedState {
                     .key()
                     .clone();
                 if let Some(hash) = self.heights_to_hashes.get(&pop_height) {
+                    if let Some(block) = self.hashes_to_blocks.get(&hash) {
+                        if self
+                            .block_sender
+                            .send((pop_height, *hash, block.as_ref().clone()))
+                            .await
+                            .is_err()
+                        {
+                            self.status.store(StatusType::CriticalError.into());
+                            return Err(NonFinalisedStateError::Critical(
+                                "Critical error in database. Closing NonFinalisedState".to_string(),
+                            ));
+                        }
+                    }
                     self.hashes_to_blocks.remove(&hash, None);
                     self.heights_to_hashes.remove(&pop_height, None);
                 }
             }
             loop {
-                match self.fetch_block_from_node(block_height).await {
+                match fetch_block_from_node(
+                    &self.fetcher,
+                    HashOrHeight::Height(Height(block_height)),
+                )
+                .await
+                {
                     Ok((hash, block)) => {
                         self.heights_to_hashes
                             .insert(Height(block_height), hash, None);
@@ -290,72 +350,6 @@ impl NonFinalisedState {
         }
 
         Ok(())
-    }
-
-    /// Fetches CompactBlock from the validator.
-    ///
-    /// Uses 2 calls as z_get_block verbosity=1 is required to fetch txids from zcashd.
-    async fn fetch_block_from_node(
-        &self,
-        height: u32,
-    ) -> Result<(Hash, CompactBlock), NonFinalisedStateError> {
-        match self.fetcher.get_block(height.to_string(), Some(1)).await {
-            Ok(zaino_fetch::jsonrpc::response::GetBlockResponse::Object {
-                hash,
-                confirmations: _,
-                height: _,
-                time: _,
-                tx,
-                trees,
-            }) => match self.fetcher.get_block(hash.0.to_string(), Some(0)).await {
-                Ok(zaino_fetch::jsonrpc::response::GetBlockResponse::Object {
-                    hash: _,
-                    confirmations: _,
-                    height: _,
-                    time: _,
-                    tx: _,
-                    trees: _,
-                }) => Err(NonFinalisedStateError::Custom(
-                    "Found transaction of `Object` type, expected only `Hash` types.".to_string(),
-                )),
-                Ok(zaino_fetch::jsonrpc::response::GetBlockResponse::Raw(block_hex)) => Ok((
-                    hash.0,
-                    zaino_fetch::chain::block::FullBlock::parse_from_hex(
-                        block_hex.as_ref(),
-                        Some(Self::display_txids_to_server(tx)?),
-                    )?
-                    .into_compact(
-                        u32::try_from(trees.sapling())?,
-                        u32::try_from(trees.orchard())?,
-                    )?,
-                )),
-                Err(e) => Err(e.into()),
-            },
-            Ok(zaino_fetch::jsonrpc::response::GetBlockResponse::Raw(_)) => {
-                Err(NonFinalisedStateError::Custom(
-                    "Found transaction of `Raw` type, expected only `Hash` types.".to_string(),
-                ))
-            }
-            Err(e) => Err(e.into()),
-        }
-    }
-
-    /// Takes a vec of big endian hex encoded txids and returns them as a vec of little endian raw bytes.
-    fn display_txids_to_server(txids: Vec<String>) -> Result<Vec<Vec<u8>>, NonFinalisedStateError> {
-        txids
-            .iter()
-            .map(|txid| {
-                txid.as_bytes()
-                    .chunks(2)
-                    .map(|chunk| {
-                        let hex_pair =
-                            std::str::from_utf8(chunk).map_err(NonFinalisedStateError::from)?;
-                        u8::from_str_radix(hex_pair, 16).map_err(NonFinalisedStateError::from)
-                    })
-                    .rev()
-                    .collect::<Result<Vec<u8>, _>>()
-            })
-            .collect::<Result<Vec<Vec<u8>>, _>>()
     }
 
     /// Returns a [`NonFinalisedStateSubscriber`].
@@ -406,6 +400,7 @@ impl Clone for NonFinalisedState {
             sync_task_handle: None,
             block_sender: self.block_sender.clone(),
             status: self.status.clone(),
+            config: self.config.clone(),
         }
     }
 }

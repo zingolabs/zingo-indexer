@@ -77,6 +77,10 @@ pub enum FetchServiceError {
     #[error("Custom error: {0}")]
     Custom(String),
 
+    /// Critical Errors, Restart Zaino.
+    #[error("Critical error: {0}")]
+    Critical(String),
+
     /// Error from a Tokio JoinHandle.
     #[error("Join error: {0}")]
     JoinError(#[from] tokio::task::JoinError),
@@ -130,6 +134,7 @@ impl From<FetchServiceError> for tonic::Status {
     fn from(error: FetchServiceError) -> Self {
         match error {
             FetchServiceError::Custom(message) => tonic::Status::internal(message),
+            FetchServiceError::Critical(message) => tonic::Status::internal(message),
             FetchServiceError::JoinError(err) => {
                 tonic::Status::internal(format!("Join error: {}", err))
             }
@@ -174,6 +179,10 @@ pub enum MempoolError {
     /// Custom Errors. *Remove before production.
     #[error("Custom error: {0}")]
     Custom(String),
+
+    /// Critical Errors, Restart Zaino.
+    #[error("Critical error: {0}")]
+    Critical(String),
 
     /// Error from a Tokio JoinHandle.
     #[error("Join error: {0}")]
@@ -220,6 +229,10 @@ pub enum BlockCacheError {
     #[error("Custom error: {0}")]
     Custom(String),
 
+    /// Critical Errors, Restart Zaino.
+    #[error("Critical error: {0}")]
+    Critical(String),
+
     /// Errors from the NonFinalisedState.
     #[error("NonFinalisedState Error: {0}")]
     NonFinalisedStateError(#[from] NonFinalisedStateError),
@@ -228,9 +241,29 @@ pub enum BlockCacheError {
     #[error("FinalisedState Error: {0}")]
     FinalisedStateError(#[from] FinalisedStateError),
 
+    /// Error from JsonRpcConnector.
+    #[error("JsonRpcConnector error: {0}")]
+    JsonRpcConnectorError(#[from] zaino_fetch::jsonrpc::error::JsonRpcConnectorError),
+
+    /// Chain parse error.
+    #[error("Chain parse error: {0}")]
+    ChainParseError(#[from] zaino_fetch::chain::error::ParseError),
+
     /// Serialization error.
     #[error("Serialization error: {0}")]
     SerializationError(#[from] zebra_chain::serialization::SerializationError),
+
+    /// UTF-8 conversion error.
+    #[error("UTF-8 conversion error: {0}")]
+    Utf8Error(#[from] std::str::Utf8Error),
+
+    /// Integer parsing error.
+    #[error("Integer parsing error: {0}")]
+    ParseIntError(#[from] std::num::ParseIntError),
+
+    /// Integer conversion error.
+    #[error("Integer conversion error: {0}")]
+    TryFromIntError(#[from] std::num::TryFromIntError),
 }
 
 /// Errors related to the `NonFinalisedState`.
@@ -247,6 +280,10 @@ pub enum NonFinalisedStateError {
     /// Required data is missing from the non-finalised state.
     #[error("Missing data: {0}")]
     MissingData(String),
+
+    /// Critical Errors, Restart Zaino.
+    #[error("Critical error: {0}")]
+    Critical(String),
 
     /// Error from a Tokio JoinHandle.
     #[error("Join error: {0}")]
@@ -308,6 +345,10 @@ pub enum FinalisedStateError {
     /// Required data is missing from the non-finalised state.
     #[error("Missing data: {0}")]
     MissingData(String),
+
+    /// Critical Errors, Restart Zaino.
+    #[error("Critical error: {0}")]
+    Critical(String),
 
     /// Error from a Tokio JoinHandle.
     #[error("Join error: {0}")]

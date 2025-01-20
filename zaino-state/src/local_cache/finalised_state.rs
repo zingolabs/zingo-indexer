@@ -2,7 +2,7 @@
 
 use std::{fs, sync::Arc};
 
-use lmdb::{Database, Environment, Transaction};
+use lmdb::{Cursor, Database, Environment, Transaction};
 use prost::Message;
 use serde::{Deserialize, Serialize};
 use zaino_fetch::jsonrpc::connector::JsonRpcConnector;
@@ -11,7 +11,9 @@ use zebra_chain::block::{Hash, Height};
 use zebra_state::HashOrHeight;
 
 use crate::{
+    config::BlockCacheConfig,
     error::FinalisedStateError,
+    local_cache::fetch_block_from_node,
     status::{AtomicStatus, StatusType},
 };
 
@@ -88,6 +90,8 @@ pub struct FinalisedState {
     write_task_handle: Option<tokio::task::JoinHandle<()>>,
     /// Non-finalised state status.
     status: AtomicStatus,
+    /// BlockCache config data.
+    config: BlockCacheConfig,
 }
 
 impl FinalisedState {
@@ -101,19 +105,18 @@ impl FinalisedState {
     /// - status: FinalisedState status.
     pub async fn spawn(
         fetcher: &JsonRpcConnector,
-        db_path: &str,
-        db_size: Option<usize>,
         block_receiver: tokio::sync::mpsc::Receiver<(Height, Hash, CompactBlock)>,
+        config: BlockCacheConfig,
     ) -> Result<Self, FinalisedStateError> {
-        let db_size = db_size.unwrap_or(8);
-        if !std::path::Path::new(db_path).exists() {
-            fs::create_dir_all(db_path)?;
+        let db_size = config.db_size.unwrap_or(8);
+        if !config.db_path.exists() {
+            fs::create_dir_all(&config.db_path)?;
         }
         let database = Arc::new(
             Environment::new()
                 .set_max_dbs(2)
                 .set_map_size(db_size * 1024 * 1024 * 1024)
-                .open(std::path::Path::new(db_path))?,
+                .open(&config.db_path)?,
         );
 
         let heights_to_hashes = match database.open_db(Some("heights_to_hashes")) {
@@ -142,14 +145,17 @@ impl FinalisedState {
             read_task_handle: None,
             write_task_handle: None,
             status: AtomicStatus::new(StatusType::Spawning.into()),
+            config,
         };
+
+        finalised_state.sync_db_from_reorg().await?;
 
         finalised_state.write_task_handle =
             Some(finalised_state.spawn_writer(block_receiver).await?);
 
-        // TODO: Sync to server!
-
         finalised_state.read_task_handle = Some(finalised_state.spawn_reader(request_rx).await?);
+
+        finalised_state.status.store(StatusType::Ready.into());
 
         Ok(finalised_state)
     }
@@ -174,8 +180,7 @@ impl FinalisedState {
                             match finalised_state.get_hash(height.0) {
                                 Ok(db_hash) => {
                                     if db_hash != hash {
-                                        if finalised_state.delete_block((height, db_hash)).is_err()
-                                        {
+                                        if finalised_state.delete_block(height).is_err() {
                                             finalised_state
                                                 .status
                                                 .store(StatusType::CriticalError.into());
@@ -200,8 +205,10 @@ impl FinalisedState {
                         }
                         Err(FinalisedStateError::LmdbError(db_err)) => {
                             eprintln!("❌ LMDB error inserting block {}: {:?}", height.0, db_err);
-                            // serious error!
-                            break;
+                            finalised_state
+                                .status
+                                .store(StatusType::CriticalError.into());
+                            return;
                         }
                         Err(e) => {
                             eprintln!(
@@ -222,7 +229,12 @@ impl FinalisedState {
 
                             retry_attempts -= 1;
 
-                            match finalised_state.fetch_block_from_node(height.0).await {
+                            match fetch_block_from_node(
+                                &finalised_state.fetcher,
+                                HashOrHeight::Height(height),
+                            )
+                            .await
+                            {
                                 Ok((new_hash, new_compact_block)) => {
                                     eprintln!(
                                         "🔄 Re-fetched block at height {}, retrying insert.",
@@ -282,6 +294,152 @@ impl FinalisedState {
         Ok(reader_handle)
     }
 
+    /// Syncs database with the server,
+    /// waits for server to sync with P2P network,
+    /// Checks for reorg before syncing.
+    async fn sync_db_from_reorg(&self) -> Result<(), FinalisedStateError> {
+        let mut reorg_height = self.get_db_height()?;
+
+        let mut reorg_hash = self.get_hash(reorg_height.0)?;
+
+        let mut check_hash = match self
+            .fetcher
+            .get_block(reorg_height.0.to_string(), Some(1))
+            .await?
+        {
+            zaino_fetch::jsonrpc::response::GetBlockResponse::Object { hash, .. } => hash.0,
+            _ => {
+                return Err(FinalisedStateError::Custom(
+                    "Unexpected block response type".to_string(),
+                ))
+            }
+        };
+
+        // Find reorg height.
+        //
+        // Here this is the latest height at which the internal block hash matches the server block hash.
+        while reorg_hash != check_hash {
+            match reorg_height.previous() {
+                Ok(height) => reorg_height = height,
+                // Underflow error meaning reorg_height = start of chain.
+                // This means the whole non-finalised state is old.
+                // We fetch the first block in the chain here as the later refill logic always starts from [reorg_height + 1].
+                Err(_) => {
+                    let mut txn = self.database.begin_rw_txn()?;
+                    txn.clear_db(self.heights_to_hashes)?;
+                    txn.clear_db(self.hashes_to_blocks)?;
+                    txn.commit()?;
+                    loop {
+                        match fetch_block_from_node(
+                            &self.fetcher,
+                            HashOrHeight::Height(reorg_height),
+                        )
+                        .await
+                        {
+                            Ok((hash, block)) => {
+                                self.insert_block((reorg_height, hash, block))?;
+                                break;
+                            }
+                            Err(e) => {
+                                self.status.store(StatusType::RecoverableError.into());
+                                eprintln!("{e}");
+                                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                            }
+                        }
+                    }
+                    break;
+                }
+            };
+
+            reorg_hash = self.get_hash(reorg_height.0)?;
+
+            check_hash = match self
+                .fetcher
+                .get_block(reorg_height.0.to_string(), Some(1))
+                .await?
+            {
+                zaino_fetch::jsonrpc::response::GetBlockResponse::Object { hash, .. } => hash.0,
+                _ => {
+                    return Err(FinalisedStateError::Custom(
+                        "Unexpected block response type".to_string(),
+                    ))
+                }
+            };
+        }
+
+        // Refill from reorg_height[+1] to current server (finalised state) height.
+        let mut sync_height = self.fetcher.get_blockchain_info().await?.blocks.0 - 99;
+        for block_height in (reorg_height.0 + 1)..sync_height {
+            if self.get_hash(block_height).is_ok() {
+                self.delete_block(Height(block_height))?;
+            }
+            loop {
+                match fetch_block_from_node(
+                    &self.fetcher,
+                    HashOrHeight::Height(Height(block_height)),
+                )
+                .await
+                {
+                    Ok((hash, block)) => {
+                        self.insert_block((Height(block_height), hash, block))?;
+                        break;
+                    }
+                    Err(e) => {
+                        self.status.store(StatusType::RecoverableError.into());
+                        eprintln!("{e}");
+                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    }
+                }
+            }
+        }
+
+        // Wait for server to sync to with p2p network and sync new blocks.
+        if !self.config.network.is_regtest() && !self.config.no_sync {
+            self.status.store(StatusType::Syncing.into());
+                loop {
+                    let blockchain_info = self.fetcher.get_blockchain_info().await?;
+                    let server_height = blockchain_info.blocks.0;
+                    for block_height in (sync_height + 1)..(server_height - 99) {
+                        if self.get_hash(block_height).is_ok() {
+                            self.delete_block(Height(block_height))?;
+                        }
+                        loop {
+                            match fetch_block_from_node(
+                                &self.fetcher,
+                                HashOrHeight::Height(Height(block_height)),
+                            )
+                            .await
+                            {
+                                Ok((hash, block)) => {
+                                    self.insert_block((Height(block_height), hash, block))?;
+                                    break;
+                                }
+                                Err(e) => {
+                                    self.status.store(StatusType::RecoverableError.into());
+                                    eprintln!("{e}");
+                                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                                }
+                            }
+                        }
+                    }
+                    sync_height = server_height - 99;
+                    if (blockchain_info.blocks.0 as i64 - blockchain_info.estimated_height.0 as i64).abs() <= 10 {
+                        break;
+                    } else {
+                        println!(" - Validator syncing with network. ZainoDB chain height: {}, Validator chain height: {}, Estimated Network chain height: {}",
+                            &sync_height,
+                            &blockchain_info.blocks.0, 
+                            &blockchain_info.estimated_height.0 
+                        );
+                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                        continue;
+                    }
+                }
+        }
+
+        Ok(())
+    }
+
     /// Inserts a block into the finalised state.
     fn insert_block(&self, block: (Height, Hash, CompactBlock)) -> Result<(), FinalisedStateError> {
         let (height, hash, compact_block) = block;
@@ -317,8 +475,8 @@ impl FinalisedState {
     }
 
     /// Deletes a block from the finalised state.
-    fn delete_block(&self, block: (Height, Hash)) -> Result<(), FinalisedStateError> {
-        let (height, hash) = block;
+    fn delete_block(&self, height: Height) -> Result<(), FinalisedStateError> {
+        let hash = self.get_hash(height.0)?;
         let height_key = serde_json::to_vec(&DbHeight(height))?;
         let hash_key = serde_json::to_vec(&DbHash(hash))?;
 
@@ -370,70 +528,19 @@ impl FinalisedState {
         Ok(hash)
     }
 
-    /// Fetches CompactBlock from the validator.
-    ///
-    /// Uses 2 calls as z_get_block verbosity=1 is required to fetch txids from zcashd.
-    async fn fetch_block_from_node(
-        &self,
-        height: u32,
-    ) -> Result<(Hash, CompactBlock), FinalisedStateError> {
-        match self.fetcher.get_block(height.to_string(), Some(1)).await {
-            Ok(zaino_fetch::jsonrpc::response::GetBlockResponse::Object {
-                hash,
-                confirmations: _,
-                height: _,
-                time: _,
-                tx,
-                trees,
-            }) => match self.fetcher.get_block(hash.0.to_string(), Some(0)).await {
-                Ok(zaino_fetch::jsonrpc::response::GetBlockResponse::Object {
-                    hash: _,
-                    confirmations: _,
-                    height: _,
-                    time: _,
-                    tx: _,
-                    trees: _,
-                }) => Err(FinalisedStateError::Custom(
-                    "Found transaction of `Object` type, expected only `Hash` types.".to_string(),
-                )),
-                Ok(zaino_fetch::jsonrpc::response::GetBlockResponse::Raw(block_hex)) => Ok((
-                    hash.0,
-                    zaino_fetch::chain::block::FullBlock::parse_from_hex(
-                        block_hex.as_ref(),
-                        Some(Self::display_txids_to_server(tx)?),
-                    )?
-                    .into_compact(
-                        u32::try_from(trees.sapling())?,
-                        u32::try_from(trees.orchard())?,
-                    )?,
-                )),
-                Err(e) => Err(e.into()),
-            },
-            Ok(zaino_fetch::jsonrpc::response::GetBlockResponse::Raw(_)) => {
-                Err(FinalisedStateError::Custom(
-                    "Found transaction of `Raw` type, expected only `Hash` types.".to_string(),
-                ))
-            }
-            Err(e) => Err(e.into()),
-        }
-    }
+    /// Fetches the highest stored height from LMDB.
+    fn get_db_height(&self) -> Result<Height, FinalisedStateError> {
+        let txn = self.database.begin_ro_txn()?;
+        let mut cursor = txn.open_ro_cursor(self.heights_to_hashes)?;
 
-    /// Takes a vec of big endian hex encoded txids and returns them as a vec of little endian raw bytes.
-    fn display_txids_to_server(txids: Vec<String>) -> Result<Vec<Vec<u8>>, FinalisedStateError> {
-        txids
-            .iter()
-            .map(|txid| {
-                txid.as_bytes()
-                    .chunks(2)
-                    .map(|chunk| {
-                        let hex_pair =
-                            std::str::from_utf8(chunk).map_err(FinalisedStateError::from)?;
-                        u8::from_str_radix(hex_pair, 16).map_err(FinalisedStateError::from)
-                    })
-                    .rev()
-                    .collect::<Result<Vec<u8>, _>>()
-            })
-            .collect::<Result<Vec<Vec<u8>>, _>>()
+        if let Some((height_bytes, _)) = cursor.iter().last() {
+            let height: DbHeight = serde_json::from_slice(height_bytes)?;
+            Ok(height.0)
+        } else {
+            Err(FinalisedStateError::MissingData(
+                "No heights found in LMDB.".to_string(),
+            ))
+        }
     }
 
     /// Returns a [`FinalisedStateSubscriber`].
@@ -492,6 +599,7 @@ impl Clone for FinalisedState {
             read_task_handle: None,
             write_task_handle: None,
             status: self.status.clone(),
+            config: self.config.clone(),
         }
     }
 }

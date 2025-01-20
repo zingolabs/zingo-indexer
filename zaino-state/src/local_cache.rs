@@ -1,6 +1,6 @@
 //! Holds Zaino's local compact block cache implementation.
 
-use crate::{error::BlockCacheError, status::StatusType};
+use crate::{config::BlockCacheConfig, error::BlockCacheError, status::StatusType};
 
 pub mod finalised_state;
 pub mod non_finalised_state;
@@ -9,43 +9,47 @@ use finalised_state::{FinalisedState, FinalisedStateSubscriber};
 use non_finalised_state::{NonFinalisedState, NonFinalisedStateSubscriber};
 use zaino_fetch::jsonrpc::connector::JsonRpcConnector;
 use zaino_proto::proto::compact_formats::CompactBlock;
-use zebra_chain::block::Height;
+use zebra_chain::block::{Hash, Height};
 use zebra_state::HashOrHeight;
 
 /// Zaino's internal compact block cache.
 ///
 /// Used by the FetchService for efficiency.
 pub struct BlockCache {
+    fetcher: JsonRpcConnector,
     non_finalised_state: NonFinalisedState,
     finalised_state: FinalisedState,
+    config: BlockCacheConfig,
 }
 
 impl BlockCache {
     /// Spawns a new [`BlockCache`].
     pub async fn spawn(
         fetcher: &JsonRpcConnector,
-        capacity_and_shard_amount: Option<(usize, usize)>,
-        db_path: &str,
-        db_size: Option<usize>,
+        config: BlockCacheConfig,
     ) -> Result<Self, BlockCacheError> {
         let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(100);
 
-        let finalised_state = FinalisedState::spawn(fetcher, db_path, db_size, channel_rx).await?;
+        let finalised_state = FinalisedState::spawn(fetcher, channel_rx, config.clone()).await?;
 
         let non_finalised_state =
-            NonFinalisedState::spawn(fetcher, capacity_and_shard_amount, channel_tx).await?;
+            NonFinalisedState::spawn(fetcher, channel_tx, config.clone()).await?;
 
         Ok(BlockCache {
+            fetcher: fetcher.clone(),
             non_finalised_state,
             finalised_state,
+            config,
         })
     }
 
     /// Returns a [`BlockCacheSubscriber`].
     pub fn subscriber(&self) -> BlockCacheSubscriber {
         BlockCacheSubscriber {
+            fetcher: self.fetcher.clone(),
             non_finalised_state: self.non_finalised_state.subscriber(),
             finalised_state: self.finalised_state.subscriber(),
+            config: self.config.clone(),
         }
     }
 
@@ -65,13 +69,13 @@ impl BlockCache {
     }
 }
 
-// drop
-
 /// A subscriber to a [`BlockCache`].
 #[derive(Debug, Clone)]
 pub struct BlockCacheSubscriber {
+    fetcher: JsonRpcConnector,
     non_finalised_state: NonFinalisedStateSubscriber,
     finalised_state: FinalisedStateSubscriber,
+    config: BlockCacheConfig,
 }
 
 impl BlockCacheSubscriber {
@@ -82,21 +86,30 @@ impl BlockCacheSubscriber {
     ) -> Result<CompactBlock, BlockCacheError> {
         let hash_or_height: HashOrHeight = hash_or_height.parse()?;
 
-        match self
+        if self
             .non_finalised_state
             .conatins_hash_or_height(hash_or_height)
             .await
         {
-            true => self
-                .non_finalised_state
+            // Fetch from non-finalised state.
+            self.non_finalised_state
                 .get_compact_block(hash_or_height)
                 .await
-                .map_err(|e| BlockCacheError::NonFinalisedStateError(e)),
-            false => self
-                .finalised_state
-                .get_compact_block(hash_or_height)
-                .await
-                .map_err(|e| BlockCacheError::FinalisedStateError(e)),
+                .map_err(|e| BlockCacheError::NonFinalisedStateError(e))
+        } else {
+            match self.config.no_db {
+                // Fetch from finalised state.
+                false => self
+                    .finalised_state
+                    .get_compact_block(hash_or_height)
+                    .await
+                    .map_err(|e| BlockCacheError::FinalisedStateError(e)),
+                // Fetch from Validator.
+                true => {
+                    let (_, block) = fetch_block_from_node(&self.fetcher, hash_or_height).await?;
+                    Ok(block)
+                }
+            }
         }
     }
 
@@ -115,4 +128,69 @@ impl BlockCacheSubscriber {
             self.finalised_state.status(),
         )
     }
+}
+
+/// Fetches CompactBlock from the validator.
+///
+/// Uses 2 calls as z_get_block verbosity=1 is required to fetch txids from zcashd.
+pub(crate) async fn fetch_block_from_node(
+    fetcher: &JsonRpcConnector,
+    hash_or_height: HashOrHeight,
+) -> Result<(Hash, CompactBlock), BlockCacheError> {
+    match fetcher.get_block(hash_or_height.to_string(), Some(1)).await {
+        Ok(zaino_fetch::jsonrpc::response::GetBlockResponse::Object {
+            hash,
+            confirmations: _,
+            height: _,
+            time: _,
+            tx,
+            trees,
+        }) => match fetcher.get_block(hash.0.to_string(), Some(0)).await {
+            Ok(zaino_fetch::jsonrpc::response::GetBlockResponse::Object {
+                hash: _,
+                confirmations: _,
+                height: _,
+                time: _,
+                tx: _,
+                trees: _,
+            }) => Err(BlockCacheError::Custom(
+                "Found transaction of `Object` type, expected only `Hash` types.".to_string(),
+            )),
+            Ok(zaino_fetch::jsonrpc::response::GetBlockResponse::Raw(block_hex)) => Ok((
+                hash.0,
+                zaino_fetch::chain::block::FullBlock::parse_from_hex(
+                    block_hex.as_ref(),
+                    Some(display_txids_to_server(tx)?),
+                )?
+                .into_compact(
+                    u32::try_from(trees.sapling())?,
+                    u32::try_from(trees.orchard())?,
+                )?,
+            )),
+            Err(e) => Err(e.into()),
+        },
+        Ok(zaino_fetch::jsonrpc::response::GetBlockResponse::Raw(_)) => {
+            Err(BlockCacheError::Custom(
+                "Found transaction of `Raw` type, expected only `Hash` types.".to_string(),
+            ))
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Takes a vec of big endian hex encoded txids and returns them as a vec of little endian raw bytes.
+fn display_txids_to_server(txids: Vec<String>) -> Result<Vec<Vec<u8>>, BlockCacheError> {
+    txids
+        .iter()
+        .map(|txid| {
+            txid.as_bytes()
+                .chunks(2)
+                .map(|chunk| {
+                    let hex_pair = std::str::from_utf8(chunk).map_err(BlockCacheError::from)?;
+                    u8::from_str_radix(hex_pair, 16).map_err(BlockCacheError::from)
+                })
+                .rev()
+                .collect::<Result<Vec<u8>, _>>()
+        })
+        .collect::<Result<Vec<Vec<u8>>, _>>()
 }
