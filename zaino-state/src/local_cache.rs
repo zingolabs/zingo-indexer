@@ -7,7 +7,10 @@ pub mod non_finalised_state;
 
 use finalised_state::{FinalisedState, FinalisedStateSubscriber};
 use non_finalised_state::{NonFinalisedState, NonFinalisedStateSubscriber};
-use zaino_fetch::jsonrpc::connector::JsonRpcConnector;
+use zaino_fetch::{
+    chain::block::FullBlock,
+    jsonrpc::{connector::JsonRpcConnector, response::GetBlockResponse},
+};
 use zaino_proto::proto::compact_formats::CompactBlock;
 use zebra_chain::block::{Hash, Height};
 use zebra_state::HashOrHeight;
@@ -137,45 +140,35 @@ pub(crate) async fn fetch_block_from_node(
     fetcher: &JsonRpcConnector,
     hash_or_height: HashOrHeight,
 ) -> Result<(Hash, CompactBlock), BlockCacheError> {
-    match fetcher.get_block(hash_or_height.to_string(), Some(1)).await {
-        Ok(zaino_fetch::jsonrpc::response::GetBlockResponse::Object {
-            hash,
-            confirmations: _,
-            height: _,
-            time: _,
-            tx,
-            trees,
-        }) => match fetcher.get_block(hash.0.to_string(), Some(0)).await {
-            Ok(zaino_fetch::jsonrpc::response::GetBlockResponse::Object {
-                hash: _,
-                confirmations: _,
-                height: _,
-                time: _,
-                tx: _,
-                trees: _,
-            }) => Err(BlockCacheError::Custom(
+    let (hash, tx, trees) = fetcher
+        .get_block(hash_or_height.to_string(), Some(1))
+        .await
+        .map_err(BlockCacheError::from)
+        .and_then(|response| match response {
+            GetBlockResponse::Raw(_) => Err(BlockCacheError::Custom(
+                "Found transaction of `Raw` type, expected only `Hash` types.".to_string(),
+            )),
+            GetBlockResponse::Object {
+                hash, tx, trees, ..
+            } => Ok((hash, tx, trees)),
+        })?;
+    fetcher
+        .get_block(hash.0.to_string(), Some(0))
+        .await
+        .map_err(BlockCacheError::from)
+        .and_then(|response| match response {
+            GetBlockResponse::Object { .. } => Err(BlockCacheError::Custom(
                 "Found transaction of `Object` type, expected only `Hash` types.".to_string(),
             )),
-            Ok(zaino_fetch::jsonrpc::response::GetBlockResponse::Raw(block_hex)) => Ok((
+            GetBlockResponse::Raw(block_hex) => Ok((
                 hash.0,
-                zaino_fetch::chain::block::FullBlock::parse_from_hex(
-                    block_hex.as_ref(),
-                    Some(display_txids_to_server(tx)?),
-                )?
-                .into_compact(
-                    u32::try_from(trees.sapling())?,
-                    u32::try_from(trees.orchard())?,
-                )?,
+                FullBlock::parse_from_hex(block_hex.as_ref(), Some(display_txids_to_server(tx)?))?
+                    .into_compact(
+                        u32::try_from(trees.sapling())?,
+                        u32::try_from(trees.orchard())?,
+                    )?,
             )),
-            Err(e) => Err(e.into()),
-        },
-        Ok(zaino_fetch::jsonrpc::response::GetBlockResponse::Raw(_)) => {
-            Err(BlockCacheError::Custom(
-                "Found transaction of `Raw` type, expected only `Hash` types.".to_string(),
-            ))
-        }
-        Err(e) => Err(e.into()),
-    }
+        })
 }
 
 /// Takes a vec of big endian hex encoded txids and returns them as a vec of little endian raw bytes.

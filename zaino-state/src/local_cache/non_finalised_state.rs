@@ -98,12 +98,15 @@ impl NonFinalisedState {
             non_finalised_state.status.store(StatusType::Syncing.into());
             loop {
                 let blockchain_info = fetcher.get_blockchain_info().await?;
-                if (blockchain_info.blocks.0 as i64 - blockchain_info.estimated_height.0 as i64).abs() <= 10 {
+                if (blockchain_info.blocks.0 as i64 - blockchain_info.estimated_height.0 as i64)
+                    .abs()
+                    <= 10
+                {
                     break;
                 } else {
                     println!(" - Validator syncing with network. Validator chain height: {}, Estimated Network chain height: {}",
-                        &blockchain_info.blocks.0, 
-                        &blockchain_info.estimated_height.0 
+                        &blockchain_info.blocks.0,
+                        &blockchain_info.estimated_height.0
                     );
                     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     continue;
