@@ -1,28 +1,64 @@
 # Configuration for Zaino
 
-# Sets the TcpIngestor's status (true or false)
-tcp_active = true
-
-# Optional TcpIngestors listen port (use None or specify a port number)
+# Zainod's gRPC server listen port.
 listen_port = 8137
 
-# Full node / validator listen port
+# Full node / validator listen port.
 zebrad_port = 18232
 
-# Optional full node Username
+# Optional full node / validator Username.
 node_user = "xxxxxx"
 
-# Optional full node Password
+# Optional full node / validator Password.
 node_password = "xxxxxx"
 
-# Maximum requests allowed in the request queue
+# Maximum requests allowed in Zainod's request queue.
 max_queue_size = 1024
 
-# Maximum workers allowed in the worker pool
+# Maximum workers allowed in Zainod's worker pool.
 max_worker_pool_size = 64
 
-# Minimum number of workers held in the worker pool when idle
+# Minimum number of workers maintained in the worker pool when idle.
 idle_worker_pool_size = 4
 
-# Network chain type (Mainnet, Testnet, Regtest)
+# Capacity of the Dashmaps used for the Mempool.
+# Also use by the BlockCache::NonFinalisedState when using the FetchService.
+# 
+# None by default.
+# map_capacity = None
+
+# Number of shard used in the DashMap used for the Mempool.
+# Also use by the BlockCache::NonFinalisedState when using the FetchService.
+#
+# shard_amount should greater than 0 and be a power of two.
+# If a shard_amount which is not a power of two is provided, the function will panic.
+#
+# None by default.
+# map_shard_amount = None
+    
+# Block Cache database file path.
+#
+# This is Zaino's Compact Block Cache db if using the FetchService or Zebra's RocksDB if using the StateService.
+#
+# None by default, this defaults to `$HOME/.cache/zaino/`
+# db_path = None
+    
+# Block Cache database maximum size in gb.
+#
+# Only used by the FetchService.
+# 
+# None by default
+# db_size = None
+    
+# Network chain type (Mainnet, Testnet, Regtest).
 network = "Testnet"
+    
+# Disables internal sync and stops zaino waiting on server to sync with p2p network.
+# Useful for testing.
+no_sync = false,
+  
+# Disables the FinalisedState in the BlockCache 
+# 
+# Only used by the FetchServic.
+# Used for testing.
+no_db = false,

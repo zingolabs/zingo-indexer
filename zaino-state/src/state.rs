@@ -1071,7 +1071,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_state_regtest_service_no_cache() {
-        let mut test_manager = TestManager::launch("zebrad", None, None, false, false)
+        let mut test_manager = TestManager::launch("zebrad", None, None, false, true, true, false)
             .await
             .unwrap();
 
@@ -1106,10 +1106,17 @@ mod tests {
 
     #[tokio::test]
     async fn launch_state_regtest_service_with_cache() {
-        let mut test_manager =
-            TestManager::launch("zebrad", None, ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
-                .await
-                .unwrap();
+        let mut test_manager = TestManager::launch(
+            "zebrad",
+            None,
+            ZEBRAD_CHAIN_CACHE_BIN.clone(),
+            false,
+            true,
+            true,
+            false,
+        )
+        .await
+        .unwrap();
 
         let state_service = StateService::spawn(StateServiceConfig::new(
             zebra_state::Config {
@@ -1142,10 +1149,17 @@ mod tests {
 
     #[tokio::test]
     async fn state_service_regtest_get_info() {
-        let mut test_manager =
-            TestManager::launch("zebrad", None, ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
-                .await
-                .unwrap();
+        let mut test_manager = TestManager::launch(
+            "zebrad",
+            None,
+            ZEBRAD_CHAIN_CACHE_BIN.clone(),
+            false,
+            true,
+            true,
+            false,
+        )
+        .await
+        .unwrap();
 
         let state_service = StateService::spawn(StateServiceConfig::new(
             zebra_state::Config {
@@ -1199,10 +1213,17 @@ mod tests {
 
     #[tokio::test]
     async fn state_service_regtest_get_blockchain_info() {
-        let mut test_manager =
-            TestManager::launch("zebrad", None, ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
-                .await
-                .unwrap();
+        let mut test_manager = TestManager::launch(
+            "zebrad",
+            None,
+            ZEBRAD_CHAIN_CACHE_BIN.clone(),
+            false,
+            true,
+            true,
+            false,
+        )
+        .await
+        .unwrap();
 
         let state_service = StateService::spawn(StateServiceConfig::new(
             zebra_state::Config {
@@ -1277,7 +1298,7 @@ mod tests {
     /// Bug documented in https://github.com/zingolabs/zaino/issues/146.
     #[tokio::test]
     async fn state_service_get_blockchain_info_no_cache() {
-        let mut test_manager = TestManager::launch("zebrad", None, None, false, false)
+        let mut test_manager = TestManager::launch("zebrad", None, None, false, true, true, false)
             .await
             .unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
@@ -1365,10 +1386,17 @@ mod tests {
 
     #[tokio::test]
     async fn state_service_regtest_get_block_raw() {
-        let mut test_manager =
-            TestManager::launch("zebrad", None, ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
-                .await
-                .unwrap();
+        let mut test_manager = TestManager::launch(
+            "zebrad",
+            None,
+            ZEBRAD_CHAIN_CACHE_BIN.clone(),
+            false,
+            true,
+            true,
+            false,
+        )
+        .await
+        .unwrap();
 
         let state_service = StateService::spawn(StateServiceConfig::new(
             zebra_state::Config {
@@ -1431,10 +1459,17 @@ mod tests {
 
     #[tokio::test]
     async fn state_service_regtest_get_block_object() {
-        let mut test_manager =
-            TestManager::launch("zebrad", None, ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
-                .await
-                .unwrap();
+        let mut test_manager = TestManager::launch(
+            "zebrad",
+            None,
+            ZEBRAD_CHAIN_CACHE_BIN.clone(),
+            false,
+            true,
+            true,
+            false,
+        )
+        .await
+        .unwrap();
 
         let state_service = StateService::spawn(StateServiceConfig::new(
             zebra_state::Config {
@@ -1528,10 +1563,17 @@ mod tests {
     /// WARNING: This tests needs refactoring due to code removed in zaino-state.
     #[tokio::test]
     async fn state_service_regtest_get_block_compact() {
-        let mut test_manager =
-            TestManager::launch("zebrad", None, ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
-                .await
-                .unwrap();
+        let mut test_manager = TestManager::launch(
+            "zebrad",
+            None,
+            ZEBRAD_CHAIN_CACHE_BIN.clone(),
+            false,
+            true,
+            true,
+            false,
+        )
+        .await
+        .unwrap();
 
         let state_service = StateService::spawn(StateServiceConfig::new(
             zebra_state::Config {
@@ -1577,10 +1619,17 @@ mod tests {
     /// WARNING: This tests needs refactoring due to code removed in zaino-state.
     #[tokio::test]
     async fn state_service_regtest_get_block_range() {
-        let mut test_manager =
-            TestManager::launch("zebrad", None, ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
-                .await
-                .unwrap();
+        let mut test_manager = TestManager::launch(
+            "zebrad",
+            None,
+            ZEBRAD_CHAIN_CACHE_BIN.clone(),
+            false,
+            true,
+            true,
+            false,
+        )
+        .await
+        .unwrap();
         let block_range = BlockRange {
             start: Some(BlockId {
                 height: 50,
@@ -1643,6 +1692,8 @@ mod tests {
             Some(zcash_local_net::network::Network::Testnet),
             ZEBRAD_TESTNET_CACHE_BIN.clone(),
             false,
+            true,
+            true,
             false,
         )
         .await

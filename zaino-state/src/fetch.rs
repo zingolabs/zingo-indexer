@@ -393,11 +393,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
     ) -> Result<GetSubtrees, Self::Error> {
         Ok(self
             .fetcher
-            .get_subtrees_by_index(
-                pool,
-                start_index.0,
-                limit.map(|limit_index| limit_index.0),
-            )
+            .get_subtrees_by_index(pool, start_index.0, limit.map(|limit_index| limit_index.0))
             .await?
             .into())
     }
@@ -1863,9 +1859,10 @@ mod tests {
     }
 
     async fn launch_fetch_service(validator: &str, chain_cache: Option<std::path::PathBuf>) {
-        let mut test_manager = TestManager::launch(validator, None, chain_cache, false, false)
-            .await
-            .unwrap();
+        let mut test_manager =
+            TestManager::launch(validator, None, chain_cache, false, true, true, false)
+                .await
+                .unwrap();
 
         let fetch_service = FetchService::spawn(
             FetchServiceConfig::new(
@@ -1877,7 +1874,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -1901,7 +1908,7 @@ mod tests {
     }
 
     async fn fetch_service_get_address_balance(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
             .await
             .unwrap();
 
@@ -1932,7 +1939,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -1965,7 +1982,7 @@ mod tests {
     }
 
     async fn fetch_service_get_block_raw(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, false, false)
+        let mut test_manager = TestManager::launch(validator, None, None, false, true, true, false)
             .await
             .unwrap();
 
@@ -1979,7 +1996,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -2003,7 +2030,7 @@ mod tests {
     }
 
     async fn fetch_service_get_block_object(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, false, false)
+        let mut test_manager = TestManager::launch(validator, None, None, false, true, true, false)
             .await
             .unwrap();
 
@@ -2017,7 +2044,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -2041,7 +2078,7 @@ mod tests {
     }
 
     async fn fetch_service_get_raw_mempool(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
             .await
             .unwrap();
         let clients = test_manager
@@ -2062,7 +2099,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -2121,7 +2168,7 @@ mod tests {
     }
 
     async fn fetch_service_z_get_treestate(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
             .await
             .unwrap();
 
@@ -2154,7 +2201,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -2178,7 +2235,7 @@ mod tests {
     }
 
     async fn fetch_service_z_get_subtrees_by_index(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
             .await
             .unwrap();
 
@@ -2211,7 +2268,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -2235,7 +2302,7 @@ mod tests {
     }
 
     async fn fetch_service_get_raw_transaction(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
             .await
             .unwrap();
 
@@ -2268,7 +2335,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -2292,7 +2369,7 @@ mod tests {
     }
 
     async fn fetch_service_get_address_tx_ids(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
             .await
             .unwrap();
 
@@ -2321,7 +2398,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -2353,7 +2440,7 @@ mod tests {
     }
 
     async fn fetch_service_get_address_utxos(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
             .await
             .unwrap();
 
@@ -2383,7 +2470,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -2412,7 +2509,7 @@ mod tests {
     }
 
     async fn fetch_service_get_latest_block(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
             .await
             .unwrap();
 
@@ -2426,7 +2523,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -2450,7 +2557,7 @@ mod tests {
     }
 
     async fn fetch_service_get_block(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
             .await
             .unwrap();
 
@@ -2464,7 +2571,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -2493,7 +2610,7 @@ mod tests {
     }
 
     async fn fetch_service_get_block_nullifiers(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
             .await
             .unwrap();
 
@@ -2507,7 +2624,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -2538,7 +2665,7 @@ mod tests {
     }
 
     async fn fetch_service_get_block_range(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
             .await
             .unwrap();
         test_manager.local_net.generate_blocks(10).await.unwrap();
@@ -2553,7 +2680,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -2596,7 +2733,7 @@ mod tests {
     }
 
     async fn fetch_service_get_block_range_nullifiers(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
             .await
             .unwrap();
         test_manager.local_net.generate_blocks(10).await.unwrap();
@@ -2611,7 +2748,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -2654,7 +2801,7 @@ mod tests {
     }
 
     async fn fetch_service_get_transaction_mined(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
             .await
             .unwrap();
 
@@ -2673,7 +2820,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -2719,7 +2876,7 @@ mod tests {
     }
 
     async fn fetch_service_get_transaction_mempool(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
             .await
             .unwrap();
 
@@ -2738,7 +2895,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -2783,7 +2950,7 @@ mod tests {
     }
 
     async fn fetch_service_get_taddress_txids(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
             .await
             .unwrap();
 
@@ -2803,7 +2970,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -2859,7 +3036,7 @@ mod tests {
     }
 
     async fn fetch_service_get_taddress_balance(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
             .await
             .unwrap();
 
@@ -2879,7 +3056,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -2924,7 +3111,7 @@ mod tests {
     }
 
     async fn fetch_service_get_mempool_tx(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
             .await
             .unwrap();
         let clients = test_manager
@@ -2942,7 +3129,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -3033,7 +3230,7 @@ mod tests {
     }
 
     async fn fetch_service_get_mempool_stream(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
             .await
             .unwrap();
 
@@ -3052,7 +3249,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -3115,7 +3322,7 @@ mod tests {
     }
 
     async fn fetch_service_get_tree_state(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
             .await
             .unwrap();
 
@@ -3129,7 +3336,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -3160,7 +3377,7 @@ mod tests {
     }
 
     async fn fetch_service_get_latest_tree_state(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
             .await
             .unwrap();
 
@@ -3174,7 +3391,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -3195,7 +3422,7 @@ mod tests {
     }
 
     async fn fetch_service_get_subtree_roots(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
             .await
             .unwrap();
 
@@ -3209,7 +3436,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -3247,7 +3484,7 @@ mod tests {
     }
 
     async fn fetch_service_get_taddress_utxos(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
             .await
             .unwrap();
 
@@ -3267,7 +3504,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -3309,7 +3556,7 @@ mod tests {
     }
 
     async fn fetch_service_get_taddress_utxos_stream(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
             .await
             .unwrap();
 
@@ -3329,7 +3576,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
@@ -3376,7 +3633,7 @@ mod tests {
     }
 
     async fn fetch_service_get_lightd_info(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true)
+        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
             .await
             .unwrap();
 
@@ -3390,7 +3647,17 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                None,
                 Network::new_regtest(Some(1), Some(1)),
+                true,
                 true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),

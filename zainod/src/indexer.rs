@@ -73,18 +73,14 @@ impl Indexer {
         set_ctrlc(online.clone());
         startup_message();
         println!("Launching Zaino..");
-        let indexer: Indexer = Indexer::new(config, online.clone(), false).await?;
+        let indexer: Indexer = Indexer::new(config, online.clone()).await?;
         indexer.serve().await?.await?
     }
 
     /// Creates a new Indexer.
     ///
     /// Currently only takes an IndexerConfig.
-    pub async fn new(
-        config: IndexerConfig,
-        online: Arc<AtomicBool>,
-        no_sync: bool,
-    ) -> Result<Self, IndexerError> {
+    pub async fn new(config: IndexerConfig, online: Arc<AtomicBool>) -> Result<Self, IndexerError> {
         config.check_config()?;
         let status = IndexerStatus::new(config.max_worker_pool_size);
         let tcp_ingestor_listen_addr = SocketAddr::new(
@@ -109,12 +105,17 @@ impl Indexer {
                     std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
                     config.zebrad_port,
                 ),
+                config.node_user.clone(),
+                config.node_password.clone(),
                 None,
                 None,
-                None,
-                None,
+                config.map_capacity,
+                config.map_shard_amount,
+                config.db_path.clone(),
+                config.db_size,
                 config.get_network()?,
-                no_sync,
+                config.no_sync,
+                config.no_db,
             ),
             status.service_status.clone(),
         )

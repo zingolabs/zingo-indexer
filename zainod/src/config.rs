@@ -12,9 +12,9 @@ pub struct IndexerConfig {
     pub listen_port: u16,
     /// Full node / validator listen port.
     pub zebrad_port: u16,
-    /// Full node Username.
+    /// Full node / validator Username.
     pub node_user: Option<String>,
-    /// full node Password.
+    /// full node / validator Password.
     pub node_password: Option<String>,
     /// Maximum requests allowed in the request queue.
     pub max_queue_size: u16,
@@ -43,7 +43,7 @@ pub struct IndexerConfig {
     ///
     /// Only used by the FetchService.
     pub db_size: Option<usize>,
-    /// StateService network type.
+    /// Network chain type (Mainnet, Testnet, Regtest).
     pub network: String,
     /// Disables internal sync and stops zaino waiting on server sync.
     /// Used for testing.
