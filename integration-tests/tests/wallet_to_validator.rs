@@ -209,29 +209,32 @@ mod wallet_basic {
 
         println!("\n\nFetching Tx From Unfinalized Chain!\n");
 
-        let _unfinalised_transactions = dbg!(
-            fetch_service
-                .get_address_txids(
-                    vec![clients.get_recipient_address("transparent").await],
-                    height,
-                    height,
-                )
-                .await
-        );
+        let unfinalised_transactions = fetch_service
+            .get_address_txids(
+                vec![clients.get_recipient_address("transparent").await],
+                height,
+                height,
+            )
+            .await
+            .unwrap();
+        
+
+        dbg!(unfinalised_transactions.clone());
 
         test_manager.local_net.generate_blocks(99).await.unwrap();
 
         println!("\n\nFetching Tx From Finalized Chain!\n");
 
-        let _finalised_transactions = dbg!(
-            fetch_service
-                .get_address_txids(
-                    vec![clients.get_recipient_address("transparent").await],
-                    height,
-                    height,
-                )
-                .await
-        );
+        let finalised_transactions = fetch_service
+            .get_address_txids(
+                vec![clients.get_recipient_address("transparent").await],
+                height,
+                height,
+            )
+            .await
+            .unwrap();
+
+        dbg!(finalised_transactions.clone());
 
         clients.recipient.do_sync(true).await.unwrap();
 
@@ -245,6 +248,8 @@ mod wallet_basic {
             250_000
         );
 
+
+        assert_eq!(unfinalised_transactions, finalised_transactions);
         // test_manager.local_net.print_stdout();
 
         test_manager.close().await;
