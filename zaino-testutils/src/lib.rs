@@ -253,13 +253,13 @@ impl zcash_local_net::validator::Validator for LocalNet {
     }
 }
 
-/// Holds zingo lightclients along with thier TempDir for wallet-2-validator tests.
+/// Holds zingo lightclients along with their TempDir for wallet-2-validator tests.
 pub struct Clients {
     /// Lightclient TempDir location.
     pub lightclient_dir: TempDir,
     /// Faucet (zingolib lightclient).
     ///
-    /// Mining rewards are recieved by this client for use in tests.
+    /// Mining rewards are received by this client for use in tests.
     pub faucet: zingolib::lightclient::LightClient,
     /// Recipient (zingolib lightclient).
     pub recipient: zingolib::lightclient::LightClient,
@@ -589,7 +589,7 @@ mod tests {
         test_manager.close().await;
     }
 
-    /// This test shows currently we do not recieve mining rewards from Zebra unless we mine 100 blocks at a time.
+    /// This test shows currently we do not receive mining rewards from Zebra unless we mine 100 blocks at a time.
     /// This is not the case with Zcashd and should not be the case here.
     /// Even if rewards need 100 confirmations these blocks should not have to be mined at the same time.
     #[tokio::test]
@@ -612,7 +612,7 @@ mod tests {
         assert!(
                 clients.faucet.do_balance().await.orchard_balance.unwrap() > 0
                     || clients.faucet.do_balance().await.transparent_balance.unwrap() > 0,
-                "No mining reward recieved from Zebrad. Faucet Orchard Balance: {:}. Faucet Transparent Balance: {:}.",
+                "No mining reward received from Zebrad. Faucet Orchard Balance: {:}. Faucet Transparent Balance: {:}.",
                 clients.faucet.do_balance().await.orchard_balance.unwrap(),
                 clients.faucet.do_balance().await.transparent_balance.unwrap()
         );
@@ -636,7 +636,7 @@ mod tests {
         assert!(
                 clients.faucet.do_balance().await.orchard_balance.unwrap() > 0
                     || clients.faucet.do_balance().await.transparent_balance.unwrap() > 0,
-                "No mining reward recieved from Zcashd. Faucet Orchard Balance: {:}. Faucet Transparent Balance: {:}.",
+                "No mining reward received from Zcashd. Faucet Orchard Balance: {:}. Faucet Transparent Balance: {:}.",
                 clients.faucet.do_balance().await.orchard_balance.unwrap(),
                 clients.faucet.do_balance().await.transparent_balance.unwrap()
             );
@@ -666,7 +666,7 @@ mod tests {
                 .transparent_balance
                 .unwrap()
                 > 0,
-            "No mining reward recieved from Zebrad. Faucet Transparent Balance: {:}.",
+            "No mining reward received from Zebrad. Faucet Transparent Balance: {:}.",
             clients
                 .faucet
                 .do_balance()
@@ -683,7 +683,7 @@ mod tests {
 
         assert!(
             clients.faucet.do_balance().await.orchard_balance.unwrap() > 0,
-            "No funds recieved from shield. Faucet Orchard Balance: {:}. Faucet Transparent Balance: {:}.",
+            "No funds received from shield. Faucet Orchard Balance: {:}. Faucet Transparent Balance: {:}.",
             clients.faucet.do_balance().await.orchard_balance.unwrap(),
             clients.faucet.do_balance().await.transparent_balance.unwrap()
         );
@@ -737,7 +737,7 @@ mod tests {
                 .verified_orchard_balance
                 .unwrap()
                 > 0,
-            "No mining reward recieved from Zcashd. Faucet Orchard Balance: {:}.",
+            "No mining reward received from Zcashd. Faucet Orchard Balance: {:}.",
             clients
                 .faucet
                 .do_balance()

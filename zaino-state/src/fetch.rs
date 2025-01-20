@@ -43,8 +43,8 @@ use zebra_rpc::methods::{
 /// This service is a central service, [`FetchServiceSubscriber`] should be created to fetch data.
 /// This is done to enable large numbers of concurrent subscribers without significant slowdowns.
 ///
-/// NOTE: We currently dop not implement clone for chain fetch services as this service is responsible for maintainng and closing its child processes.
-///       ServiceSubscribers are used to create seperate chain fetch processes while allowing central state processes to be managed in a sibgle place.
+/// NOTE: We currently dop not implement clone for chain fetch services as this service is responsible for maintaining and closing its child processes.
+///       ServiceSubscribers are used to create separate chain fetch processes while allowing central state processes to be managed in a single place.
 ///       If we want the ability to clone Service all JoinHandle's should be converted to Arc<JoinHandle>.
 #[derive(Debug)]
 pub struct FetchService {
@@ -396,7 +396,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .get_subtrees_by_index(
                 pool,
                 start_index.0,
-                limit.and_then(|limit_index| Some(limit_index.0)),
+                limit.map(|limit_index| limit_index.0),
             )
             .await?
             .into())
@@ -515,7 +515,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
 
     /// Return the compact block corresponding to the given block identifier
     ///
-    /// NOTE: This implementation is slow due to the absense on an internal CompactBlock cache.
+    /// NOTE: This implementation is slow due to the absence on an internal CompactBlock cache.
     async fn get_block(&self, request: BlockId) -> Result<CompactBlock, Self::Error> {
         let height: u32 = match request.height.try_into() {
             Ok(height) => height,
@@ -553,7 +553,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
 
     /// Same as GetBlock except actions contain only nullifiers
     ///
-    /// NOTE: This implementation is slow due to the absense on an internal CompactBlock cache.
+    /// NOTE: This implementation is slow due to the absence on an internal CompactBlock cache.
     async fn get_block_nullifiers(&self, request: BlockId) -> Result<CompactBlock, Self::Error> {
         let height: u32 = match request.height.try_into() {
             Ok(height) => height,
@@ -591,7 +591,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
 
     /// Return a list of consecutive compact blocks
     ///
-    /// NOTE: This implementation is slow due to the absense on an internal CompactBlock cache.
+    /// NOTE: This implementation is slow due to the absence on an internal CompactBlock cache.
     async fn get_block_range(
         &self,
         request: BlockRange,
@@ -704,7 +704,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
 
     /// Same as GetBlockRange except actions contain only nullifiers
     ///
-    /// NOTE: This implementation is slow due to the absense on an internal CompactBlock cache.
+    /// NOTE: This implementation is slow due to the absence on an internal CompactBlock cache.
     async fn get_block_range_nullifiers(
         &self,
         request: BlockRange,
@@ -1411,7 +1411,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             .z_get_subtrees_by_index(
                 pool.to_string(),
                 NoteCommitmentSubtreeIndex(start_index),
-                limit.and_then(|limit| Some(NoteCommitmentSubtreeIndex(limit))),
+                limit.map(NoteCommitmentSubtreeIndex),
             )
             .await?;
         let fetch_service_clone = self.clone();
@@ -1730,7 +1730,7 @@ impl FetchServiceSubscriber {
     ///
     /// Uses 2 calls as z_get_block verbosity=1 is required to fetch txids from zcashd.
     ///
-    /// NOTE: This implementation is slow due to the absense on an internal CompactBlock cache.
+    /// NOTE: This implementation is slow due to the absence on an internal CompactBlock cache.
     async fn get_compact_block(&self, height: &u32) -> Result<CompactBlock, FetchServiceError> {
         match self.z_get_block(height.to_string(), Some(1)).await {
             Ok(GetBlock::Object {
@@ -1763,12 +1763,12 @@ impl FetchServiceSubscriber {
                         u32::try_from(trees.orchard())?,
                     )?)
                 }
-                Err(e) => Err(e.into()),
+                Err(e) => Err(e),
             },
             Ok(GetBlock::Raw(_)) => Err(FetchServiceError::TonicStatusError(
                 tonic::Status::internal("Received raw block hex instead of block object."),
             )),
-            Err(e) => Err(e.into()),
+            Err(e) => Err(e),
         }
     }
 
@@ -1792,7 +1792,7 @@ impl FetchServiceSubscriber {
 
     /// Returns a compact block holding only action nullifiers.
     ///
-    /// NOTE: This implementation is slow due to the absense on an internal CompactBlock cache.
+    /// NOTE: This implementation is slow due to the absence on an internal CompactBlock cache.
     async fn get_nullifiers(&self, height: &u32) -> Result<CompactBlock, FetchServiceError> {
         match self.get_compact_block(height).await {
             Ok(block) => Ok(CompactBlock {

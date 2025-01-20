@@ -116,7 +116,7 @@ impl<T> Clone for QueueReceiver<T> {
 }
 
 impl<T> QueueReceiver<T> {
-    /// Try to receive a request from the queue, updatig queue size.
+    /// Try to receive a request from the queue, updating queue size.
     pub(crate) fn try_recv(&self) -> Result<T, QueueError<T>> {
         match self.inner.try_recv() {
             Ok(message) => {
@@ -128,7 +128,7 @@ impl<T> QueueReceiver<T> {
         }
     }
 
-    /// Listens indefinately for an incoming message on the queue. Returns message if received or error if queue is closed.
+    /// Listens indefinitely for an incoming message on the queue. Returns message if received or error if queue is closed.
     pub(crate) async fn listen(&self) -> Result<T, QueueError<T>> {
         // NOTE: This interval may need to be reduced or removed / moved once scale testing begins.
         let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(50));

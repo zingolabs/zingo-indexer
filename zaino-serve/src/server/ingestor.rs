@@ -86,7 +86,7 @@ impl TcpIngestor {
                             }
                             Err(e) => {
                                 eprintln!("Failed to accept connection with client: {}", e);
-                                // TODO: Handle failed connection errors here (count errors and restart ingestor / proxy or initiate shotdown?)
+                                // TODO: Handle failed connection errors here (count errors and restart ingestor / proxy or initiate shutdown?)
                             }
                         }
                     }

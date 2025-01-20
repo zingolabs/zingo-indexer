@@ -8,7 +8,7 @@ use tokio::net::TcpStream;
 #[derive(Debug, Clone)]
 struct QueueData {
     // / Exclusive request id.
-    // request_id: u64, // TODO: implement with request queue (implement exlusive request_id generator in queue object).
+    // request_id: u64, // TODO: implement with request queue (implement exclusive request_id generator in queue object).
     /// Time which the request was received.
     #[allow(dead_code)]
     time_received: SystemTime,
@@ -32,7 +32,7 @@ impl QueueData {
         self.requeue_attempts += 1;
     }
 
-    /// Returns the duration sunce the request was received.
+    /// Returns the duration since the request was received.
     #[allow(dead_code)]
     fn duration(&self) -> Result<std::time::Duration, RequestError> {
         self.time_received.elapsed().map_err(RequestError::from)
@@ -79,7 +79,7 @@ pub enum ZingoIndexerRequest {
 }
 
 impl ZingoIndexerRequest {
-    /// Creates a ZingoIndexerRequest from a gRPC service call, recieved by the gRPC server.
+    /// Creates a ZingoIndexerRequest from a gRPC service call, received by the gRPC server.
     ///
     /// TODO: implement proper functionality along with queue.
     pub(crate) fn new_from_grpc(stream: TcpStream) -> Self {
@@ -97,7 +97,7 @@ impl ZingoIndexerRequest {
         }
     }
 
-    /// Returns the duration sunce the request was received.
+    /// Returns the duration since the request was received.
     #[allow(dead_code)]
     pub(crate) fn duration(&self) -> Result<std::time::Duration, RequestError> {
         match self {

@@ -43,8 +43,8 @@ use zaino_proto::proto::compact_formats::{
 
 /// Chain fetch service backed by Zebra's `ReadStateService` and `TrustedChainSync`.
 ///
-/// NOTE: We currently dop not implement clone for chain fetch services as this service is responsible for maintainng and closing its child processes.
-///       ServiceSubscribers are used to create seperate chain fetch processes while allowing central state processes to be managed in a sibgle place.
+/// NOTE: We currently dop not implement clone for chain fetch services as this service is responsible for maintaining and closing its child processes.
+///       ServiceSubscribers are used to create separate chain fetch processes while allowing central state processes to be managed in a single place.
 ///       If we want the ability to clone Service all JoinHandle's should be converted to Arc<JoinHandle>.
 #[derive(Debug)]
 pub struct StateService {
@@ -1249,7 +1249,7 @@ mod tests {
         let fetch_service_get_blockchain_info: GetBlockChainInfo =
             fetch_service_get_blockchain_info.into();
 
-        // Zaino-Fetch does not return value_pools, ingnore this field.
+        // Zaino-Fetch does not return value_pools, ignore this field.
         assert_eq!(
             (
                 state_service_get_blockchain_info.chain(),
@@ -1338,7 +1338,7 @@ mod tests {
 
         test_manager.local_net.print_stdout();
 
-        // Zaino-Fetch does not return value_pools, ingnore this field.
+        // Zaino-Fetch does not return value_pools, ignore this field.
         assert_eq!(
             (
                 state_service_get_blockchain_info.chain(),

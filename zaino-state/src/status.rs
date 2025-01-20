@@ -5,7 +5,7 @@ use std::sync::{
     Arc,
 };
 
-/// Holds a thread safe reperesentation of a StatusType.
+/// Holds a thread safe representation of a StatusType.
 /// Possible values:
 /// - [0: Spawning]
 /// - [1: Syncing]

@@ -12,7 +12,7 @@ pub struct RawTransactionStream {
 }
 
 impl RawTransactionStream {
-    /// Returns new instanse of RawTransactionStream.
+    /// Returns new instance of RawTransactionStream.
     pub fn new(rx: tokio::sync::mpsc::Receiver<Result<RawTransaction, tonic::Status>>) -> Self {
         RawTransactionStream {
             inner: ReceiverStream::new(rx),
@@ -43,7 +43,7 @@ pub struct CompactTransactionStream {
 }
 
 impl CompactTransactionStream {
-    /// Returns new instanse of RawTransactionStream.
+    /// Returns new instance of RawTransactionStream.
     pub fn new(rx: tokio::sync::mpsc::Receiver<Result<CompactTx, tonic::Status>>) -> Self {
         CompactTransactionStream {
             inner: ReceiverStream::new(rx),
@@ -74,7 +74,7 @@ pub struct CompactBlockStream {
 }
 
 impl CompactBlockStream {
-    /// Returns new instanse of CompactBlockStream.
+    /// Returns new instance of CompactBlockStream.
     pub fn new(rx: tokio::sync::mpsc::Receiver<Result<CompactBlock, tonic::Status>>) -> Self {
         CompactBlockStream {
             inner: ReceiverStream::new(rx),
@@ -105,7 +105,7 @@ pub struct UtxoReplyStream {
 }
 
 impl UtxoReplyStream {
-    /// Returns new instanse of CompactBlockStream.
+    /// Returns new instance of CompactBlockStream.
     pub fn new(
         rx: tokio::sync::mpsc::Receiver<Result<GetAddressUtxosReply, tonic::Status>>,
     ) -> Self {
@@ -138,7 +138,7 @@ pub struct SubtreeRootReplyStream {
 }
 
 impl SubtreeRootReplyStream {
-    /// Returns new instanse of CompactBlockStream.
+    /// Returns new instance of CompactBlockStream.
     pub fn new(rx: tokio::sync::mpsc::Receiver<Result<SubtreeRoot, tonic::Status>>) -> Self {
         SubtreeRootReplyStream {
             inner: ReceiverStream::new(rx),
