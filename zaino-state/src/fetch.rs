@@ -393,11 +393,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
     ) -> Result<GetSubtrees, Self::Error> {
         Ok(self
             .fetcher
-            .get_subtrees_by_index(
-                pool,
-                start_index.0,
-                limit.map(|limit_index| limit_index.0),
-            )
+            .get_subtrees_by_index(pool, start_index.0, limit.map(|limit_index| limit_index.0))
             .await?
             .into())
     }

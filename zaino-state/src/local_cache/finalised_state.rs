@@ -149,11 +149,8 @@ impl FinalisedState {
         };
 
         finalised_state.sync_db_from_reorg().await?;
-
-        finalised_state.write_task_handle =
-            Some(finalised_state.spawn_writer(block_receiver).await?);
-
-        finalised_state.read_task_handle = Some(finalised_state.spawn_reader(request_rx).await?);
+        finalised_state.spawn_writer(block_receiver).await?;
+        finalised_state.spawn_reader(request_rx).await?;
 
         finalised_state.status.store(StatusType::Ready.into());
 
@@ -161,10 +158,20 @@ impl FinalisedState {
     }
 
     async fn spawn_writer(
-        &self,
+        &mut self,
         mut block_receiver: tokio::sync::mpsc::Receiver<(Height, Hash, CompactBlock)>,
-    ) -> Result<tokio::task::JoinHandle<()>, FinalisedStateError> {
-        let finalised_state = self.clone();
+    ) -> Result<(), FinalisedStateError> {
+        let finalised_state = Self {
+            fetcher: self.fetcher.clone(),
+            database: Arc::clone(&self.database),
+            heights_to_hashes: self.heights_to_hashes,
+            hashes_to_blocks: self.hashes_to_blocks,
+            request_sender: self.request_sender.clone(),
+            read_task_handle: None,
+            write_task_handle: None,
+            status: self.status.clone(),
+            config: self.config.clone(),
+        };
 
         let writer_handle = tokio::spawn(async move {
             while let Some((height, mut hash, mut compact_block)) = block_receiver.recv().await {
@@ -262,14 +269,25 @@ impl FinalisedState {
             }
         });
 
-        Ok(writer_handle)
+        self.write_task_handle = Some(writer_handle);
+        Ok(())
     }
 
     async fn spawn_reader(
-        &self,
+        &mut self,
         mut request_receiver: tokio::sync::mpsc::Receiver<DbRequest>,
-    ) -> Result<tokio::task::JoinHandle<()>, FinalisedStateError> {
-        let finalised_state = self.clone();
+    ) -> Result<(), FinalisedStateError> {
+        let finalised_state = Self {
+            fetcher: self.fetcher.clone(),
+            database: Arc::clone(&self.database),
+            heights_to_hashes: self.heights_to_hashes,
+            hashes_to_blocks: self.hashes_to_blocks,
+            request_sender: self.request_sender.clone(),
+            read_task_handle: None,
+            write_task_handle: None,
+            status: self.status.clone(),
+            config: self.config.clone(),
+        };
 
         let reader_handle = tokio::spawn(async move {
             while let Some(DbRequest {
@@ -291,7 +309,8 @@ impl FinalisedState {
             }
         });
 
-        Ok(reader_handle)
+        self.read_task_handle = Some(reader_handle);
+        Ok(())
     }
 
     /// Syncs database with the server,
@@ -396,45 +415,48 @@ impl FinalisedState {
         // Wait for server to sync to with p2p network and sync new blocks.
         if !self.config.network.is_regtest() && !self.config.no_sync {
             self.status.store(StatusType::Syncing.into());
-                loop {
-                    let blockchain_info = self.fetcher.get_blockchain_info().await?;
-                    let server_height = blockchain_info.blocks.0;
-                    for block_height in (sync_height + 1)..(server_height - 99) {
-                        if self.get_hash(block_height).is_ok() {
-                            self.delete_block(Height(block_height))?;
-                        }
-                        loop {
-                            match fetch_block_from_node(
-                                &self.fetcher,
-                                HashOrHeight::Height(Height(block_height)),
-                            )
-                            .await
-                            {
-                                Ok((hash, block)) => {
-                                    self.insert_block((Height(block_height), hash, block))?;
-                                    break;
-                                }
-                                Err(e) => {
-                                    self.status.store(StatusType::RecoverableError.into());
-                                    eprintln!("{e}");
-                                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                                }
+            loop {
+                let blockchain_info = self.fetcher.get_blockchain_info().await?;
+                let server_height = blockchain_info.blocks.0;
+                for block_height in (sync_height + 1)..(server_height - 99) {
+                    if self.get_hash(block_height).is_ok() {
+                        self.delete_block(Height(block_height))?;
+                    }
+                    loop {
+                        match fetch_block_from_node(
+                            &self.fetcher,
+                            HashOrHeight::Height(Height(block_height)),
+                        )
+                        .await
+                        {
+                            Ok((hash, block)) => {
+                                self.insert_block((Height(block_height), hash, block))?;
+                                break;
+                            }
+                            Err(e) => {
+                                self.status.store(StatusType::RecoverableError.into());
+                                eprintln!("{e}");
+                                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                             }
                         }
                     }
-                    sync_height = server_height - 99;
-                    if (blockchain_info.blocks.0 as i64 - blockchain_info.estimated_height.0 as i64).abs() <= 10 {
-                        break;
-                    } else {
-                        println!(" - Validator syncing with network. ZainoDB chain height: {}, Validator chain height: {}, Estimated Network chain height: {}",
-                            &sync_height,
-                            &blockchain_info.blocks.0, 
-                            &blockchain_info.estimated_height.0 
-                        );
-                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                        continue;
-                    }
                 }
+                sync_height = server_height - 99;
+                if (blockchain_info.blocks.0 as i64 - blockchain_info.estimated_height.0 as i64)
+                    .abs()
+                    <= 10
+                {
+                    break;
+                } else {
+                    println!(" - Validator syncing with network. ZainoDB chain height: {}, Validator chain height: {}, Estimated Network chain height: {}",
+                            &sync_height,
+                            &blockchain_info.blocks.0,
+                            &blockchain_info.estimated_height.0
+                        );
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    continue;
+                }
+            }
         }
 
         Ok(())
@@ -584,22 +606,6 @@ impl Drop for FinalisedState {
 
         if let Err(e) = self.database.sync(true) {
             eprintln!("❌ Error syncing LMDB before shutdown: {:?}", e);
-        }
-    }
-}
-
-impl Clone for FinalisedState {
-    fn clone(&self) -> Self {
-        Self {
-            fetcher: self.fetcher.clone(),
-            database: Arc::clone(&self.database),
-            heights_to_hashes: self.heights_to_hashes,
-            hashes_to_blocks: self.hashes_to_blocks,
-            request_sender: self.request_sender.clone(),
-            read_task_handle: None,
-            write_task_handle: None,
-            status: self.status.clone(),
-            config: self.config.clone(),
         }
     }
 }
