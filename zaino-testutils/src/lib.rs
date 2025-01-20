@@ -357,8 +357,7 @@ impl TestManager {
             let zaino_grpc_listen_port = portpicker::pick_unused_port().expect("No ports free");
             // NOTE: queue and workerpool sizes may need to be changed here.
             let indexer_config = zainodlib::config::IndexerConfig {
-                tcp_active: true,
-                listen_port: Some(zaino_grpc_listen_port),
+                listen_port: zaino_grpc_listen_port,
                 zebrad_port: zebrad_rpc_listen_port,
                 node_user: Some("xxxxxx".to_string()),
                 node_password: Some("xxxxxx".to_string()),
