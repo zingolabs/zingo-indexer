@@ -55,10 +55,10 @@ network = "Testnet"
     
 # Disables internal sync and stops zaino waiting on server to sync with p2p network.
 # Useful for testing.
-no_sync = false,
+no_sync = false
   
 # Disables the FinalisedState in the BlockCache 
 # 
 # Only used by the FetchServic.
 # Used for testing.
-no_db = false,
+no_db = false
