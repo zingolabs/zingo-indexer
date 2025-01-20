@@ -217,7 +217,7 @@ mod wallet_basic {
             )
             .await
             .unwrap();
-        
+
 
         dbg!(unfinalised_transactions.clone());
 

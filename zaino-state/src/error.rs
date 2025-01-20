@@ -70,12 +70,16 @@ impl From<StateServiceError> for tonic::Status {
     }
 }
 
-/// Errors related to the `StateService`.
+/// Errors related to the `FetchService`.
 #[derive(Debug, thiserror::Error)]
 pub enum FetchServiceError {
     /// Custom Errors. *Remove before production.
     #[error("Custom error: {0}")]
     Custom(String),
+
+    /// Critical Errors, Restart Zaino.
+    #[error("Critical error: {0}")]
+    Critical(String),
 
     /// Error from a Tokio JoinHandle.
     #[error("Join error: {0}")]
@@ -130,6 +134,7 @@ impl From<FetchServiceError> for tonic::Status {
     fn from(error: FetchServiceError) -> Self {
         match error {
             FetchServiceError::Custom(message) => tonic::Status::internal(message),
+            FetchServiceError::Critical(message) => tonic::Status::internal(message),
             FetchServiceError::JoinError(err) => {
                 tonic::Status::internal(format!("Join error: {}", err))
             }
@@ -168,12 +173,16 @@ impl From<FetchServiceError> for tonic::Status {
     }
 }
 
-/// Errors related to the `StateService`.
+/// Errors related to the `Mempool`.
 #[derive(Debug, thiserror::Error)]
 pub enum MempoolError {
     /// Custom Errors. *Remove before production.
     #[error("Custom error: {0}")]
     Custom(String),
+
+    /// Critical Errors, Restart Zaino.
+    #[error("Critical error: {0}")]
+    Critical(String),
 
     /// Error from a Tokio JoinHandle.
     #[error("Join error: {0}")]
@@ -199,6 +208,138 @@ pub enum MempoolError {
             Result<(crate::mempool::MempoolKey, crate::mempool::MempoolValue), StatusError>,
         >,
     ),
+
+    /// UTF-8 conversion error.
+    #[error("UTF-8 conversion error: {0}")]
+    Utf8Error(#[from] std::str::Utf8Error),
+
+    /// Integer parsing error.
+    #[error("Integer parsing error: {0}")]
+    ParseIntError(#[from] std::num::ParseIntError),
+
+    /// A generic boxed error.
+    #[error("Generic error: {0}")]
+    Generic(#[from] Box<dyn std::error::Error + Send + Sync>),
+}
+
+/// Errors related to the `BlockCache`.
+#[derive(Debug, thiserror::Error)]
+pub enum BlockCacheError {
+    /// Custom Errors. *Remove before production.
+    #[error("Custom error: {0}")]
+    Custom(String),
+
+    /// Critical Errors, Restart Zaino.
+    #[error("Critical error: {0}")]
+    Critical(String),
+
+    /// Errors from the NonFinalisedState.
+    #[error("NonFinalisedState Error: {0}")]
+    NonFinalisedStateError(#[from] NonFinalisedStateError),
+
+    /// Errors from the FinalisedState.
+    #[error("FinalisedState Error: {0}")]
+    FinalisedStateError(#[from] FinalisedStateError),
+
+    /// Error from JsonRpcConnector.
+    #[error("JsonRpcConnector error: {0}")]
+    JsonRpcConnectorError(#[from] zaino_fetch::jsonrpc::error::JsonRpcConnectorError),
+
+    /// Chain parse error.
+    #[error("Chain parse error: {0}")]
+    ChainParseError(#[from] zaino_fetch::chain::error::ParseError),
+
+    /// Serialization error.
+    #[error("Serialization error: {0}")]
+    SerializationError(#[from] zebra_chain::serialization::SerializationError),
+
+    /// UTF-8 conversion error.
+    #[error("UTF-8 conversion error: {0}")]
+    Utf8Error(#[from] std::str::Utf8Error),
+
+    /// Integer parsing error.
+    #[error("Integer parsing error: {0}")]
+    ParseIntError(#[from] std::num::ParseIntError),
+
+    /// Integer conversion error.
+    #[error("Integer conversion error: {0}")]
+    TryFromIntError(#[from] std::num::TryFromIntError),
+}
+
+/// Errors related to the `NonFinalisedState`.
+#[derive(Debug, thiserror::Error)]
+pub enum NonFinalisedStateError {
+    /// Custom Errors. *Remove before production.
+    #[error("Custom error: {0}")]
+    Custom(String),
+
+    /// Required data is missing from the non-finalised state.
+    #[error("Missing data: {0}")]
+    MissingData(String),
+
+    /// Critical Errors, Restart Zaino.
+    #[error("Critical error: {0}")]
+    Critical(String),
+
+    /// Error from JsonRpcConnector.
+    #[error("JsonRpcConnector error: {0}")]
+    JsonRpcConnectorError(#[from] zaino_fetch::jsonrpc::error::JsonRpcConnectorError),
+
+    /// Error from a Tokio Watch Reciever.
+    #[error("Join error: {0}")]
+    WatchRecvError(#[from] tokio::sync::watch::error::RecvError),
+
+    /// Unexpected status-related error.
+    #[error("Status error: {0:?}")]
+    StatusError(StatusError),
+
+    /// Error from sending to a Tokio MPSC channel.
+    #[error("Send error: {0}")]
+    SendError(
+        #[from]
+        tokio::sync::mpsc::error::SendError<
+            Result<(crate::mempool::MempoolKey, crate::mempool::MempoolValue), StatusError>,
+        >,
+    ),
+    /// A generic boxed error.
+    #[error("Generic error: {0}")]
+    Generic(#[from] Box<dyn std::error::Error + Send + Sync>),
+}
+
+/// Errors related to the `FinalisedState`.
+#[derive(Debug, thiserror::Error)]
+pub enum FinalisedStateError {
+    /// Custom Errors. *Remove before production.
+    #[error("Custom error: {0}")]
+    Custom(String),
+
+    /// Required data is missing from the non-finalised state.
+    #[error("Missing data: {0}")]
+    MissingData(String),
+
+    /// Critical Errors, Restart Zaino.
+    #[error("Critical error: {0}")]
+    Critical(String),
+
+    /// Error from the LLDM database.
+    #[error("LMDB database error: {0}")]
+    LmdbError(#[from] lmdb::Error),
+
+    /// Serde Json serialisation / deserialisation errors.
+    #[error("LMDB database error: {0}")]
+    SerdeJsonError(#[from] serde_json::Error),
+
+    /// Unexpected status-related error.
+    #[error("Status error: {0:?}")]
+    StatusError(StatusError),
+
+    /// Error from JsonRpcConnector.
+    #[error("JsonRpcConnector error: {0}")]
+    JsonRpcConnectorError(#[from] zaino_fetch::jsonrpc::error::JsonRpcConnectorError),
+
+    /// std::io::Error
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
 
     /// A generic boxed error.
     #[error("Generic error: {0}")]

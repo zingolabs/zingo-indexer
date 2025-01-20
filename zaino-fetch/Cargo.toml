@@ -27,11 +27,12 @@ thiserror = { workspace = true }
 prost = { workspace = true }
 reqwest = { workspace = true }
 url = { workspace = true }
-serde_json = { workspace = true, features = ["preserve_order"] } # The preserve_order feature in serde_jsonn is a dependency of jsonrpc-core
+serde_json = { workspace = true, features = ["preserve_order"] }
 serde = { workspace = true, features = ["derive"] }
 hex = { workspace = true, features = ["serde"] }
 indexmap = { workspace = true, features = ["serde"] }
 base64 = { workspace = true }
 byteorder = { workspace = true }
 sha2 = { workspace = true }
+jsonrpsee-types = { workspace = true }
 

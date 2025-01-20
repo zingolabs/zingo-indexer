@@ -1,92 +1,32 @@
-//! A mempool and chain-fetching service built on top of zebra's ReadStateService and TrustedChainSync.
+//! Zaino's core mempool and chain-fetching Library.
+//!
+//! Built to use a configurable backend, current and planned backend options:
+//! - FetchService (WIP - Functionality complete, requires local compact block cache for efficiency).
+//!    - Built using the Zcash Json RPC Services for backwards compatibility with Zcashd and other JsonRPC based validators.
+//! - StateService (WIP)
+//!    - Built using Zebra's ReadStateService for efficient chain access.
+//! - TonicService (PLANNED)
+//! - DarksideService (PLANNED)
 
 #![warn(missing_docs)]
 #![forbid(unsafe_code)]
 
-use zebra_chain::parameters::Network;
-
-pub mod broadcast;
-pub mod config;
-pub mod error;
-pub mod fetch;
+// Zaino's Indexer library frontend.
 pub mod indexer;
+
+// Core Indexer functionality
+// NOTE: This should possibly be made pub(crate) and moved to the indexer mod.
+pub mod fetch;
+pub mod local_cache;
 pub mod mempool;
 pub mod state;
+
+// Exposed backend Indexer functionality
+pub mod config;
+pub mod error;
 pub mod status;
 pub mod stream;
 
-/// Zaino build info.
-#[derive(Debug, Clone)]
-pub(crate) struct BuildInfo {
-    /// Git commit hash.
-    commit_hash: String,
-    /// Git Branch.
-    branch: String,
-    /// Build date.
-    build_date: String,
-    /// Build user.
-    build_user: String,
-    /// Zingo-Indexer version.
-    version: String,
-}
-
-#[allow(dead_code)]
-impl BuildInfo {
-    pub(crate) fn commit_hash(&self) -> String {
-        self.commit_hash.clone()
-    }
-
-    pub(crate) fn branch(&self) -> String {
-        self.branch.clone()
-    }
-
-    pub(crate) fn build_user(&self) -> String {
-        self.build_user.clone()
-    }
-
-    pub(crate) fn build_date(&self) -> String {
-        self.build_date.clone()
-    }
-
-    pub(crate) fn version(&self) -> String {
-        self.version.clone()
-    }
-}
-
-/// Returns build info for Zingo-Indexer.
-pub(crate) fn get_build_info() -> BuildInfo {
-    BuildInfo {
-        commit_hash: env!("GIT_COMMIT").to_string(),
-        branch: env!("BRANCH").to_string(),
-        build_date: env!("BUILD_DATE").to_string(),
-        build_user: env!("BUILD_USER").to_string(),
-        version: env!("VERSION").to_string(),
-    }
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct ServiceMetadata {
-    build_info: BuildInfo,
-    network: Network,
-    zebra_build: String,
-    zebra_subversion: String,
-}
-
-impl ServiceMetadata {
-    #[allow(dead_code)]
-    pub(crate) fn build_info(&self) -> BuildInfo {
-        self.build_info.clone()
-    }
-
-    pub(crate) fn network(&self) -> Network {
-        self.network.clone()
-    }
-
-    pub(crate) fn zebra_build(&self) -> String {
-        self.zebra_build.clone()
-    }
-
-    pub(crate) fn zebra_subversion(&self) -> String {
-        self.zebra_subversion.clone()
-    }
-}
+// Internal backend Indexer functionality.
+pub(crate) mod broadcast;
+pub(crate) mod utils;

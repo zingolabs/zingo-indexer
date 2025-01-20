@@ -1,5 +1,7 @@
 //! Holds config data for Zaino-State services.
 
+use std::path::PathBuf;
+
 /// Holds config data for [`StateService`].
 #[derive(Debug, Clone)]
 pub struct StateServiceConfig {
@@ -55,7 +57,7 @@ pub struct FetchServiceConfig {
     pub service_timeout: u32,
     /// StateService RPC max channel size.
     pub service_channel_size: u32,
-    /// StateService network type.
+    /// Network type.
     pub network: zebra_chain::parameters::Network,
     /// Disables internal sync and stops zaino waiting on server sync.
     /// Used for testing.
@@ -82,6 +84,57 @@ impl FetchServiceConfig {
             service_channel_size: service_channel_size.unwrap_or(32),
             network,
             no_sync,
+        }
+    }
+}
+
+/// Holds config data for [`FetchService`].
+#[derive(Debug, Clone)]
+pub struct BlockCacheConfig {
+    /// Capacity of the Dashmap.
+    ///
+    /// NOTE: map_capacity and shard map must both be set for either to be used.
+    pub map_capacity: Option<usize>,
+    /// Number of shard used in the DashMap.
+    ///
+    /// shard_amount should greater than 0 and be a power of two.
+    /// If a shard_amount which is not a power of two is provided, the function will panic.
+    ///
+    /// NOTE: map_capacity and shard map must both be set for either to be used.
+    pub map_shard_amount: Option<usize>,
+    /// Block Cache database file path.
+    pub db_path: PathBuf,
+    /// Block Cache database maximum size in gb.
+    pub db_size: Option<usize>,
+    /// Network type.
+    pub network: zebra_chain::parameters::Network,
+    /// Stops zaino waiting on server sync.
+    /// Used for testing.
+    pub no_sync: bool,
+    /// Disables FinalisedState.
+    /// Used for testing.
+    pub no_db: bool,
+}
+
+impl BlockCacheConfig {
+    /// Returns a new instance of [`FetchServiceConfig`].
+    pub fn new(
+        map_capacity: Option<usize>,
+        map_shard_amount: Option<usize>,
+        db_path: PathBuf,
+        db_size: Option<usize>,
+        network: zebra_chain::parameters::Network,
+        no_sync: bool,
+        no_db: bool,
+    ) -> Self {
+        BlockCacheConfig {
+            map_capacity,
+            map_shard_amount,
+            db_path,
+            db_size,
+            network,
+            no_sync,
+            no_db,
         }
     }
 }

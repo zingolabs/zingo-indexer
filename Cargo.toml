@@ -32,9 +32,11 @@ zcash_protocol = { git = "https://github.com/zingolabs/librustzcash.git", tag = 
 
 
 # Zebra
-zebra-chain = { git = "https://github.com/idky137/zebra.git", branch = "add_public_func_for_zaino_pt2" }
-zebra-state = { git = "https://github.com/idky137/zebra.git", branch = "add_public_func_for_zaino_pt2" }
-zebra-rpc = { git = "https://github.com/idky137/zebra.git", branch = "add_public_func_for_zaino_pt2" }
+# This should be changed to a specific release tag once Zebra regtest stabalizes, currently main is used to fetch most recent bug fixes from Zebra.
+zebra-chain = { git = "https://github.com/ZcashFoundation/zebra.git", branch = "main" }
+zebra-state = { git = "https://github.com/ZcashFoundation/zebra.git", branch = "main" }
+zebra-rpc = { git = "https://github.com/ZcashFoundation/zebra.git", branch = "main" }
+
 
 # Zcash-Local-Net
 zcash_local_net = { git = "https://github.com/zingolabs/zcash-local-net.git", rev = "d64b76cab748455c5b9e1e4412f1689fb66f7d41", features = [ "test_fixtures" ] }
@@ -72,5 +74,7 @@ whoami = "1.5"
 tower = { version = "0.4", features = ["buffer", "util"] }
 async-trait = "0.1"
 chrono = "0.4"
-jsonrpc-core = "18.0.0"
+jsonrpc-core = "18.0"
+jsonrpsee-types = "0.24"
 dashmap = "6.1"
+lmdb = "0.8"

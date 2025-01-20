@@ -5,7 +5,6 @@ use std::time;
 use crate::{
     config::FetchServiceConfig,
     error::FetchServiceError,
-    get_build_info,
     indexer::{IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService},
     mempool::{Mempool, MempoolSubscriber},
     status::{AtomicStatus, StatusType},
@@ -13,7 +12,7 @@ use crate::{
         AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
         SubtreeRootReplyStream, UtxoReplyStream,
     },
-    ServiceMetadata,
+    utils::{get_build_info, ServiceMetadata},
 };
 use futures::StreamExt;
 use hex::FromHex;
@@ -21,7 +20,7 @@ use tokio::{sync::mpsc, time::timeout};
 use tonic::async_trait;
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
-    jsonrpc::connector::{test_node_and_return_uri, JsonRpcConnector, RpcError},
+    jsonrpc::connector::{test_node_and_return_uri, JsonRpcConnector},
 };
 use zaino_proto::proto::{
     compact_formats::{ChainMetadata, CompactBlock, CompactOrchardAction, CompactTx},
@@ -89,12 +88,12 @@ impl ZcashService for FetchService {
         .await?;
 
         let zebra_build_data = fetcher.get_info().await?;
-        let data = ServiceMetadata {
-            build_info: get_build_info(),
-            network: config.network.clone(),
-            zebra_build: zebra_build_data.build,
-            zebra_subversion: zebra_build_data.subversion,
-        };
+        let data = ServiceMetadata::new(
+            get_build_info(),
+            config.network.clone(),
+            zebra_build_data.build,
+            zebra_build_data.subversion,
+        );
 
         // If Network is Mainnet or Testnet wait for validator to sync before spawning Mempool.
         //
@@ -255,9 +254,9 @@ impl ZcashIndexer for FetchServiceSubscriber {
     ) -> Result<AddressBalance, Self::Error> {
         Ok(self
             .fetcher
-            .get_address_balance(address_strings.valid_address_strings().map_err(|code| {
-                FetchServiceError::RpcError(RpcError {
-                    code: code as i32 as i64,
+            .get_address_balance(address_strings.valid_address_strings().map_err(|error| {
+                FetchServiceError::RpcError(zaino_fetch::jsonrpc::connector::RpcError {
+                    code: error.code() as i32 as i64,
                     message: "Invalid address provided".to_string(),
                     data: None,
                 })
@@ -394,11 +393,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
     ) -> Result<GetSubtrees, Self::Error> {
         Ok(self
             .fetcher
-            .get_subtrees_by_index(
-                pool,
-                start_index.0,
-                limit.map(|limit_index| limit_index.0),
-            )
+            .get_subtrees_by_index(pool, start_index.0, limit.map(|limit_index| limit_index.0))
             .await?
             .into())
     }
@@ -483,9 +478,9 @@ impl ZcashIndexer for FetchServiceSubscriber {
     ) -> Result<Vec<GetAddressUtxos>, Self::Error> {
         Ok(self
             .fetcher
-            .get_address_utxos(address_strings.valid_address_strings().map_err(|code| {
-                FetchServiceError::RpcError(RpcError {
-                    code: code as i32 as i64,
+            .get_address_utxos(address_strings.valid_address_strings().map_err(|error| {
+                FetchServiceError::RpcError(zaino_fetch::jsonrpc::connector::RpcError {
+                    code: error.code() as i32 as i64,
                     message: "Invalid address provided".to_string(),
                     data: None,
                 })
@@ -953,11 +948,13 @@ impl LightWalletIndexer for FetchServiceSubscriber {
 
     /// Returns the total balance for a list of taddrs
     async fn get_taddress_balance(&self, request: AddressList) -> Result<Balance, Self::Error> {
-        let taddrs = AddressStrings::new_valid(request.addresses).map_err(|legacy_code| {
-            FetchServiceError::RpcError(RpcError::new_from_legacycode(
-                legacy_code,
-                "Error in Validator.",
-            ))
+        let taddrs = AddressStrings::new_valid(request.addresses).map_err(|err_obj| {
+            FetchServiceError::RpcError(
+                zaino_fetch::jsonrpc::connector::RpcError::new_from_errorobject(
+                    err_obj,
+                    "Error in Validator",
+                ),
+            )
         })?;
         let balance = self.z_get_address_balance(taddrs).await?;
         let checked_balance: i64 = match i64::try_from(balance.balance) {
@@ -991,12 +988,14 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                         match channel_rx.recv().await {
                             Some(taddr) => {
                                 let taddrs = AddressStrings::new_valid(vec![taddr]).map_err(
-                                    |legacy_code| {
-                                        FetchServiceError::RpcError(RpcError::new_from_legacycode(
-                                            legacy_code,
-                                            "Error in Validator.",
-                                        ))
-                                    },
+                                    |err_obj| {
+                                        FetchServiceError::RpcError(
+                                            zaino_fetch::jsonrpc::connector::RpcError::new_from_errorobject(
+                                                err_obj,
+                                                "Error in Validator",
+                                            ),
+                                        )
+                                    }
                                 )?;
                                 let balance =
                                     fetch_service_clone.z_get_address_balance(taddrs).await?;
@@ -1534,11 +1533,13 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         &self,
         request: GetAddressUtxosArg,
     ) -> Result<GetAddressUtxosReplyList, Self::Error> {
-        let taddrs = AddressStrings::new_valid(request.addresses).map_err(|legacy_code| {
-            FetchServiceError::RpcError(RpcError::new_from_legacycode(
-                legacy_code,
-                "Error in Validator.",
-            ))
+        let taddrs = AddressStrings::new_valid(request.addresses).map_err(|err_obj| {
+            FetchServiceError::RpcError(
+                zaino_fetch::jsonrpc::connector::RpcError::new_from_errorobject(
+                    err_obj,
+                    "Error in Validator",
+                ),
+            )
         })?;
         let utxos = self.z_get_address_utxos(taddrs).await?;
         let mut address_utxos: Vec<GetAddressUtxosReply> = Vec::new();
@@ -1590,11 +1591,13 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         &self,
         request: GetAddressUtxosArg,
     ) -> Result<UtxoReplyStream, Self::Error> {
-        let taddrs = AddressStrings::new_valid(request.addresses).map_err(|legacy_code| {
-            FetchServiceError::RpcError(RpcError::new_from_legacycode(
-                legacy_code,
-                "Error in Validator.",
-            ))
+        let taddrs = AddressStrings::new_valid(request.addresses).map_err(|err_obj| {
+            FetchServiceError::RpcError(
+                zaino_fetch::jsonrpc::connector::RpcError::new_from_errorobject(
+                    err_obj,
+                    "Error in Validator",
+                ),
+            )
         })?;
         let utxos = self.z_get_address_utxos(taddrs).await?;
         let service_timeout = self.config.service_timeout;
@@ -1691,17 +1694,17 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         .to_string();
 
         Ok(LightdInfo {
-            version: self.data.build_info.version(),
+            version: self.data.build_info().version(),
             vendor: "ZingoLabs ZainoD".to_string(),
             taddr_support: true,
             chain_name: blockchain_info.chain(),
             sapling_activation_height: sapling_activation_height.0 as u64,
             consensus_branch_id,
             block_height: blockchain_info.blocks().0 as u64,
-            git_commit: self.data.build_info.commit_hash(),
-            branch: self.data.build_info.branch(),
-            build_date: self.data.build_info.build_date(),
-            build_user: self.data.build_info.build_user(),
+            git_commit: self.data.build_info().commit_hash(),
+            branch: self.data.build_info().branch(),
+            build_date: self.data.build_info().build_date(),
+            build_user: self.data.build_info().build_user(),
             estimated_height: blockchain_info.estimated_height().0 as u64,
             zcashd_build: self.data.zebra_build(),
             zcashd_subversion: self.data.zebra_subversion(),
