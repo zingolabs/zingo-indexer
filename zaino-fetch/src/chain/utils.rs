@@ -9,7 +9,7 @@ use crate::chain::error::ParseError;
 pub trait ParseFromSlice {
     /// Reads data from a bytestring, consuming data read, and returns an instance of self along with the remaining data in the bytestring given.
     ///
-    /// txid is givin as an input as this is taken from a get_block verbose=1 call.
+    /// txid is giving as an input as this is taken from a get_block verbose=1 call.
     ///
     /// tx_version is used for deserializing sapling spends and outputs.
     fn parse_from_slice(

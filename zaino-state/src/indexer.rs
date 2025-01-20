@@ -64,7 +64,7 @@ where
 /// Zcash Service functionality.
 #[async_trait]
 pub trait ZcashService: Sized {
-    /// Uses undelying error type of implementer.
+    /// Uses underlying error type of implementer.
     type Error: std::error::Error + Send + Sync + 'static;
 
     /// A subscriber to the service, used to fetch chain data.
@@ -125,7 +125,7 @@ where
 /// Doc comments taken from Zebra for consistency.
 #[async_trait]
 pub trait ZcashIndexer: Send + Sync + 'static {
-    /// Uses undelying error type of implementer.
+    /// Uses underlying error type of implementer.
     type Error: std::error::Error + Send + Sync + 'static;
 
     /// Returns software information from the RPC server, as a [`GetInfo`] JSON struct.
@@ -355,7 +355,7 @@ pub trait ZcashIndexer: Send + Sync + 'static {
 /// Doc comments taken from Zaino-Proto for consistency.
 #[async_trait]
 pub trait LightWalletIndexer: Send + Sync + 'static {
-    /// Uses undelying error type of implementer.
+    /// Uses underlying error type of implementer.
     type Error: std::error::Error + Send + Sync + 'static + Into<tonic::Status>;
 
     /// Return the height of the tip of the best chain

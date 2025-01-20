@@ -19,7 +19,7 @@ The main crates are:
 
 Below is a detailed specification for each crate.
 
-A full specification of the public functionality and RPC services available in Zaino is availabe in [Cargo Docs](https://zingolabs.github.io/zaino/index.html) and [RPC API Spec](./rpc_api.md).
+A full specification of the public functionality and RPC services available in Zaino is available in [Cargo Docs](https://zingolabs.github.io/zaino/index.html) and [RPC API Spec](./rpc_api.md).
 
 
 ## ZainoD
