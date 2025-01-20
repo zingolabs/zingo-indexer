@@ -1,5 +1,7 @@
 //! Zcash chain fetch and tx submission service backed by zcashds JsonRPC service.
 
+use std::time;
+
 use crate::{
     config::FetchServiceConfig,
     error::FetchServiceError,
@@ -15,9 +17,12 @@ use crate::{
 };
 use futures::StreamExt;
 use hex::FromHex;
-use tokio::time::timeout;
+use tokio::{sync::mpsc, time::timeout};
 use tonic::async_trait;
-use zaino_fetch::jsonrpc::connector::{test_node_and_return_uri, JsonRpcConnector};
+use zaino_fetch::{
+    chain::{transaction::FullTransaction, utils::ParseFromSlice},
+    jsonrpc::connector::{test_node_and_return_uri, JsonRpcConnector, RpcError},
+};
 use zaino_proto::proto::{
     compact_formats::{ChainMetadata, CompactBlock, CompactOrchardAction, CompactTx},
     service::{
@@ -63,18 +68,21 @@ impl ZcashService for FetchService {
     type Subscriber = FetchServiceSubscriber;
     type Config = FetchServiceConfig;
     /// Initializes a new StateService instance and starts sync process.
-    async fn spawn(config: FetchServiceConfig, status: AtomicStatus) -> Result<Self, FetchServiceError> {
+    async fn spawn(
+        config: FetchServiceConfig,
+        status: AtomicStatus,
+    ) -> Result<Self, FetchServiceError> {
         println!("Launching Chain Fetch Service..");
         let status = status.clone();
         status.store(StatusType::Spawning.into());
 
         let fetcher = JsonRpcConnector::new(
             test_node_and_return_uri(
-            &config.validator_rpc_address.port(),
-            Some(config.validator_rpc_user.clone()),
-            Some(config.validator_rpc_password.clone()),
-        )
-        .await?,
+                &config.validator_rpc_address.port(),
+                Some(config.validator_rpc_user.clone()),
+                Some(config.validator_rpc_password.clone()),
+            )
+            .await?,
             Some(config.validator_rpc_user.clone()),
             Some(config.validator_rpc_password.clone()),
         )
@@ -98,14 +106,17 @@ impl ZcashService for FetchService {
             if !config.network.is_regtest() {
                 loop {
                     let blockchain_info = fetcher.get_blockchain_info().await?;
-                    if (blockchain_info.blocks.0 as i64 - blockchain_info.estimated_height.0 as i64).abs() <= 10 {
+                    if (blockchain_info.blocks.0 as i64 - blockchain_info.estimated_height.0 as i64)
+                        .abs()
+                        <= 10
+                    {
                         break;
                     } else {
                         println!(" - Validator syncing with network. Validator chain height: {}, Estimated Network chain height: {}",
-                            &blockchain_info.blocks.0, 
-                            &blockchain_info.estimated_height.0 
+                            &blockchain_info.blocks.0,
+                            &blockchain_info.estimated_height.0
                         );
-                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                        tokio::time::sleep(time::Duration::from_millis(500)).await;
                         continue;
                     }
                 }
@@ -126,8 +137,7 @@ impl ZcashService for FetchService {
 
     /// Returns a [`FetchServiceSubscriber`].
     fn get_subscriber(&self) -> IndexerSubscriber<FetchServiceSubscriber> {
-        IndexerSubscriber::new(
-            FetchServiceSubscriber {
+        IndexerSubscriber::new(FetchServiceSubscriber {
             fetcher: self.fetcher.clone(),
             mempool: self.mempool.subscriber(),
             data: self.data.clone(),
@@ -246,7 +256,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
         Ok(self
             .fetcher
             .get_address_balance(address_strings.valid_address_strings().map_err(|code| {
-                FetchServiceError::RpcError(zaino_fetch::jsonrpc::connector::RpcError {
+                FetchServiceError::RpcError(RpcError {
                     code: code as i32 as i64,
                     message: "Invalid address provided".to_string(),
                     data: None,
@@ -474,7 +484,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
         Ok(self
             .fetcher
             .get_address_utxos(address_strings.valid_address_strings().map_err(|code| {
-                FetchServiceError::RpcError(zaino_fetch::jsonrpc::connector::RpcError {
+                FetchServiceError::RpcError(RpcError {
                     code: code as i32 as i64,
                     message: "Invalid address provided".to_string(),
                     data: None,
@@ -630,10 +640,9 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         let chain_height = self.get_blockchain_info().await?.blocks().0;
         let fetch_service_clone = self.clone();
         let service_timeout = self.config.service_timeout;
-        let (channel_tx, channel_rx) =
-            tokio::sync::mpsc::channel(self.config.service_channel_size as usize);
+        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
         tokio::spawn(async move {
-            let timeout = timeout(std::time::Duration::from_secs((service_timeout*4) as u64), async {
+            let timeout = timeout(time::Duration::from_secs((service_timeout*4) as u64), async {
                     for height in start..=end {
                         let height = if rev_order {
                             end - (height - start)
@@ -701,40 +710,24 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         &self,
         request: BlockRange,
     ) -> Result<CompactBlockStream, Self::Error> {
-        let mut start: u32 = match request.start {
-            Some(block_id) => match block_id.height.try_into() {
-                Ok(height) => height,
-                Err(_) => {
-                    return Err(FetchServiceError::TonicStatusError(
-                        tonic::Status::invalid_argument(
-                            "Error: Start height out of range. Failed to convert to u32.",
-                        ),
-                    ));
-                }
+        let tonic_status_error =
+            |err| FetchServiceError::TonicStatusError(tonic::Status::invalid_argument(err));
+        let mut start = match request.start {
+            Some(block_id) => match u32::try_from(block_id.height) {
+                Ok(height) => Ok(height),
+                Err(_) => Err("Error: Start height out of range. Failed to convert to u32."),
             },
-            None => {
-                return Err(FetchServiceError::TonicStatusError(
-                    tonic::Status::invalid_argument("Error: No start height given."),
-                ));
-            }
-        };
-        let mut end: u32 = match request.end {
-            Some(block_id) => match block_id.height.try_into() {
-                Ok(height) => height,
-                Err(_) => {
-                    return Err(FetchServiceError::TonicStatusError(
-                        tonic::Status::invalid_argument(
-                            "Error: End height out of range. Failed to convert to u32.",
-                        ),
-                    ));
-                }
+            None => Err("Error: No start height given."),
+        }
+        .map_err(tonic_status_error)?;
+        let mut end = match request.end {
+            Some(block_id) => match u32::try_from(block_id.height) {
+                Ok(height) => Ok(height),
+                Err(_) => Err("Error: End height out of range. Failed to convert to u32."),
             },
-            None => {
-                return Err(FetchServiceError::TonicStatusError(
-                    tonic::Status::invalid_argument("Error: No start height given."),
-                ));
-            }
-        };
+            None => Err("Error: No start height given."),
+        }
+        .map_err(tonic_status_error)?;
         let rev_order = if start > end {
             (start, end) = (end, start);
             true
@@ -744,65 +737,49 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         let chain_height = self.get_blockchain_info().await?.blocks().0;
         let fetch_service_clone = self.clone();
         let service_timeout = self.config.service_timeout;
-        let (channel_tx, channel_rx) =
-            tokio::sync::mpsc::channel(self.config.service_channel_size as usize);
+        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
         tokio::spawn(async move {
-            let timeout = timeout(std::time::Duration::from_secs((service_timeout*4) as u64), async {
+            let timeout = timeout(
+                time::Duration::from_secs((service_timeout * 4) as u64),
+                async {
                     for height in start..=end {
                         let height = if rev_order {
                             end - (height - start)
                         } else {
                             height
                         };
-                        match fetch_service_clone.get_nullifiers(
-                            &height,
-                        ).await {
-                            Ok(block) => {
-                                if channel_tx.send(Ok(block)).await.is_err() {
-                                    break;
-                                }
-                            }
-                            Err(e) => {
-                                if height >= chain_height {
-                                    match channel_tx
-                                        .send(Err(tonic::Status::out_of_range(format!(
-                                            "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
+                        if let Err(e) =
+                            channel_tx
+                                .send(fetch_service_clone.get_nullifiers(&height).await.map_err(
+                                    |e| {
+                                        if height >= chain_height {
+                                            tonic::Status::out_of_range(format!(
+                                            "Error: Height out of range [{}]. Height requested \
+                                            is greater than the best chain tip [{}].",
                                             height, chain_height,
-                                        ))))
-                                        .await
-
-                                    {
-                                        Ok(_) => break,
-                                        Err(e) => {
-                                            eprintln!("Error: Channel closed unexpectedly: {}", e);
-                                            break;
+                                        ))
+                                        } else {
+                                            // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                                            tonic::Status::unknown(e.to_string())
                                         }
-                                    }
-                                } else {
-                                    // TODO: Hide server error from clients before release. Currently useful for dev purposes.
-                                    if channel_tx
-                                        .send(Err(tonic::Status::unknown(e.to_string())))
-                                        .await
-                                        .is_err()
-                                    {
-                                        break;
-                                    }
-                                }
-                            }
+                                    },
+                                ))
+                                .await
+                        {
+                            eprintln!("Error: Channel closed unexpectedly: {}", e);
+                            break;
                         }
                     }
-                })
-                .await;
-            match timeout {
-                Ok(_) => {}
-                Err(_) => {
-                    channel_tx
-                        .send(Err(tonic::Status::deadline_exceeded(
-                            "Error: get_block_range gRPC request timed out.",
-                        )))
-                        .await
-                        .ok();
-                }
+                },
+            )
+            .await;
+            if timeout.is_err() {
+                channel_tx
+                    .send(Err(tonic::Status::deadline_exceeded(
+                        "Error: get_block_range gRPC request timed out.",
+                    )))
+                    .await
+                    .ok();
             }
         });
         Ok(CompactBlockStream::new(channel_rx))
@@ -907,12 +884,14 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             .await?;
         let fetch_service_clone = self.clone();
         let service_timeout = self.config.service_timeout;
-        let (channel_tx, channel_rx) =
-            tokio::sync::mpsc::channel(self.config.service_channel_size as usize);
+        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
         tokio::spawn(async move {
-            let timeout = timeout(std::time::Duration::from_secs((service_timeout*4) as u64), async {
+            let timeout = timeout(
+                time::Duration::from_secs((service_timeout * 4) as u64),
+                async {
                     for txid in txids {
-                        let transaction = fetch_service_clone.get_raw_transaction(txid, Some(1)).await;
+                        let transaction =
+                            fetch_service_clone.get_raw_transaction(txid, Some(1)).await;
                         match transaction {
                             Ok(GetRawTransaction::Object(transaction_obj)) => {
                                 let height: u64 = match transaction_obj.height {
@@ -954,8 +933,9 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                             }
                         }
                     }
-                })
-                .await;
+                },
+            )
+            .await;
             match timeout {
                 Ok(_) => {}
                 Err(_) => {
@@ -974,12 +954,10 @@ impl LightWalletIndexer for FetchServiceSubscriber {
     /// Returns the total balance for a list of taddrs
     async fn get_taddress_balance(&self, request: AddressList) -> Result<Balance, Self::Error> {
         let taddrs = AddressStrings::new_valid(request.addresses).map_err(|legacy_code| {
-            FetchServiceError::RpcError(
-                zaino_fetch::jsonrpc::connector::RpcError::new_from_legacycode(
-                    legacy_code,
-                    "Error in Validator.",
-                ),
-            )
+            FetchServiceError::RpcError(RpcError::new_from_legacycode(
+                legacy_code,
+                "Error in Validator.",
+            ))
         })?;
         let balance = self.z_get_address_balance(taddrs).await?;
         let checked_balance: i64 = match i64::try_from(balance.balance) {
@@ -1003,10 +981,10 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         let fetch_service_clone = self.clone();
         let service_timeout = self.config.service_timeout;
         let (channel_tx, mut channel_rx) =
-            tokio::sync::mpsc::channel::<String>(self.config.service_channel_size as usize);
+            mpsc::channel::<String>(self.config.service_channel_size as usize);
         let fetcher_task_handle = tokio::spawn(async move {
             let fetcher_timeout = timeout(
-                std::time::Duration::from_secs((service_timeout*4) as u64),
+                time::Duration::from_secs((service_timeout * 4) as u64),
                 async {
                     let mut total_balance: u64 = 0;
                     loop {
@@ -1014,17 +992,14 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                             Some(taddr) => {
                                 let taddrs = AddressStrings::new_valid(vec![taddr]).map_err(
                                     |legacy_code| {
-                                        FetchServiceError::RpcError(
-                                            zaino_fetch::jsonrpc::connector::RpcError::new_from_legacycode(
-                                                legacy_code,
-                                                "Error in Validator.",
-                                            ),
-                                        )
+                                        FetchServiceError::RpcError(RpcError::new_from_legacycode(
+                                            legacy_code,
+                                            "Error in Validator.",
+                                        ))
                                     },
                                 )?;
-                                let balance = fetch_service_clone
-                                        .z_get_address_balance(taddrs)
-                                        .await?;
+                                let balance =
+                                    fetch_service_clone.z_get_address_balance(taddrs).await?;
                                 total_balance += balance.balance;
                             }
                             None => {
@@ -1045,7 +1020,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
         // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [mempool_rpc_timout = 4*rpc_timeout]
         let addr_recv_timeout = timeout(
-            std::time::Duration::from_secs((service_timeout*4) as u64),
+            time::Duration::from_secs((service_timeout * 4) as u64),
             async {
                 while let Some(address_result) = request.next().await {
                     // TODO: Hide server error from clients before release. Currently useful for dev purposes.
@@ -1126,11 +1101,10 @@ impl LightWalletIndexer for FetchServiceSubscriber {
 
         let mempool = self.mempool.clone();
         let service_timeout = self.config.service_timeout;
-        let (channel_tx, channel_rx) =
-            tokio::sync::mpsc::channel(self.config.service_channel_size as usize);
+        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
         tokio::spawn(async move {
             let timeout = timeout(
-                std::time::Duration::from_secs((service_timeout*4) as u64),
+                time::Duration::from_secs((service_timeout*4) as u64),
                 async {
                     for (txid, transaction) in mempool.get_filtered_mempool(exclude_txids).await {
                         match transaction.0 {
@@ -1149,33 +1123,25 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                                         }
                                     }
                                 };
-                                match <zaino_fetch::chain::transaction::FullTransaction as zaino_fetch::chain::utils::ParseFromSlice>::parse_from_slice(
-                                    transaction_object.hex.as_ref(), 
-                                    Some(vec!(txid_bytes)), None) 
+                                match <FullTransaction as ParseFromSlice>::parse_from_slice(
+                                    transaction_object.hex.as_ref(),
+                                    Some(vec!(txid_bytes)), None)
                                 {
                                     Ok(transaction) => {
-                                        // ParseFromSlice returns any data left after the conversion to a FullTransaction, If the conversion has succeeded this should be empty.
+                                        // ParseFromSlice returns any data left after the conversion to a
+                                        // FullTransaction, If the conversion has succeeded this should be empty.
                                         if transaction.0.is_empty() {
-                                            match transaction.1.to_compact(0) {
-                                                Ok(compact_tx) => {
-                                                    if channel_tx
-                                                        .send(Ok(compact_tx))
-                                                        .await
-                                                        .is_err()
-                                                    {
-                                                        break;
-                                                    }
-                                                }
-                                                Err(e) => {
-                                                    // TODO: Hide server error from clients before release. Currently useful for dev purposes.
-                                                    if channel_tx
-                                                        .send(Err(tonic::Status::unknown(e.to_string())))
-                                                        .await
-                                                        .is_err()
-                                                    {
-                                                        break;
-                                                    }
-                                                }
+                                            if channel_tx.send(
+                                                transaction
+                                                .1
+                                                .to_compact(0)
+                                                .map_err(|e| {
+                                                    tonic::Status::unknown(
+                                                        e.to_string()
+                                                    )
+                                                })
+                                            ).await.is_err() {
+                                                break
                                             }
                                         } else {
                                             // TODO: Hide server error from clients before release. Currently useful for dev purposes.
@@ -1237,12 +1203,11 @@ impl LightWalletIndexer for FetchServiceSubscriber {
     async fn get_mempool_stream(&self) -> Result<RawTransactionStream, Self::Error> {
         let mut mempool = self.mempool.clone();
         let service_timeout = self.config.service_timeout;
-        let (channel_tx, channel_rx) =
-            tokio::sync::mpsc::channel(self.config.service_channel_size as usize);
+        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
         let mempool_height = self.fetcher.get_blockchain_info().await?.blocks.0;
         tokio::spawn(async move {
             let timeout = timeout(
-                std::time::Duration::from_secs((service_timeout*6) as u64),
+                time::Duration::from_secs((service_timeout*6) as u64),
                 async {
                     let (mut mempool_stream, _mempool_handle) =
                         match mempool.get_mempool_stream().await {
@@ -1285,7 +1250,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                                             break;
                                         }
                                     }
-                                } 
+                                }
                             }
                             Err(e) => {
                                 channel_tx
@@ -1448,11 +1413,10 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             .await?;
         let fetch_service_clone = self.clone();
         let service_timeout = self.config.service_timeout;
-        let (channel_tx, channel_rx) =
-            tokio::sync::mpsc::channel(self.config.service_channel_size as usize);
+        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
         tokio::spawn(async move {
             let timeout = timeout(
-                std::time::Duration::from_secs((service_timeout*4) as u64),
+                time::Duration::from_secs((service_timeout * 4) as u64),
                 async {
                     for subtree in subtrees.subtrees {
                         match fetch_service_clone
@@ -1571,12 +1535,10 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         request: GetAddressUtxosArg,
     ) -> Result<GetAddressUtxosReplyList, Self::Error> {
         let taddrs = AddressStrings::new_valid(request.addresses).map_err(|legacy_code| {
-            FetchServiceError::RpcError(
-                zaino_fetch::jsonrpc::connector::RpcError::new_from_legacycode(
-                    legacy_code,
-                    "Error in Validator.",
-                ),
-            )
+            FetchServiceError::RpcError(RpcError::new_from_legacycode(
+                legacy_code,
+                "Error in Validator.",
+            ))
         })?;
         let utxos = self.z_get_address_utxos(taddrs).await?;
         let mut address_utxos: Vec<GetAddressUtxosReply> = Vec::new();
@@ -1629,20 +1591,17 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         request: GetAddressUtxosArg,
     ) -> Result<UtxoReplyStream, Self::Error> {
         let taddrs = AddressStrings::new_valid(request.addresses).map_err(|legacy_code| {
-            FetchServiceError::RpcError(
-                zaino_fetch::jsonrpc::connector::RpcError::new_from_legacycode(
-                    legacy_code,
-                    "Error in Validator.",
-                ),
-            )
+            FetchServiceError::RpcError(RpcError::new_from_legacycode(
+                legacy_code,
+                "Error in Validator.",
+            ))
         })?;
         let utxos = self.z_get_address_utxos(taddrs).await?;
         let service_timeout = self.config.service_timeout;
-        let (channel_tx, channel_rx) =
-            tokio::sync::mpsc::channel(self.config.service_channel_size as usize);
+        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
         tokio::spawn(async move {
             let timeout = timeout(
-                std::time::Duration::from_secs((service_timeout*4) as u64),
+                time::Duration::from_secs((service_timeout * 4) as u64),
                 async {
                     let mut entries: u32 = 0;
                     for utxo in utxos {
@@ -1753,10 +1712,9 @@ impl LightWalletIndexer for FetchServiceSubscriber {
     ///
     /// NOTE: Currently unimplemented in Zaino.
     async fn ping(&self, _request: Duration) -> Result<PingResponse, Self::Error> {
-                Err(FetchServiceError::TonicStatusError(tonic::Status::unimplemented(
+        Err(FetchServiceError::TonicStatusError(tonic::Status::unimplemented(
             "Ping not yet implemented. If you require this RPC please open an issue or PR at the Zaino github (https://github.com/zingolabs/zaino.git)."
         )))
-
     }
 }
 
@@ -1902,17 +1860,18 @@ mod tests {
             .await
             .unwrap();
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
-            ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -1956,17 +1915,18 @@ mod tests {
         clients.recipient.do_sync(true).await.unwrap();
         let recipient_balance = clients.recipient.do_balance().await;
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
-            ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
@@ -2002,18 +1962,19 @@ mod tests {
             .await
             .unwrap();
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
-        ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
@@ -2039,18 +2000,19 @@ mod tests {
             .await
             .unwrap();
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
-        ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
@@ -2083,25 +2045,24 @@ mod tests {
             .parse::<http::Uri>()
             .expect("Failed to convert URL to URI");
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
-        ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
         .unwrap();
-        let fetch_service_subscriber = fetch_service
-            .get_subscriber()
-            .inner();
+        let fetch_service_subscriber = fetch_service.get_subscriber().inner();
 
         let json_service = JsonRpcConnector::new(
             zebra_uri,
@@ -2176,18 +2137,19 @@ mod tests {
 
         test_manager.local_net.generate_blocks(1).await.unwrap();
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
-        ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
@@ -2232,18 +2194,19 @@ mod tests {
 
         test_manager.local_net.generate_blocks(1).await.unwrap();
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
-        ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
@@ -2288,18 +2251,19 @@ mod tests {
 
         test_manager.local_net.generate_blocks(1).await.unwrap();
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
-        ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
@@ -2340,18 +2304,19 @@ mod tests {
         .unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
-        ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
@@ -2401,18 +2366,19 @@ mod tests {
         test_manager.local_net.generate_blocks(1).await.unwrap();
         clients.faucet.do_sync(true).await.unwrap();
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
-        ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
@@ -2443,33 +2409,30 @@ mod tests {
             .await
             .unwrap();
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
-            ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
             AtomicStatus::new(StatusType::Spawning.into()),
-            )
-            .await
-            .unwrap();
+        )
+        .await
+        .unwrap();
 
-        let fetch_service_subscriber = fetch_service
-            .get_subscriber()
-            .inner();
+        let fetch_service_subscriber = fetch_service.get_subscriber().inner();
 
-        let fetch_service_get_latest_block = dbg!(fetch_service_subscriber.get_latest_block().await.unwrap());
+        let fetch_service_get_latest_block =
+            dbg!(fetch_service_subscriber.get_latest_block().await.unwrap());
 
-        assert_eq!(
-            fetch_service_get_latest_block.height,
-            1
-        );
+        assert_eq!(fetch_service_get_latest_block.height, 1);
 
         test_manager.close().await;
     }
@@ -2484,18 +2447,19 @@ mod tests {
             .await
             .unwrap();
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
-        ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
@@ -2526,18 +2490,19 @@ mod tests {
             .await
             .unwrap();
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
-        ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
@@ -2571,18 +2536,19 @@ mod tests {
             .unwrap();
         test_manager.local_net.generate_blocks(10).await.unwrap();
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
-        ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
@@ -2628,18 +2594,19 @@ mod tests {
             .unwrap();
         test_manager.local_net.generate_blocks(10).await.unwrap();
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
-        ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
@@ -2689,18 +2656,19 @@ mod tests {
             .as_ref()
             .expect("Clients are not initialized");
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
-        ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
@@ -2753,18 +2721,19 @@ mod tests {
             .as_ref()
             .expect("Clients are not initialized");
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
-        ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
@@ -2817,18 +2786,19 @@ mod tests {
             .expect("Clients are not initialized");
         let recipient_address = clients.get_recipient_address("transparent").await;
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
-        ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
@@ -2892,18 +2862,19 @@ mod tests {
             .expect("Clients are not initialized");
         let recipient_address = clients.get_recipient_address("transparent").await;
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
-        ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
@@ -2954,26 +2925,25 @@ mod tests {
             .as_ref()
             .expect("Clients are not initialized");
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
-        ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
         .unwrap();
-        let fetch_service_subscriber = fetch_service
-            .get_subscriber()
-            .inner();
-        
+        let fetch_service_subscriber = fetch_service.get_subscriber().inner();
+
         test_manager.local_net.generate_blocks(1).await.unwrap();
         clients.faucet.do_sync(true).await.unwrap();
 
@@ -3000,7 +2970,7 @@ mod tests {
 
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-        let exclude_list_empty = Exclude { txid: Vec::new()};
+        let exclude_list_empty = Exclude { txid: Vec::new() };
 
         let fetch_service_stream = fetch_service_subscriber
             .get_mempool_tx(exclude_list_empty.clone())
@@ -3027,7 +2997,9 @@ mod tests {
         assert_eq!(sorted_fetch_mempool_tx[0].hash, sorted_txids[0]);
         assert_eq!(sorted_fetch_mempool_tx[1].hash, sorted_txids[1]);
 
-        let exclude_list = Exclude { txid: vec![sorted_txids[0][..8].to_vec()]};
+        let exclude_list = Exclude {
+            txid: vec![sorted_txids[0][..8].to_vec()],
+        };
 
         let exclude_fetch_service_stream = fetch_service_subscriber
             .get_mempool_tx(exclude_list.clone())
@@ -3063,34 +3035,30 @@ mod tests {
             .as_ref()
             .expect("Clients are not initialized");
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
-        ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
         .unwrap();
-        let fetch_service_subscriber = fetch_service
-            .get_subscriber()
-            .inner();
+        let fetch_service_subscriber = fetch_service.get_subscriber().inner();
 
         test_manager.local_net.generate_blocks(1).await.unwrap();
         clients.faucet.do_sync(true).await.unwrap();
 
         let fetch_service_handle = tokio::spawn(async move {
-            let fetch_service_stream = fetch_service_subscriber
-                .get_mempool_stream()
-                .await
-                .unwrap();
+            let fetch_service_stream = fetch_service_subscriber.get_mempool_stream().await.unwrap();
             let fetch_service_mempool_tx: Vec<_> = fetch_service_stream.collect().await;
             fetch_service_mempool_tx
                 .into_iter()
@@ -3144,18 +3112,19 @@ mod tests {
             .await
             .unwrap();
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
-        ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
@@ -3188,18 +3157,19 @@ mod tests {
             .await
             .unwrap();
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
-        ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
@@ -3222,18 +3192,19 @@ mod tests {
             .await
             .unwrap();
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
-        ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
@@ -3279,25 +3250,26 @@ mod tests {
             .expect("Clients are not initialized");
         let recipient_address = clients.get_recipient_address("transparent").await;
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
-        ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
         .unwrap()
         .get_subscriber()
         .inner();
-        
+
         clients.faucet.do_sync(true).await.unwrap();
         let tx = zingolib::testutils::lightclient::from_inputs::quick_send(
             &clients.faucet,
@@ -3340,18 +3312,19 @@ mod tests {
             .expect("Clients are not initialized");
         let recipient_address = clients.get_recipient_address("transparent").await;
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
-        ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
@@ -3400,18 +3373,19 @@ mod tests {
             .await
             .unwrap();
 
-        let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
+        let fetch_service = FetchService::spawn(
+            FetchServiceConfig::new(
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    test_manager.zebrad_rpc_listen_port,
+                ),
+                None,
+                None,
+                None,
+                None,
+                Network::new_regtest(Some(1), Some(1)),
+                true,
             ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-            true,
-        ),
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
