@@ -92,7 +92,7 @@ impl BlockCacheSubscriber {
 
         if self
             .non_finalised_state
-            .conatins_hash_or_height(hash_or_height)
+            .contains_hash_or_height(hash_or_height)
             .await
         {
             // Fetch from non-finalised state.

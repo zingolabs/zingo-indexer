@@ -443,7 +443,7 @@ impl NonFinalisedStateSubscriber {
     }
 
     ///
-    pub async fn conatins_hash_or_height(&self, hash_or_height: HashOrHeight) -> bool {
+    pub async fn contains_hash_or_height(&self, hash_or_height: HashOrHeight) -> bool {
         match hash_or_height {
             HashOrHeight::Height(height) => self.heights_to_hashes.contains_key(&height),
             HashOrHeight::Hash(hash) => self.hashes_to_blocks.contains_key(&hash),
