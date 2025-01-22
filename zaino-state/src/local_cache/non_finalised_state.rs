@@ -54,6 +54,30 @@ impl NonFinalisedState {
             config,
         };
 
+        // If no_db is active wait for server to sync with p2p network.
+        if non_finalised_state.config.no_db
+            && !non_finalised_state.config.network.is_regtest()
+            && !non_finalised_state.config.no_sync
+        {
+            non_finalised_state.status.store(StatusType::Syncing.into());
+            loop {
+                let blockchain_info = fetcher.get_blockchain_info().await?;
+                if (blockchain_info.blocks.0 as i64 - blockchain_info.estimated_height.0 as i64)
+                    .abs()
+                    <= 10
+                {
+                    break;
+                } else {
+                    println!(" - Validator syncing with network. Validator chain height: {}, Estimated Network chain height: {}",
+                        &blockchain_info.blocks.0,
+                        &blockchain_info.estimated_height.0
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    continue;
+                }
+            }
+        }
+
         let chain_height = fetcher.get_blockchain_info().await?.blocks.0;
         for height in chain_height.saturating_sub(99)..=chain_height {
             loop {
@@ -77,30 +101,6 @@ impl NonFinalisedState {
                         eprintln!("{e}");
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     }
-                }
-            }
-        }
-
-        // If no_db is active wait for server to sync with p2p network.
-        if non_finalised_state.config.no_db
-            && !non_finalised_state.config.network.is_regtest()
-            && !non_finalised_state.config.no_sync
-        {
-            non_finalised_state.status.store(StatusType::Syncing.into());
-            loop {
-                let blockchain_info = fetcher.get_blockchain_info().await?;
-                if (blockchain_info.blocks.0 as i64 - blockchain_info.estimated_height.0 as i64)
-                    .abs()
-                    <= 10
-                {
-                    break;
-                } else {
-                    println!(" - Validator syncing with network. Validator chain height: {}, Estimated Network chain height: {}",
-                        &blockchain_info.blocks.0,
-                        &blockchain_info.estimated_height.0
-                    );
-                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                    continue;
                 }
             }
         }

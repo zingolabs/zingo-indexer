@@ -6,6 +6,7 @@ use crate::{
     config::FetchServiceConfig,
     error::FetchServiceError,
     indexer::{IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService},
+    local_cache::BlockCache,
     mempool::{Mempool, MempoolSubscriber},
     status::{AtomicStatus, StatusType},
     stream::{
@@ -50,7 +51,8 @@ use zebra_rpc::methods::{
 pub struct FetchService {
     /// JsonRPC Client.
     fetcher: JsonRpcConnector,
-    // TODO: Add internal compact block cache.
+    /// Local compact block cache.
+    block_cache: BlockCache,
     /// Internal mempool.
     mempool: Mempool,
     /// Service metadata.
@@ -95,38 +97,14 @@ impl ZcashService for FetchService {
             zebra_build_data.subversion,
         );
 
-        // If Network is Mainnet or Testnet wait for validator to sync before spawning Mempool.
-        //
-        // We compare estimated (network) chain height against the internal validator chain height and wait for the validator to syn with the network.
-        //
-        // NOTE: The internal compact block cache should start its sync process while the validator is syncing with the network.
-        if !config.no_sync {
-            status.store(StatusType::Syncing.into());
-            if !config.network.is_regtest() {
-                loop {
-                    let blockchain_info = fetcher.get_blockchain_info().await?;
-                    if (blockchain_info.blocks.0 as i64 - blockchain_info.estimated_height.0 as i64)
-                        .abs()
-                        <= 10
-                    {
-                        break;
-                    } else {
-                        println!(" - Validator syncing with network. Validator chain height: {}, Estimated Network chain height: {}",
-                            &blockchain_info.blocks.0,
-                            &blockchain_info.estimated_height.0
-                        );
-                        tokio::time::sleep(time::Duration::from_millis(500)).await;
-                        continue;
-                    }
-                }
-            }
-        }
+        let block_cache = BlockCache::spawn(&fetcher, config.clone().into()).await?;
         let mempool = Mempool::spawn(&fetcher, None).await?;
 
         status.store(StatusType::Ready.into());
 
         Ok(Self {
             fetcher,
+            block_cache,
             mempool,
             data,
             config,

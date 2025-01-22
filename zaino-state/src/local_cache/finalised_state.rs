@@ -345,10 +345,12 @@ impl FinalisedState {
                 // This means the whole non-finalised state is old.
                 // We fetch the first block in the chain here as the later refill logic always starts from [reorg_height + 1].
                 Err(_) => {
-                    let mut txn = self.database.begin_rw_txn()?;
-                    txn.clear_db(self.heights_to_hashes)?;
-                    txn.clear_db(self.hashes_to_blocks)?;
-                    txn.commit()?;
+                    {
+                        let mut txn = self.database.begin_rw_txn()?;
+                        txn.clear_db(self.heights_to_hashes)?;
+                        txn.clear_db(self.hashes_to_blocks)?;
+                        txn.commit()?;
+                    }
                     loop {
                         match fetch_block_from_node(
                             &self.fetcher,

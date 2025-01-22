@@ -22,8 +22,7 @@ use zebra_state::HashOrHeight;
 pub struct BlockCache {
     fetcher: JsonRpcConnector,
     non_finalised_state: NonFinalisedState,
-    finalised_state: FinalisedState,
-    config: BlockCacheConfig,
+    finalised_state: Option<FinalisedState>,
 }
 
 impl BlockCache {
@@ -34,7 +33,11 @@ impl BlockCache {
     ) -> Result<Self, BlockCacheError> {
         let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(100);
 
-        let finalised_state = FinalisedState::spawn(fetcher, channel_rx, config.clone()).await?;
+        let finalised_state = if !config.no_db {
+            Some(FinalisedState::spawn(fetcher, channel_rx, config.clone()).await?)
+        } else {
+            None
+        };
 
         let non_finalised_state =
             NonFinalisedState::spawn(fetcher, channel_tx, config.clone()).await?;
@@ -43,33 +46,39 @@ impl BlockCache {
             fetcher: fetcher.clone(),
             non_finalised_state,
             finalised_state,
-            config,
         })
     }
 
     /// Returns a [`BlockCacheSubscriber`].
     pub fn subscriber(&self) -> BlockCacheSubscriber {
+        let finalised_state_subscriber = match &self.finalised_state {
+            Some(finalised_state) => Some(finalised_state.subscriber()),
+            None => None,
+        };
         BlockCacheSubscriber {
             fetcher: self.fetcher.clone(),
             non_finalised_state: self.non_finalised_state.subscriber(),
-            finalised_state: self.finalised_state.subscriber(),
-            config: self.config.clone(),
+            finalised_state: finalised_state_subscriber,
         }
     }
 
     /// Returns the status of the block cache as:
     /// (non_finalised_state_status, finalised_state_status).
     pub fn status(&self) -> (StatusType, StatusType) {
-        (
-            self.non_finalised_state.status(),
-            self.finalised_state.status(),
-        )
+        let finalised_state_status = match &self.finalised_state {
+            Some(finalised_state) => finalised_state.status(),
+            None => StatusType::Offline,
+        };
+
+        (self.non_finalised_state.status(), finalised_state_status)
     }
 
     /// Sets the block cache to close gracefully.
     pub fn close(&mut self) {
         self.non_finalised_state.close();
-        self.finalised_state.close();
+        if self.finalised_state.is_some() {
+            self.finalised_state.take().unwrap().close();
+        }
     }
 }
 
@@ -78,8 +87,7 @@ impl BlockCache {
 pub struct BlockCacheSubscriber {
     fetcher: JsonRpcConnector,
     non_finalised_state: NonFinalisedStateSubscriber,
-    finalised_state: FinalisedStateSubscriber,
-    config: BlockCacheConfig,
+    finalised_state: Option<FinalisedStateSubscriber>,
 }
 
 impl BlockCacheSubscriber {
@@ -101,15 +109,14 @@ impl BlockCacheSubscriber {
                 .await
                 .map_err(|e| BlockCacheError::NonFinalisedStateError(e))
         } else {
-            match self.config.no_db {
+            match &self.finalised_state {
                 // Fetch from finalised state.
-                false => self
-                    .finalised_state
+                Some(finalised_state) => finalised_state
                     .get_compact_block(hash_or_height)
                     .await
                     .map_err(|e| BlockCacheError::FinalisedStateError(e)),
                 // Fetch from Validator.
-                true => {
+                None => {
                     let (_, block) = fetch_block_from_node(&self.fetcher, hash_or_height).await?;
                     Ok(block)
                 }
@@ -127,10 +134,11 @@ impl BlockCacheSubscriber {
 
     /// Returns the status of the [`BlockCache`]..
     pub fn status(&self) -> (StatusType, StatusType) {
-        (
-            self.non_finalised_state.status(),
-            self.finalised_state.status(),
-        )
+        let finalised_state_status = match &self.finalised_state {
+            Some(finalised_state) => finalised_state.status(),
+            None => StatusType::Offline,
+        };
+        (self.non_finalised_state.status(), finalised_state_status)
     }
 }
 
