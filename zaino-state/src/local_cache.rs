@@ -18,6 +18,7 @@ use zebra_state::HashOrHeight;
 /// Zaino's internal compact block cache.
 ///
 /// Used by the FetchService for efficiency.
+#[derive(Debug)]
 pub struct BlockCache {
     fetcher: JsonRpcConnector,
     non_finalised_state: NonFinalisedState,

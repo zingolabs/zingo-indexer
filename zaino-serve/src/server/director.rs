@@ -74,44 +74,28 @@ impl Server {
     #[allow(clippy::too_many_arguments)]
     pub async fn spawn(
         service_subscriber: IndexerSubscriber<FetchServiceSubscriber>,
-        tcp_active: bool,
-        tcp_ingestor_listen_addr: Option<SocketAddr>,
+        tcp_ingestor_listen_addr: SocketAddr,
         max_queue_size: u16,
         max_worker_pool_size: u16,
         idle_worker_pool_size: u16,
         status: ServerStatus,
         online: Arc<AtomicBool>,
     ) -> Result<Self, ServerError> {
-        if !tcp_active {
-            return Err(ServerError::ServerConfigError(
-                "Cannot start server with no ingestors selected.".to_string(),
-            ));
-        }
-        if tcp_active && tcp_ingestor_listen_addr.is_none() {
-            return Err(ServerError::ServerConfigError(
-                "TCP is active but no address provided.".to_string(),
-            ));
-        }
         println!("Launching Server..");
         status.server_status.store(StatusType::Spawning.into());
         let request_queue: Queue<ZingoIndexerRequest> =
             Queue::new(max_queue_size as usize, status.request_queue_status.clone());
         status.request_queue_status.store(0, Ordering::SeqCst);
-        let tcp_ingestor = if tcp_active {
-            println!("Launching TcpIngestor..");
-            Some(
-                TcpIngestor::spawn(
-                    tcp_ingestor_listen_addr
-                        .expect("tcp_ingestor_listen_addr returned none when used."),
-                    request_queue.tx().clone(),
-                    status.tcp_ingestor_status.clone(),
-                    online.clone(),
-                )
-                .await?,
+        println!("Launching TcpIngestor..");
+        let tcp_ingestor = Some(
+            TcpIngestor::spawn(
+                tcp_ingestor_listen_addr,
+                request_queue.tx().clone(),
+                status.tcp_ingestor_status.clone(),
+                online.clone(),
             )
-        } else {
-            None
-        };
+            .await?,
+        );
         println!("Launching WorkerPool..");
         let worker_pool = WorkerPool::spawn(
             service_subscriber.clone(),

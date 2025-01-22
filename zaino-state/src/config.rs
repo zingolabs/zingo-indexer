@@ -57,11 +57,25 @@ pub struct FetchServiceConfig {
     pub service_timeout: u32,
     /// StateService RPC max channel size.
     pub service_channel_size: u32,
+    /// Capacity of the Dashmaps used for the Mempool and BlockCache NonFinalisedState.
+    pub map_capacity: Option<usize>,
+    /// Number of shard used in the DashMap used for the Mempool and BlockCache NonFinalisedState.
+    ///
+    /// shard_amount should greater than 0 and be a power of two.
+    /// If a shard_amount which is not a power of two is provided, the function will panic.
+    pub map_shard_amount: Option<usize>,
+    /// Block Cache database file path.
+    pub db_path: PathBuf,
+    /// Block Cache database maximum size in gb.
+    pub db_size: Option<usize>,
     /// Network type.
     pub network: zebra_chain::parameters::Network,
     /// Disables internal sync and stops zaino waiting on server sync.
     /// Used for testing.
     pub no_sync: bool,
+    /// Disables FinalisedState.
+    /// Used for testing.
+    pub no_db: bool,
 }
 
 impl FetchServiceConfig {
@@ -72,8 +86,13 @@ impl FetchServiceConfig {
         validator_rpc_password: Option<String>,
         service_timeout: Option<u32>,
         service_channel_size: Option<u32>,
+        map_capacity: Option<usize>,
+        map_shard_amount: Option<usize>,
+        db_path: PathBuf,
+        db_size: Option<usize>,
         network: zebra_chain::parameters::Network,
         no_sync: bool,
+        no_db: bool,
     ) -> Self {
         FetchServiceConfig {
             validator_rpc_address,
@@ -82,8 +101,13 @@ impl FetchServiceConfig {
             // NOTE: This timeout is currently long to ease development but should be reduced before production.
             service_timeout: service_timeout.unwrap_or(60),
             service_channel_size: service_channel_size.unwrap_or(32),
+            map_capacity,
+            map_shard_amount,
+            db_path,
+            db_size,
             network,
             no_sync,
+            no_db,
         }
     }
 }

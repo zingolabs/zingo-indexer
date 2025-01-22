@@ -73,17 +73,9 @@ impl From<StateServiceError> for tonic::Status {
 /// Errors related to the `FetchService`.
 #[derive(Debug, thiserror::Error)]
 pub enum FetchServiceError {
-    /// Custom Errors. *Remove before production.
-    #[error("Custom error: {0}")]
-    Custom(String),
-
     /// Critical Errors, Restart Zaino.
     #[error("Critical error: {0}")]
     Critical(String),
-
-    /// Error from a Tokio JoinHandle.
-    #[error("Join error: {0}")]
-    JoinError(#[from] tokio::task::JoinError),
 
     /// Error from JsonRpcConnector.
     #[error("JsonRpcConnector error: {0}")]
@@ -120,24 +112,12 @@ pub enum FetchServiceError {
     /// Chain parse error.
     #[error("Chain parse error: {0}")]
     ChainParseError(#[from] zaino_fetch::chain::error::ParseError),
-
-    /// std::io::Error
-    #[error("IO error: {0}")]
-    IoError(#[from] std::io::Error),
-
-    /// A generic boxed error.
-    #[error("Generic error: {0}")]
-    Generic(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl From<FetchServiceError> for tonic::Status {
     fn from(error: FetchServiceError) -> Self {
         match error {
-            FetchServiceError::Custom(message) => tonic::Status::internal(message),
             FetchServiceError::Critical(message) => tonic::Status::internal(message),
-            FetchServiceError::JoinError(err) => {
-                tonic::Status::internal(format!("Join error: {}", err))
-            }
             FetchServiceError::JsonRpcConnectorError(err) => {
                 tonic::Status::internal(format!("JsonRpcConnector error: {}", err))
             }
@@ -163,12 +143,6 @@ impl From<FetchServiceError> for tonic::Status {
             FetchServiceError::ChainParseError(err) => {
                 tonic::Status::internal(format!("Chain parse error: {}", err))
             }
-            FetchServiceError::IoError(err) => {
-                tonic::Status::internal(format!("IO error: {}", err))
-            }
-            FetchServiceError::Generic(err) => {
-                tonic::Status::internal(format!("Generic error: {}", err))
-            }
         }
     }
 }
@@ -176,17 +150,9 @@ impl From<FetchServiceError> for tonic::Status {
 /// Errors related to the `Mempool`.
 #[derive(Debug, thiserror::Error)]
 pub enum MempoolError {
-    /// Custom Errors. *Remove before production.
-    #[error("Custom error: {0}")]
-    Custom(String),
-
     /// Critical Errors, Restart Zaino.
     #[error("Critical error: {0}")]
     Critical(String),
-
-    /// Error from a Tokio JoinHandle.
-    #[error("Join error: {0}")]
-    JoinError(#[from] tokio::task::JoinError),
 
     /// Error from JsonRpcConnector.
     #[error("JsonRpcConnector error: {0}")]
@@ -199,27 +165,6 @@ pub enum MempoolError {
     /// Unexpected status-related error.
     #[error("Status error: {0:?}")]
     StatusError(StatusError),
-
-    /// Error from sending to a Tokio MPSC channel.
-    #[error("Send error: {0}")]
-    SendError(
-        #[from]
-        tokio::sync::mpsc::error::SendError<
-            Result<(crate::mempool::MempoolKey, crate::mempool::MempoolValue), StatusError>,
-        >,
-    ),
-
-    /// UTF-8 conversion error.
-    #[error("UTF-8 conversion error: {0}")]
-    Utf8Error(#[from] std::str::Utf8Error),
-
-    /// Integer parsing error.
-    #[error("Integer parsing error: {0}")]
-    ParseIntError(#[from] std::num::ParseIntError),
-
-    /// A generic boxed error.
-    #[error("Generic error: {0}")]
-    Generic(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 /// Errors related to the `BlockCache`.
@@ -285,25 +230,9 @@ pub enum NonFinalisedStateError {
     #[error("JsonRpcConnector error: {0}")]
     JsonRpcConnectorError(#[from] zaino_fetch::jsonrpc::error::JsonRpcConnectorError),
 
-    /// Error from a Tokio Watch Reciever.
-    #[error("Join error: {0}")]
-    WatchRecvError(#[from] tokio::sync::watch::error::RecvError),
-
     /// Unexpected status-related error.
     #[error("Status error: {0:?}")]
     StatusError(StatusError),
-
-    /// Error from sending to a Tokio MPSC channel.
-    #[error("Send error: {0}")]
-    SendError(
-        #[from]
-        tokio::sync::mpsc::error::SendError<
-            Result<(crate::mempool::MempoolKey, crate::mempool::MempoolValue), StatusError>,
-        >,
-    ),
-    /// A generic boxed error.
-    #[error("Generic error: {0}")]
-    Generic(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 /// Errors related to the `FinalisedState`.
@@ -321,7 +250,7 @@ pub enum FinalisedStateError {
     #[error("Critical error: {0}")]
     Critical(String),
 
-    /// Error from the LLDM database.
+    /// Error from the LMDB database.
     #[error("LMDB database error: {0}")]
     LmdbError(#[from] lmdb::Error),
 
@@ -340,10 +269,6 @@ pub enum FinalisedStateError {
     /// std::io::Error
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
-
-    /// A generic boxed error.
-    #[error("Generic error: {0}")]
-    Generic(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 /// A general error type to represent error StatusTypes.

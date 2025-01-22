@@ -73,23 +73,20 @@ impl Indexer {
         set_ctrlc(online.clone());
         startup_message();
         println!("Launching Zaino..");
-        let indexer: Indexer = Indexer::new(config, online.clone(), false).await?;
+        let indexer: Indexer = Indexer::new(config, online.clone()).await?;
         indexer.serve().await?.await?
     }
 
     /// Creates a new Indexer.
     ///
     /// Currently only takes an IndexerConfig.
-    pub async fn new(
-        config: IndexerConfig,
-        online: Arc<AtomicBool>,
-        no_sync: bool,
-    ) -> Result<Self, IndexerError> {
+    pub async fn new(config: IndexerConfig, online: Arc<AtomicBool>) -> Result<Self, IndexerError> {
         config.check_config()?;
         let status = IndexerStatus::new(config.max_worker_pool_size);
-        let tcp_ingestor_listen_addr: Option<SocketAddr> = config
-            .listen_port
-            .map(|port| SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST), port));
+        let tcp_ingestor_listen_addr = SocketAddr::new(
+            std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+            config.listen_port,
+        );
         println!("Checking connection with node..");
         let zebrad_uri = test_node_and_return_uri(
             &config.zebrad_port,
@@ -108,12 +105,17 @@ impl Indexer {
                     std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
                     config.zebrad_port,
                 ),
+                config.node_user.clone(),
+                config.node_password.clone(),
                 None,
                 None,
-                None,
-                None,
+                config.map_capacity,
+                config.map_shard_amount,
+                config.db_path.clone(),
+                config.db_size,
                 config.get_network()?,
-                no_sync,
+                config.no_sync,
+                config.no_db,
             ),
             status.service_status.clone(),
         )
@@ -121,7 +123,6 @@ impl Indexer {
         let server = Some(
             Server::spawn(
                 service.inner_ref().get_subscriber(),
-                config.tcp_active,
                 tcp_ingestor_listen_addr,
                 config.max_queue_size,
                 config.max_worker_pool_size,
@@ -157,12 +158,7 @@ impl Indexer {
             };
 
             self.status.indexer_status.store(StatusType::Ready.into());
-            println!(
-                "Zaino listening on port {:?}.",
-                self.config
-                    .listen_port
-                    .expect("Error fetching Zaino's listen prot from config.")
-            );
+            println!("Zaino listening on port {:?}.", self.config.listen_port);
             loop {
                 self.status.load();
                 // indexer.log_status();

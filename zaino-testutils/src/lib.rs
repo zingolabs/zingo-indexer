@@ -310,6 +310,8 @@ impl TestManager {
         network: Option<zcash_local_net::network::Network>,
         chain_cache: Option<PathBuf>,
         enable_zaino: bool,
+        zaino_no_sync: bool,
+        zaino_no_db: bool,
         enable_clients: bool,
     ) -> Result<Self, std::io::Error> {
         let validator_kind = ValidatorKind::from_str(validator).unwrap();
@@ -351,23 +353,30 @@ impl TestManager {
         };
         let local_net = LocalNet::launch(validator_config).await.unwrap();
         let data_dir = local_net.data_dir().path().to_path_buf();
+        let db_path = data_dir.join("zaino");
 
         // Launch Zaino:
         let (zaino_grpc_listen_port, zaino_handle) = if enable_zaino {
             let zaino_grpc_listen_port = portpicker::pick_unused_port().expect("No ports free");
             // NOTE: queue and workerpool sizes may need to be changed here.
             let indexer_config = zainodlib::config::IndexerConfig {
-                tcp_active: true,
-                listen_port: Some(zaino_grpc_listen_port),
+                listen_port: zaino_grpc_listen_port,
                 zebrad_port: zebrad_rpc_listen_port,
                 node_user: Some("xxxxxx".to_string()),
                 node_password: Some("xxxxxx".to_string()),
                 max_queue_size: 512,
                 max_worker_pool_size: 64,
                 idle_worker_pool_size: 4,
+                map_capacity: None,
+                map_shard_amount: None,
+                db_path,
+                db_size: None,
                 network: network.to_string(),
+                no_sync: zaino_no_sync,
+                no_db: zaino_no_db,
+                no_state: false,
             };
-            let handle = zainodlib::indexer::Indexer::new(indexer_config, online.clone(), true)
+            let handle = zainodlib::indexer::Indexer::new(indexer_config, online.clone())
                 .await
                 .unwrap()
                 .serve()
@@ -435,7 +444,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zebrad() {
-        let mut test_manager = TestManager::launch("zebrad", None, None, false, false)
+        let mut test_manager = TestManager::launch("zebrad", None, None, false, true, true, false)
             .await
             .unwrap();
         assert_eq!(
@@ -447,7 +456,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zcashd() {
-        let mut test_manager = TestManager::launch("zcashd", None, None, false, false)
+        let mut test_manager = TestManager::launch("zcashd", None, None, false, true, true, false)
             .await
             .unwrap();
         assert_eq!(
@@ -459,7 +468,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zebrad_generate_blocks() {
-        let mut test_manager = TestManager::launch("zebrad", None, None, false, false)
+        let mut test_manager = TestManager::launch("zebrad", None, None, false, true, true, false)
             .await
             .unwrap();
         assert_eq!(
@@ -476,7 +485,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zcashd_generate_blocks() {
-        let mut test_manager = TestManager::launch("zcashd", None, None, false, false)
+        let mut test_manager = TestManager::launch("zcashd", None, None, false, true, true, false)
             .await
             .unwrap();
         assert_eq!(
@@ -493,10 +502,17 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zebrad_with_chain() {
-        let mut test_manager =
-            TestManager::launch("zebrad", None, ZEBRAD_CHAIN_CACHE_BIN.clone(), false, false)
-                .await
-                .unwrap();
+        let mut test_manager = TestManager::launch(
+            "zebrad",
+            None,
+            ZEBRAD_CHAIN_CACHE_BIN.clone(),
+            false,
+            true,
+            true,
+            false,
+        )
+        .await
+        .unwrap();
         assert_eq!(
             52,
             u32::from(test_manager.local_net.get_chain_height().await)
@@ -506,10 +522,17 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zcashd_with_chain() {
-        let mut test_manager =
-            TestManager::launch("zcashd", None, ZCASHD_CHAIN_CACHE_BIN.clone(), false, false)
-                .await
-                .unwrap();
+        let mut test_manager = TestManager::launch(
+            "zcashd",
+            None,
+            ZCASHD_CHAIN_CACHE_BIN.clone(),
+            false,
+            true,
+            true,
+            false,
+        )
+        .await
+        .unwrap();
         assert_eq!(
             10,
             u32::from(test_manager.local_net.get_chain_height().await)
@@ -519,7 +542,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zebrad_zaino() {
-        let mut test_manager = TestManager::launch("zebrad", None, None, true, false)
+        let mut test_manager = TestManager::launch("zebrad", None, None, true, true, true, false)
             .await
             .unwrap();
         let mut grpc_client =
@@ -541,7 +564,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zcashd_zaino() {
-        let mut test_manager = TestManager::launch("zcashd", None, None, true, false)
+        let mut test_manager = TestManager::launch("zcashd", None, None, true, true, true, false)
             .await
             .unwrap();
         let mut grpc_client =
@@ -563,7 +586,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zebrad_zaino_clients() {
-        let mut test_manager = TestManager::launch("zebrad", None, None, true, true)
+        let mut test_manager = TestManager::launch("zebrad", None, None, true, true, true, true)
             .await
             .unwrap();
         let clients = test_manager
@@ -577,7 +600,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zcashd_zaino_clients() {
-        let mut test_manager = TestManager::launch("zcashd", None, None, true, true)
+        let mut test_manager = TestManager::launch("zcashd", None, None, true, true, true, true)
             .await
             .unwrap();
         let clients = test_manager
@@ -594,7 +617,7 @@ mod tests {
     /// Even if rewards need 100 confirmations these blocks should not have to be mined at the same time.
     #[tokio::test]
     async fn launch_testmanager_zebrad_zaino_clients_receive_mining_reward() {
-        let mut test_manager = TestManager::launch("zebrad", None, None, true, true)
+        let mut test_manager = TestManager::launch("zebrad", None, None, true, true, true, true)
             .await
             .unwrap();
         let clients = test_manager
@@ -622,7 +645,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zcashd_zaino_clients_receive_mining_reward() {
-        let mut test_manager = TestManager::launch("zcashd", None, None, true, true)
+        let mut test_manager = TestManager::launch("zcashd", None, None, true, true, true, true)
             .await
             .unwrap();
         let clients = test_manager
@@ -646,7 +669,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zebrad_zaino_clients_receive_mining_reward_and_send() {
-        let mut test_manager = TestManager::launch("zebrad", None, None, true, true)
+        let mut test_manager = TestManager::launch("zebrad", None, None, true, true, true, true)
             .await
             .unwrap();
         let clients = test_manager
@@ -718,7 +741,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_testmanager_zcashd_zaino_clients_receive_mining_reward_and_send() {
-        let mut test_manager = TestManager::launch("zcashd", None, None, true, true)
+        let mut test_manager = TestManager::launch("zcashd", None, None, true, true, true, true)
             .await
             .unwrap();
         let clients = test_manager
@@ -780,6 +803,8 @@ mod tests {
             "zebrad",
             Some(zcash_local_net::network::Network::Testnet),
             ZEBRAD_TESTNET_CACHE_BIN.clone(),
+            true,
+            true,
             true,
             true,
         )
