@@ -393,20 +393,6 @@ impl Drop for NonFinalisedState {
     }
 }
 
-// impl Clone for NonFinalisedState {
-//     fn clone(&self) -> Self {
-//         Self {
-//             fetcher: self.fetcher.clone(),
-//             heights_to_hashes: self.heights_to_hashes.clone(),
-//             hashes_to_blocks: self.hashes_to_blocks.clone(),
-//             sync_task_handle: None,
-//             block_sender: self.block_sender.clone(),
-//             status: self.status.clone(),
-//             config: self.config.clone(),
-//         }
-//     }
-// }
-
 /// A subscriber to a [`NonFinalisedState`].
 #[derive(Debug, Clone)]
 pub struct NonFinalisedStateSubscriber {
