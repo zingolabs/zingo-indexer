@@ -51,6 +51,12 @@ pub struct IndexerConfig {
     /// Disables FinalisedState.
     /// Used for testing.
     pub no_db: bool,
+    /// Disables internal mempool and blockcache.
+    ///
+    /// For use by lightweight wallets that do not want to run any extra processes.
+    ///
+    /// NOTE: Currently unimplemented as will require either a Tonic backend or a JsonRPC server.
+    pub no_state: bool,
 }
 
 impl IndexerConfig {
@@ -101,6 +107,7 @@ impl Default for IndexerConfig {
             network: "Testnet".to_string(),
             no_sync: false,
             no_db: false,
+            no_state: false,
         }
     }
 }

@@ -374,6 +374,7 @@ impl TestManager {
                 network: network.to_string(),
                 no_sync: zaino_no_sync,
                 no_db: zaino_no_db,
+                no_state: false,
             };
             let handle = zainodlib::indexer::Indexer::new(indexer_config, online.clone())
                 .await

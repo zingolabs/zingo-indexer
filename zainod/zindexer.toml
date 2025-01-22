@@ -62,3 +62,11 @@ no_sync = false
 # Only used by the FetchServic.
 # Used for testing.
 no_db = false
+
+# Disables internal mempool and blockcache.
+#
+# For use by lightweight wallets that do not want to run any extra processes.
+#
+# NOTE: Currently unimplemented as will require either a Tonic backend or a JsonRPC server.
+# no_state = false
+    
