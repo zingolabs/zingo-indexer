@@ -484,7 +484,7 @@ mod wallet_basic {
         println!("\n\nStarting Mempool!\n");
 
         recipient_client.clear_state().await;
-        let _ = zingolib::lightclient::LightClient::start_mempool_monitor(recipient_client.clone())
+        zingolib::lightclient::LightClient::start_mempool_monitor(recipient_client.clone())
             .unwrap();
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 

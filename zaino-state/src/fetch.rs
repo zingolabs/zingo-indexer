@@ -256,7 +256,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .fetcher
             .get_address_balance(address_strings.valid_address_strings().map_err(|error| {
                 FetchServiceError::RpcError(RpcError {
-                    code: error.code() as i32 as i64,
+                    code: error.code() as i64,
                     message: "Invalid address provided".to_string(),
                     data: None,
                 })
@@ -480,7 +480,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .fetcher
             .get_address_utxos(address_strings.valid_address_strings().map_err(|error| {
                 FetchServiceError::RpcError(RpcError {
-                    code: error.code() as i32 as i64,
+                    code: error.code() as i64,
                     message: "Invalid address provided".to_string(),
                     data: None,
                 })

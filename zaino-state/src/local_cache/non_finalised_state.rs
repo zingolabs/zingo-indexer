@@ -128,7 +128,7 @@ impl NonFinalisedState {
             loop {
                 match non_finalised_state.fetcher.get_blockchain_info().await {
                     Ok(chain_info) => {
-                        best_block_hash = chain_info.best_block_hash.clone();
+                        best_block_hash = chain_info.best_block_hash;
                         non_finalised_state.status.store(StatusType::Ready.into());
                         break;
                     }
@@ -148,7 +148,7 @@ impl NonFinalisedState {
 
                 match non_finalised_state.fetcher.get_blockchain_info().await {
                     Ok(chain_info) => {
-                        check_block_hash = chain_info.best_block_hash.clone();
+                        check_block_hash = chain_info.best_block_hash;
                     }
                     Err(e) => {
                         non_finalised_state.update_status_and_notify(StatusType::RecoverableError);
@@ -198,7 +198,7 @@ impl NonFinalisedState {
     ///
     /// Newly mined blocks are treated as a reorg at chain_height[-0].
     async fn fill_from_reorg(&self) -> Result<(), NonFinalisedStateError> {
-        let mut reorg_height = self
+        let mut reorg_height = *self
             .heights_to_hashes
             .get_state()
             .iter()
@@ -208,8 +208,7 @@ impl NonFinalisedState {
                     "Failed to find the maximum height in the non-finalised state.".to_string(),
                 )
             })?
-            .key()
-            .clone();
+            .key();
 
         let mut reorg_hash = self.heights_to_hashes.get(&reorg_height).ok_or_else(|| {
             NonFinalisedStateError::MissingData(format!(
@@ -298,7 +297,7 @@ impl NonFinalisedState {
                     self.heights_to_hashes.remove(&Height(block_height), None);
                 }
             } else {
-                let pop_height = self
+                let pop_height = *self
                     .heights_to_hashes
                     .get_state()
                     .iter()
@@ -309,8 +308,7 @@ impl NonFinalisedState {
                                 .to_string(),
                         )
                     })?
-                    .key()
-                    .clone();
+                    .key();
                 if let Some(hash) = self.heights_to_hashes.get(&pop_height) {
                     if let Some(block) = self.hashes_to_blocks.get(&hash) {
                         if self
@@ -421,7 +419,7 @@ impl NonFinalisedStateSubscriber {
 
         self.hashes_to_blocks
             .get(&hash)
-            .and_then(|block| Some(block.as_ref().clone()))
+            .map(|block| block.as_ref().clone())
             .ok_or_else(|| {
                 NonFinalisedStateError::MissingData(format!("Block not found for hash: {}", hash))
             })
@@ -429,15 +427,14 @@ impl NonFinalisedStateSubscriber {
 
     /// Returns the height of the latest block in the non-finalised state.
     pub async fn get_chain_height(&self) -> Result<Height, NonFinalisedStateError> {
-        let (height, _) = self
+        let (height, _) = *self
             .heights_to_hashes
             .get_filtered_state(&HashSet::new())
             .iter()
             .max_by_key(|(height, ..)| height.0)
             .ok_or_else(|| {
                 NonFinalisedStateError::MissingData("Non-finalised state is empty.".into())
-            })?
-            .clone();
+            })?;
 
         Ok(height)
     }
@@ -450,7 +447,7 @@ impl NonFinalisedStateSubscriber {
         }
     }
 
-    /// Returns the status of the NonFinalisedState..
+    /// Returns the status of the NonFinalisedState.
     pub fn status(&self) -> StatusType {
         self.status.load().into()
     }
