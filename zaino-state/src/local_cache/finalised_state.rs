@@ -180,7 +180,7 @@ impl FinalisedState {
                 loop {
                     match finalised_state.insert_block((height, hash, compact_block.clone())) {
                         Ok(_) => {
-                            println!("✅ Block at height {} successfully inserted.", height.0);
+                            println!("Block at height {} successfully inserted.", height.0);
                             break;
                         }
                         Err(FinalisedStateError::LmdbError(lmdb::Error::KeyExist)) => {
@@ -196,7 +196,7 @@ impl FinalisedState {
                                         continue;
                                     } else {
                                         println!(
-                                            "⚠️ Block at height {} already exists, skipping.",
+                                            "Block at height {} already exists, skipping.",
                                             height.0
                                         );
                                         break;
@@ -211,7 +211,7 @@ impl FinalisedState {
                             }
                         }
                         Err(FinalisedStateError::LmdbError(db_err)) => {
-                            eprintln!("❌ LMDB error inserting block {}: {:?}", height.0, db_err);
+                            eprintln!("LMDB error inserting block {}: {:?}", height.0, db_err);
                             finalised_state
                                 .status
                                 .store(StatusType::CriticalError.into());
@@ -219,13 +219,13 @@ impl FinalisedState {
                         }
                         Err(e) => {
                             eprintln!(
-                                "⚠️ Unknown error inserting block {}: {:?}. Retrying...",
+                                "Unknown error inserting block {}: {:?}. Retrying...",
                                 height.0, e
                             );
 
                             if retry_attempts == 0 {
                                 eprintln!(
-                                    "❌ Failed to insert block {} after multiple retries.",
+                                    "Failed to insert block {} after multiple retries.",
                                     height.0
                                 );
                                 finalised_state
@@ -244,7 +244,7 @@ impl FinalisedState {
                             {
                                 Ok((new_hash, new_compact_block)) => {
                                     eprintln!(
-                                        "🔄 Re-fetched block at height {}, retrying insert.",
+                                        "Re-fetched block at height {}, retrying insert.",
                                         height.0
                                     );
                                     hash = new_hash;
@@ -252,7 +252,7 @@ impl FinalisedState {
                                 }
                                 Err(fetch_err) => {
                                     eprintln!(
-                                        "❌ Failed to fetch block {} from validator: {:?}",
+                                        "Failed to fetch block {} from validator: {:?}",
                                         height.0, fetch_err
                                     );
                                     finalised_state
@@ -589,7 +589,7 @@ impl FinalisedState {
         }
 
         if let Err(e) = self.database.sync(true) {
-            eprintln!("❌ Error syncing LMDB before shutdown: {:?}", e);
+            eprintln!("Error syncing LMDB before shutdown: {:?}", e);
         }
     }
 }
@@ -605,7 +605,7 @@ impl Drop for FinalisedState {
         }
 
         if let Err(e) = self.database.sync(true) {
-            eprintln!("❌ Error syncing LMDB before shutdown: {:?}", e);
+            eprintln!("Error syncing LMDB before shutdown: {:?}", e);
         }
     }
 }
