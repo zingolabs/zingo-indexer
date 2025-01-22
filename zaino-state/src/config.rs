@@ -58,15 +58,11 @@ pub struct FetchServiceConfig {
     /// StateService RPC max channel size.
     pub service_channel_size: u32,
     /// Capacity of the Dashmaps used for the Mempool and BlockCache NonFinalisedState.
-    ///
-    /// NOTE: map_capacity and shard map must both be set for either to be used.
     pub map_capacity: Option<usize>,
     /// Number of shard used in the DashMap used for the Mempool and BlockCache NonFinalisedState.
     ///
     /// shard_amount should greater than 0 and be a power of two.
     /// If a shard_amount which is not a power of two is provided, the function will panic.
-    ///
-    /// NOTE: map_capacity and shard map must both be set for either to be used.
     pub map_shard_amount: Option<usize>,
     /// Block Cache database file path.
     pub db_path: PathBuf,

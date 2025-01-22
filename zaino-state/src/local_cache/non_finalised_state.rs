@@ -44,19 +44,10 @@ impl NonFinalisedState {
         config: BlockCacheConfig,
     ) -> Result<Self, NonFinalisedStateError> {
         println!("Launching Non-Finalised State..");
-        let (heights_to_hashes, hashes_to_blocks) =
-            match (config.map_capacity, config.map_shard_amount) {
-                (Some(capacity), Some(shard_amount)) => (
-                    Broadcast::new_custom(capacity, shard_amount),
-                    Broadcast::new_custom(capacity, shard_amount),
-                ),
-                _ => (Broadcast::new_default(), Broadcast::new_default()),
-            };
-
         let mut non_finalised_state = NonFinalisedState {
             fetcher: fetcher.clone(),
-            heights_to_hashes,
-            hashes_to_blocks,
+            heights_to_hashes: Broadcast::new(config.map_capacity, config.map_shard_amount),
+            hashes_to_blocks: Broadcast::new(config.map_capacity, config.map_shard_amount),
             sync_task_handle: None,
             block_sender,
             status: AtomicStatus::new(StatusType::Spawning.into()),

@@ -14,25 +14,19 @@ pub(crate) struct Broadcast<K, V> {
 }
 
 impl<K: Eq + Hash + Clone, V: Clone> Broadcast<K, V> {
-    /// Creates a new Broadcast instance, uses default dashmap spec.
-    pub(crate) fn new_default() -> Self {
+    /// Creates a new [`Broadcast`], optionally exposes dashmap spec.
+    pub(crate) fn new(capacity: Option<usize>, shard_amount: Option<usize>) -> Self {
         let (notifier, _) = watch::channel(StatusType::Spawning);
-        Self {
-            state: Arc::new(DashMap::new()),
-            notifier,
-        }
-    }
+        let state = match (capacity, shard_amount) {
+            (Some(capacity), Some(shard_amount)) => Arc::new(
+                DashMap::with_capacity_and_shard_amount(capacity, shard_amount),
+            ),
+            (Some(capacity), None) => Arc::new(DashMap::with_capacity(capacity)),
+            (None, Some(shard_amount)) => Arc::new(DashMap::with_shard_amount(shard_amount)),
+            (None, None) => Arc::new(DashMap::new()),
+        };
 
-    /// Creates a new Broadcast instance, exposes dashmap spec.
-    pub(crate) fn new_custom(capacity: usize, shard_amount: usize) -> Self {
-        let (notifier, _) = watch::channel(StatusType::Spawning);
-        Self {
-            state: Arc::new(DashMap::with_capacity_and_shard_amount(
-                capacity,
-                shard_amount,
-            )),
-            notifier,
-        }
+        Self { state, notifier }
     }
 
     /// Inserts or updates an entry in the state and optionally broadcasts an update.
@@ -154,7 +148,7 @@ impl<K: Eq + Hash + Clone, V: Clone> Broadcast<K, V> {
 
 impl<K: Eq + Hash + Clone, V: Clone> Default for Broadcast<K, V> {
     fn default() -> Self {
-        Self::new_default()
+        Self::new(None, None)
     }
 }
 

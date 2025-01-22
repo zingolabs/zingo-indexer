@@ -61,8 +61,10 @@ impl Mempool {
         let mut mempool = Mempool {
             fetcher: fetcher.clone(),
             state: match capacity_and_shard_amount {
-                Some((capacity, shard_amount)) => Broadcast::new_custom(capacity, shard_amount),
-                None => Broadcast::new_default(),
+                Some((capacity, shard_amount)) => {
+                    Broadcast::new(Some(capacity), Some(shard_amount))
+                }
+                None => Broadcast::new(None, None),
             },
             sync_task_handle: None,
             status: AtomicStatus::new(StatusType::Spawning.into()),
