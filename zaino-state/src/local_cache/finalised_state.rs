@@ -54,6 +54,7 @@ impl<'de> Deserialize<'de> for DbCompactBlock {
 }
 
 /// A Zaino database request.
+#[derive(Debug)]
 struct DbRequest {
     hash_or_height: HashOrHeight,
     response_channel: tokio::sync::oneshot::Sender<Result<CompactBlock, FinalisedStateError>>,
@@ -73,6 +74,7 @@ impl DbRequest {
 }
 
 /// Fanalised part of the chain, held in an LMDB database.
+#[derive(Debug)]
 pub struct FinalisedState {
     /// Chain fetch service.
     fetcher: JsonRpcConnector,
@@ -102,7 +104,6 @@ impl FinalisedState {
     /// - db_path: File path of the db.
     /// - db_size: Max size of the db in gb.
     /// - block_reciever: Channel that recieves new blocks to add to the db.
-    /// - status: FinalisedState status.
     pub async fn spawn(
         fetcher: &JsonRpcConnector,
         block_receiver: tokio::sync::mpsc::Receiver<(Height, Hash, CompactBlock)>,
