@@ -31,12 +31,14 @@ use crate::{
 ///
 /// NOTE: Work to implement a unified endpoint for IndexerService will be completed in Milestone 3 of the Zaino Dev Grant.
 #[derive(Clone)]
-pub struct IndexerService<Service: ZcashService> {
+pub struct IndexerInterface<Service: ZcashService> {
     /// Underlying Service.
     service: Service,
+    //dservice: DarkSideService,
+    //_tonicservice: TonicService,
 }
 
-impl<Service> IndexerService<Service>
+impl<Service> IndexerInterface<Service>
 where
     Service: ZcashService,
 {
@@ -45,7 +47,7 @@ where
         config: Service::Config,
         status: AtomicStatus,
     ) -> Result<Self, Service::Error> {
-        Ok(IndexerService {
+        Ok(IndexerInterface {
             service: Service::spawn(config, status).await?,
         })
     }
