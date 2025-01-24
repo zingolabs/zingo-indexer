@@ -99,7 +99,7 @@ impl BlockCacheSubscriber {
             self.non_finalised_state
                 .get_compact_block(hash_or_height)
                 .await
-                .map_err(|e| BlockCacheError::NonFinalisedStateError(e))
+                .map_err(BlockCacheError::NonFinalisedStateError)
         } else {
             match self.config.no_db {
                 // Fetch from finalised state.
@@ -107,7 +107,7 @@ impl BlockCacheSubscriber {
                     .finalised_state
                     .get_compact_block(hash_or_height)
                     .await
-                    .map_err(|e| BlockCacheError::FinalisedStateError(e)),
+                    .map_err(BlockCacheError::FinalisedStateError),
                 // Fetch from Validator.
                 true => {
                     let (_, block) = fetch_block_from_node(&self.fetcher, hash_or_height).await?;
@@ -122,7 +122,7 @@ impl BlockCacheSubscriber {
         self.non_finalised_state
             .get_chain_height()
             .await
-            .map_err(|e| BlockCacheError::NonFinalisedStateError(e))
+            .map_err(BlockCacheError::NonFinalisedStateError)
     }
 
     /// Returns the status of the [`BlockCache`]..
