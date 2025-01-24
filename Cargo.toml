@@ -78,3 +78,7 @@ jsonrpc-core = "18.0"
 jsonrpsee-types = "0.24"
 dashmap = "6.1"
 lmdb = "0.8"
+
+[profile.test]
+opt-level = 3
+debug = true

@@ -23,7 +23,7 @@ idle_worker_pool_size = 4
 
 # Capacity of the Dashmaps used for the Mempool.
 # Also use by the BlockCache::NonFinalisedState when using the FetchService.
-# 
+#
 # None by default.
 # map_capacity = None
 
@@ -35,30 +35,30 @@ idle_worker_pool_size = 4
 #
 # None by default.
 # map_shard_amount = None
-    
+
 # Block Cache database file path.
 #
 # This is Zaino's Compact Block Cache db if using the FetchService or Zebra's RocksDB if using the StateService.
 #
 # None by default, this defaults to `$HOME/.cache/zaino/`
 # db_path = None
-    
+
 # Block Cache database maximum size in gb.
 #
 # Only used by the FetchService.
-# 
+#
 # None by default
 # db_size = None
-    
+
 # Network chain type (Mainnet, Testnet, Regtest).
 network = "Testnet"
-    
+
 # Disables internal sync and stops zaino waiting on server to sync with p2p network.
 # Useful for testing.
 no_sync = false
-  
-# Disables the FinalisedState in the BlockCache 
-# 
+
+# Disables the FinalisedState in the BlockCache
+#
 # Only used by the FetchServic.
 # Used for testing.
 no_db = false
@@ -69,4 +69,4 @@ no_db = false
 #
 # NOTE: Currently unimplemented as will require either a Tonic backend or a JsonRPC server.
 # no_state = false
-    
+
