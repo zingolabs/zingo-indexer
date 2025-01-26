@@ -6,10 +6,6 @@ authors = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
 
-[features]
-# Used by zcash-local-net:
-test_fixtures = []
-
 [dependencies]
 zaino-fetch = { path = "../zaino-fetch" }
 zainod = { path = "../zainod" }
@@ -17,6 +13,7 @@ zainod = { path = "../zainod" }
 # Librustzcash
 zcash_protocol = { workspace = true }
 zcash_client_backend = { workspace = true }
+zcash_primitives = { workspace = true }
 
 # Zebra
 zebra-chain = { workspace = true }
@@ -25,7 +22,7 @@ zebra-chain = { workspace = true }
 zingolib = { workspace = true }
 
 # Test Utilities
-zcash_local_net = { workspace = true, features = ["test_fixtures"] }
+zcash_local_net = { workspace = true, features = [ "client" ] }
 
 # Miscellaneous
 tokio = { workspace = true }
@@ -35,4 +32,5 @@ ctrlc = { workspace = true }
 tempfile = { workspace = true }
 portpicker = { workspace = true }
 once_cell = { workspace = true }
+tokio-stream.workspace = true
 

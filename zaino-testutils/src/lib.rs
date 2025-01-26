@@ -8,6 +8,8 @@ use std::{path::PathBuf, str::FromStr};
 use tempfile::TempDir;
 use zcash_local_net::validator::Validator;
 
+pub mod test_fixtures;
+
 /// Path for zcashd binary.
 pub static ZCASHD_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
     let mut workspace_root_path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
@@ -335,7 +337,7 @@ impl TestManager {
                 let cfg = zcash_local_net::validator::ZcashdConfig {
                     zcashd_bin: ZCASHD_BIN.clone(),
                     zcash_cli_bin: ZCASH_CLI_BIN.clone(),
-                    rpc_port: Some(zebrad_rpc_listen_port),
+                    rpc_listen_port: Some(zebrad_rpc_listen_port),
                     activation_heights: zcash_local_net::network::ActivationHeights::default(),
                     miner_address: Some(zingolib::testvectors::REG_O_ADDR_FROM_ABANDONART),
                     chain_cache,

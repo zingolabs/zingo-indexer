@@ -29,6 +29,7 @@ zingolib = { git = "https://github.com/zingolabs/zingolib.git", tag = "zaino_dep
 # Librustzcash
 zcash_client_backend = { git = "https://github.com/zingolabs/librustzcash.git", tag = "zcash_client_sqlite-0.12.1_plus_zingolabs_changes-test_2", features = [ "lightwalletd-tonic" ] }
 zcash_protocol = { git = "https://github.com/zingolabs/librustzcash.git", tag = "zcash_client_sqlite-0.12.1_plus_zingolabs_changes-test_2" }
+zcash_primitives = { git = "https://github.com/zingolabs/librustzcash.git", tag = "zcash_client_sqlite-0.12.1_plus_zingolabs_changes-test_2" }
 
 
 # Zebra
@@ -39,7 +40,7 @@ zebra-rpc = { git = "https://github.com/ZcashFoundation/zebra.git", branch = "ma
 
 
 # Zcash-Local-Net
-zcash_local_net = { git = "https://github.com/zingolabs/zcash-local-net.git", rev = "d64b76cab748455c5b9e1e4412f1689fb66f7d41", features = [ "test_fixtures" ] }
+zcash_local_net = { path = "/home/nattyb/src/zingolabs/zcash-local-nets/zcash-local-net" }
 
 # Miscellaneous
 tokio = { version = "1.38", features = ["full"] }

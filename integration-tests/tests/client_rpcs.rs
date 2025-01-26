@@ -8,6 +8,8 @@ use zaino_testutils::{LIGHTWALLETD_BIN, ZAINOD_BIN, ZCASHD_BIN, ZCASH_CLI_BIN, Z
 use zcash_local_net::network::Network;
 
 pub mod client_rpcs {
+    use zaino_testutils::test_fixtures;
+
     use super::*;
 
     #[ignore = "not a test. generates chain cache for client_rpc tests."]
@@ -15,7 +17,7 @@ pub mod client_rpcs {
     async fn generate_zcashd_chain_cache() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::generate_zcashd_chain_cache(
+        test_fixtures::generate_zcashd_chain_cache(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             LIGHTWALLETD_BIN.clone(),
@@ -28,7 +30,7 @@ pub mod client_rpcs {
     async fn generate_zebrad_large_chain_cache() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::generate_zebrad_large_chain_cache(
+        test_fixtures::generate_zebrad_large_chain_cache(
             ZEBRAD_BIN.clone(),
             LIGHTWALLETD_BIN.clone(),
         )
@@ -39,7 +41,7 @@ pub mod client_rpcs {
     async fn get_lightd_info() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_lightd_info(
+        test_fixtures::get_lightd_info(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -52,7 +54,7 @@ pub mod client_rpcs {
     async fn get_latest_block() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_latest_block(
+        test_fixtures::get_latest_block(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -65,7 +67,7 @@ pub mod client_rpcs {
     async fn get_block() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_block(
+        test_fixtures::get_block(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -78,7 +80,7 @@ pub mod client_rpcs {
     async fn get_block_out_of_bounds() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_block_out_of_bounds(
+        test_fixtures::get_block_out_of_bounds(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -91,7 +93,7 @@ pub mod client_rpcs {
     async fn get_block_nullifiers() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_block_nullifiers(
+        test_fixtures::get_block_nullifiers(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -104,7 +106,7 @@ pub mod client_rpcs {
     async fn get_block_range_nullifiers() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_block_range_nullifiers(
+        test_fixtures::get_block_range_nullifiers(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -117,7 +119,7 @@ pub mod client_rpcs {
     async fn get_block_range_nullifiers_reverse() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_block_range_nullifiers_reverse(
+        test_fixtures::get_block_range_nullifiers_reverse(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -130,7 +132,7 @@ pub mod client_rpcs {
     async fn get_block_range_lower() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_block_range_lower(
+        test_fixtures::get_block_range_lower(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -143,7 +145,7 @@ pub mod client_rpcs {
     async fn get_block_range_upper() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_block_range_upper(
+        test_fixtures::get_block_range_upper(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -156,7 +158,7 @@ pub mod client_rpcs {
     async fn get_block_range_reverse() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_block_range_reverse(
+        test_fixtures::get_block_range_reverse(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -169,7 +171,7 @@ pub mod client_rpcs {
     async fn get_block_range_out_of_bounds() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_block_range_out_of_bounds(
+        test_fixtures::get_block_range_out_of_bounds(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -182,7 +184,7 @@ pub mod client_rpcs {
     async fn get_transaction() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_transaction(
+        test_fixtures::get_transaction(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -196,7 +198,7 @@ pub mod client_rpcs {
     async fn send_transaction() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::send_transaction(
+        test_fixtures::send_transaction(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -209,7 +211,7 @@ pub mod client_rpcs {
     async fn get_taddress_txids_all() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_taddress_txids_all(
+        test_fixtures::get_taddress_txids_all(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -222,7 +224,7 @@ pub mod client_rpcs {
     async fn get_taddress_txids_lower() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_taddress_txids_lower(
+        test_fixtures::get_taddress_txids_lower(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -235,7 +237,7 @@ pub mod client_rpcs {
     async fn get_taddress_txids_upper() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_taddress_txids_upper(
+        test_fixtures::get_taddress_txids_upper(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -248,7 +250,7 @@ pub mod client_rpcs {
     async fn get_taddress_balance() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_taddress_balance(
+        test_fixtures::get_taddress_balance(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -261,7 +263,7 @@ pub mod client_rpcs {
     async fn get_taddress_balance_stream() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_taddress_balance_stream(
+        test_fixtures::get_taddress_balance_stream(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -274,7 +276,7 @@ pub mod client_rpcs {
     async fn get_mempool_tx() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_mempool_tx(
+        test_fixtures::get_mempool_tx(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -287,7 +289,7 @@ pub mod client_rpcs {
     async fn get_mempool_stream_zingolib_mempool_monitor() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_mempool_stream_zingolib_mempool_monitor(
+        test_fixtures::get_mempool_stream_zingolib_mempool_monitor(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -300,7 +302,7 @@ pub mod client_rpcs {
     async fn get_mempool_stream() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_mempool_stream(
+        test_fixtures::get_mempool_stream(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -313,7 +315,7 @@ pub mod client_rpcs {
     async fn get_tree_state_by_height() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_tree_state_by_height(
+        test_fixtures::get_tree_state_by_height(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -326,7 +328,7 @@ pub mod client_rpcs {
     async fn get_tree_state_by_hash() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_tree_state_by_hash(
+        test_fixtures::get_tree_state_by_hash(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -339,7 +341,7 @@ pub mod client_rpcs {
     async fn get_tree_state_out_of_bounds() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_tree_state_out_of_bounds(
+        test_fixtures::get_tree_state_out_of_bounds(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -352,7 +354,7 @@ pub mod client_rpcs {
     async fn get_latest_tree_state() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_latest_tree_state(
+        test_fixtures::get_latest_tree_state(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -369,7 +371,7 @@ pub mod client_rpcs {
     async fn get_subtree_roots_sapling() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_subtree_roots_sapling(
+        test_fixtures::get_subtree_roots_sapling(
             ZEBRAD_BIN.clone(),
             ZAINOD_BIN.clone(),
             LIGHTWALLETD_BIN.clone(),
@@ -386,7 +388,7 @@ pub mod client_rpcs {
     async fn get_subtree_roots_orchard() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_subtree_roots_orchard(
+        test_fixtures::get_subtree_roots_orchard(
             ZEBRAD_BIN.clone(),
             ZAINOD_BIN.clone(),
             LIGHTWALLETD_BIN.clone(),
@@ -399,7 +401,7 @@ pub mod client_rpcs {
     async fn get_address_utxos_all() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_address_utxos_all(
+        test_fixtures::get_address_utxos_all(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -412,7 +414,7 @@ pub mod client_rpcs {
     async fn get_address_utxos_lower() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_address_utxos_lower(
+        test_fixtures::get_address_utxos_lower(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -425,7 +427,7 @@ pub mod client_rpcs {
     async fn get_address_utxos_upper() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_address_utxos_upper(
+        test_fixtures::get_address_utxos_upper(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -438,7 +440,7 @@ pub mod client_rpcs {
     async fn get_address_utxos_out_of_bounds() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_address_utxos_out_of_bounds(
+        test_fixtures::get_address_utxos_out_of_bounds(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -451,7 +453,7 @@ pub mod client_rpcs {
     async fn get_address_utxos_stream_all() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_address_utxos_stream_all(
+        test_fixtures::get_address_utxos_stream_all(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -464,7 +466,7 @@ pub mod client_rpcs {
     async fn get_address_utxos_stream_lower() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_address_utxos_stream_lower(
+        test_fixtures::get_address_utxos_stream_lower(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -477,7 +479,7 @@ pub mod client_rpcs {
     async fn get_address_utxos_stream_upper() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_address_utxos_stream_upper(
+        test_fixtures::get_address_utxos_stream_upper(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),
@@ -490,7 +492,7 @@ pub mod client_rpcs {
     async fn get_address_utxos_stream_out_of_bounds() {
         tracing_subscriber::fmt().init();
 
-        zcash_local_net::test_fixtures::get_address_utxos_stream_out_of_bounds(
+        test_fixtures::get_address_utxos_stream_out_of_bounds(
             ZCASHD_BIN.clone(),
             ZCASH_CLI_BIN.clone(),
             ZAINOD_BIN.clone(),

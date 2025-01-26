@@ -159,6 +159,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 
 [[package]]
+name = "async-compression"
+version = "0.4.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df895a515f70646414f4b45c0b79082783b80552b373a68283012928df56f522"
+dependencies = [
+ "futures-core",
+ "memchr",
+ "pin-project-lite",
+ "tokio",
+ "zstd",
+ "zstd-safe",
+]
+
+[[package]]
 name = "async-stream"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -250,8 +264,8 @@ dependencies = [
  "pin-project-lite",
  "rustversion",
  "serde",
- "sync_wrapper 1.0.2",
- "tower 0.5.1",
+ "sync_wrapper",
+ "tower 0.5.2",
  "tower-layer",
  "tower-service",
 ]
@@ -271,7 +285,7 @@ dependencies = [
  "mime",
  "pin-project-lite",
  "rustversion",
- "sync_wrapper 1.0.2",
+ "sync_wrapper",
  "tower-layer",
  "tower-service",
 ]
@@ -3338,10 +3352,11 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.12.9"
+version = "0.12.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a77c62af46e79de0a562e1a9849205ffcb7fc1238876e9bd743357570e04046f"
+checksum = "43e734407157c3c2034e0258f5e4473ddb361b1e85f95a66690d67264d7cd1da"
 dependencies = [
+ "async-compression",
  "base64 0.22.1",
  "bytes",
  "encoding_rs",
@@ -3370,11 +3385,13 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
- "sync_wrapper 1.0.2",
+ "sync_wrapper",
  "system-configuration",
  "tokio",
  "tokio-native-tls",
  "tokio-rustls",
+ "tokio-util",
+ "tower 0.5.2",
  "tower-service",
  "url",
  "wasm-bindgen",
@@ -4000,12 +4017,6 @@ dependencies = [
 
 [[package]]
 name = "sync_wrapper"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2047c6ded9c721764247e62cd3b03c09ffc529b2ba5b10ec482ae507a4a70160"
-
-[[package]]
-name = "sync_wrapper"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bf256ce5efdfa370213c1dabab5935a12e49f2c58d15e9eac2870d3b4f27263"
@@ -4396,14 +4407,15 @@ dependencies = [
 
 [[package]]
 name = "tower"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2873938d487c3cfb9aed7546dc9f2711d867c9f90c46b889989a2cb84eba6b4f"
+checksum = "d039ad9159c98b70ecfd540b2573b97f7f52c3e8d9f8ad57a24b916a536975f9"
 dependencies = [
  "futures-core",
  "futures-util",
  "pin-project-lite",
- "sync_wrapper 0.1.2",
+ "sync_wrapper",
+ "tokio",
  "tower-layer",
  "tower-service",
 ]
@@ -5322,11 +5334,13 @@ dependencies = [
  "portpicker",
  "tempfile",
  "tokio",
+ "tokio-stream",
  "tonic",
  "zaino-fetch",
  "zainod",
  "zcash_client_backend",
  "zcash_local_net",
+ "zcash_primitives 0.19.0 (git+https://github.com/zingolabs/librustzcash.git?tag=zcash_client_sqlite-0.12.1_plus_zingolabs_changes-test_2)",
  "zcash_protocol 0.4.0",
  "zebra-chain 1.0.0-beta.44",
  "zingolib",
@@ -5480,20 +5494,20 @@ dependencies = [
 [[package]]
 name = "zcash_local_net"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/zcash-local-net.git?rev=d64b76cab748455c5b9e1e4412f1689fb66f7d41#d64b76cab748455c5b9e1e4412f1689fb66f7d41"
 dependencies = [
  "getset",
  "hex",
  "http",
  "json",
  "portpicker",
+ "reqwest",
  "serde_json",
+ "sha2",
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
- "tokio-stream",
- "tonic",
  "tracing",
+ "tracing-subscriber",
  "zcash_client_backend",
  "zcash_primitives 0.19.0 (git+https://github.com/zingolabs/librustzcash.git?tag=zcash_client_sqlite-0.12.1_plus_zingolabs_changes-test_2)",
  "zcash_protocol 0.4.0",
@@ -6221,7 +6235,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio-rustls",
  "tonic",
- "tower 0.5.1",
+ "tower 0.5.2",
  "webpki-roots 0.25.4",
  "zcash_client_backend",
 ]
@@ -6357,4 +6371,32 @@ dependencies = [
  "percent-encoding",
  "zcash_address 0.6.0 (git+https://github.com/zingolabs/librustzcash.git?tag=zcash_client_sqlite-0.12.1_plus_zingolabs_changes-test_2)",
  "zcash_protocol 0.4.0",
+]
+
+[[package]]
+name = "zstd"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fcf2b778a664581e31e389454a7072dab1647606d44f7feea22cd5abb9c9f3f9"
+dependencies = [
+ "zstd-safe",
+]
+
+[[package]]
+name = "zstd-safe"
+version = "7.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54a3ab4db68cea366acc5c897c7b4d4d1b8994a9cd6e6f841f8964566a419059"
+dependencies = [
+ "zstd-sys",
+]
+
+[[package]]
+name = "zstd-sys"
+version = "2.0.13+zstd.1.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38ff0f21cfee8f97d94cef41359e0c89aa6113028ab0291aa8ca0038995a95aa"
+dependencies = [
+ "cc",
+ "pkg-config",
 ]
