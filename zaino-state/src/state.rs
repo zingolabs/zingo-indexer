@@ -1,15 +1,25 @@
 //! Zcash chain fetch and tx submission service backed by Zebras [`ReadStateService`].
 
 use chrono::Utc;
-use hex::ToHex;
+use futures::FutureExt as _;
+use hex::{FromHex as _, ToHex as _};
 use indexmap::IndexMap;
 use std::io::Cursor;
+use std::str::FromStr as _;
 use std::{future::poll_fn, pin::pin};
 use tokio::time::timeout;
+use tonic::async_trait;
 use tower::Service;
+use zaino_fetch::jsonrpc::response::TxidsResponse;
 use zaino_proto::proto::service::BlockRange;
+use zebra_chain::block::{Height, SerializedBlock};
 use zebra_chain::parameters::Network;
-use zebra_rpc::methods::GetBlockTransaction;
+use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
+use zebra_rpc::methods::trees::{GetSubtrees, GetTreestate, SubtreeRpcData};
+use zebra_rpc::methods::{
+    AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlockTransaction,
+    GetRawTransaction, SentTransactionHash, TransactionObject,
+};
 use zebra_rpc::server::error::LegacyCode;
 
 use zebra_chain::{
@@ -26,8 +36,12 @@ use zebra_rpc::{
     },
     sync::init_read_state_with_syncer,
 };
-use zebra_state::{ChainTipChange, HashOrHeight, LatestChainTip, ReadStateService};
+use zebra_state::{
+    ChainTipChange, HashOrHeight, LatestChainTip, MinedTx, OutputLocation, ReadRequest,
+    ReadResponse, ReadStateService, TransactionLocation,
+};
 
+use crate::indexer::ZcashIndexer;
 use crate::{
     config::StateServiceConfig,
     error::StateServiceError,
@@ -35,11 +49,22 @@ use crate::{
     stream::CompactBlockStream,
     utils::{get_build_info, ServiceMetadata},
 };
-use zaino_fetch::jsonrpc::connector::{test_node_and_return_uri, JsonRpcConnector};
+use zaino_fetch::jsonrpc::connector::{test_node_and_return_uri, JsonRpcConnector, RpcError};
 use zaino_proto::proto::compact_formats::{
     ChainMetadata, CompactBlock, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend,
     CompactTx,
 };
+
+macro_rules! expected_read_response {
+    ($response:ident, $expected_variant:ident) => {
+        match $response {
+            ReadResponse::$expected_variant(inner) => inner,
+            unexpected => {
+                unreachable!("Unexpected response from state service: {unexpected:?}")
+            }
+        }
+    };
+}
 
 /// Chain fetch service backed by Zebra's `ReadStateService` and `TrustedChainSync`.
 ///
@@ -57,7 +82,7 @@ pub struct StateService {
     /// Sync task handle.
     sync_task_handle: Option<tokio::task::JoinHandle<()>>,
     /// JsonRPC Client.
-    _rpc_client: JsonRpcConnector,
+    rpc_client: JsonRpcConnector,
     /// Service metadata.
     data: ServiceMetadata,
     /// StateService config data.
@@ -105,7 +130,7 @@ impl StateService {
             latest_chain_tip,
             _chain_tip_change: chain_tip_change,
             sync_task_handle: Some(sync_task_handle),
-            _rpc_client: rpc_client,
+            rpc_client,
             data,
             config,
             status: AtomicStatus::new(StatusType::Spawning.into()),
@@ -190,6 +215,544 @@ impl StateService {
                 handle.abort();
             }
         }
+    }
+}
+
+#[async_trait]
+impl ZcashIndexer for StateService {
+    type Error = StateServiceError;
+
+    async fn get_info(&self) -> Result<GetInfo, Self::Error> {
+        Ok(GetInfo::from_parts(
+            self.data.zebra_build(),
+            self.data.zebra_subversion(),
+        ))
+    }
+
+    async fn get_blockchain_info(&self) -> Result<GetBlockChainInfo, Self::Error> {
+        let response = self.checked_call(ReadRequest::TipPoolValues).await?;
+        let (height, hash, balance) = match response {
+            ReadResponse::TipPoolValues {
+                tip_height,
+                tip_hash,
+                value_balance,
+            } => (tip_height, tip_hash, value_balance),
+            unexpected => {
+                unreachable!("Unexpected response from state service: {unexpected:?}")
+            }
+        };
+        let request = zebra_state::ReadRequest::BlockHeader(hash.into());
+        let response = self.checked_call(request).await?;
+        let header = match response {
+            ReadResponse::BlockHeader { header, .. } => header,
+            unexpected => {
+                unreachable!("Unexpected response from state service: {unexpected:?}")
+            }
+        };
+        let now = Utc::now();
+        let zebra_estimated_height =
+            NetworkChainTipHeightEstimator::new(header.time, height, &self.config.network)
+                .estimate_height_at(now);
+        let estimated_height = if header.time > now || zebra_estimated_height < height {
+            height
+        } else {
+            zebra_estimated_height
+        };
+        let upgrades = IndexMap::from_iter(
+            self.config
+                .network
+                .full_activation_list()
+                .into_iter()
+                .filter_map(|(activation_height, network_upgrade)| {
+                    // Zebra defines network upgrades based on incompatible consensus rule changes,
+                    // but zcashd defines them based on ZIPs.
+                    //
+                    // All the network upgrades with a consensus branch ID are the same in Zebra and zcashd.
+                    network_upgrade.branch_id().map(|branch_id| {
+                        // zcashd's RPC seems to ignore Disabled network upgrades, so Zebra does too.
+                        let status = if height >= activation_height {
+                            NetworkUpgradeStatus::Active
+                        } else {
+                            NetworkUpgradeStatus::Pending
+                        };
+
+                        (
+                            ConsensusBranchIdHex::new(branch_id.into()),
+                            NetworkUpgradeInfo::from_parts(
+                                network_upgrade,
+                                activation_height,
+                                status,
+                            ),
+                        )
+                    })
+                }),
+        );
+        let next_block_height =
+            (height + 1).expect("valid chain tips are a lot less than Height::MAX");
+        let consensus = TipConsensusBranch::from_parts(
+            ConsensusBranchIdHex::new(
+                NetworkUpgrade::current(&self.config.network, height)
+                    .branch_id()
+                    .unwrap_or(ConsensusBranchId::RPC_MISSING_ID)
+                    .into(),
+            )
+            .inner(),
+            ConsensusBranchIdHex::new(
+                NetworkUpgrade::current(&self.config.network, next_block_height)
+                    .branch_id()
+                    .unwrap_or(ConsensusBranchId::RPC_MISSING_ID)
+                    .into(),
+            )
+            .inner(),
+        );
+
+        Ok(GetBlockChainInfo::new(
+            self.config.network.bip70_network_name(),
+            height,
+            hash,
+            estimated_height,
+            ValuePoolBalance::from_value_balance(balance),
+            upgrades,
+            consensus,
+        ))
+    }
+
+    async fn z_get_address_balance(
+        &self,
+        address_strings: AddressStrings,
+    ) -> Result<AddressBalance, Self::Error> {
+        let strings_set = address_strings
+            .valid_addresses()
+            .map_err(|e| RpcError::new_from_errorobject(e, "invalid taddrs provided"))?;
+        let response = self
+            .checked_call(ReadRequest::AddressBalance(strings_set))
+            .await?;
+        let balance = expected_read_response!(response, AddressBalance);
+        Ok(AddressBalance {
+            balance: u64::from(balance),
+        })
+    }
+
+    async fn send_raw_transaction(
+        &self,
+        raw_transaction_hex: String,
+    ) -> Result<SentTransactionHash, Self::Error> {
+        // Offload to the json rpc connector, as ReadStateService doesn't yet interface with the mempool
+        self.rpc_client
+            .send_raw_transaction(raw_transaction_hex)
+            .await
+            .map(SentTransactionHash::from)
+            .map_err(StateServiceError::JsonRpcConnectorError)
+    }
+
+    async fn z_get_block(
+        &self,
+        hash_or_height_string: String,
+        verbosity: Option<u8>,
+    ) -> Result<GetBlock, Self::Error> {
+        let verbosity = verbosity.unwrap_or(1);
+        let hash_or_height = HashOrHeight::from_str(&hash_or_height_string);
+        match verbosity {
+            0 => {
+                let request = ReadRequest::Block(hash_or_height?);
+                let response = self.checked_call(request).await?;
+                let block = expected_read_response!(response, Block);
+                block.map(SerializedBlock::from).map(GetBlock::Raw).ok_or(
+                    StateServiceError::RpcError(RpcError::new_from_legacycode(
+                        LegacyCode::InvalidParameter,
+                        "block not found",
+                    )),
+                )
+            }
+            1 | 2 => {
+                let hash_or_height = hash_or_height?;
+                let txids_or_fullblock_request = match verbosity {
+                    1 => ReadRequest::TransactionIdsForBlock(hash_or_height),
+                    2 => ReadRequest::Block(hash_or_height),
+                    _ => unreachable!("verbosity is known to be 1 or 2"),
+                };
+
+                let (txids_or_fullblock, orchard_tree_response, header) = futures::join!(
+                    self.checked_call(txids_or_fullblock_request),
+                    self.checked_call(ReadRequest::OrchardTree(hash_or_height)),
+                    self.get_block_header(hash_or_height_string, Some(true))
+                );
+
+                let header_obj = match header? {
+                    GetBlockHeader::Raw(_hex_data) => unreachable!(
+                        "`true` was passed to get_block_header, an object should be returned"
+                    ),
+                    GetBlockHeader::Object(get_block_header_object) => get_block_header_object,
+                };
+                let GetBlockHeaderObject {
+                    hash,
+                    confirmations,
+                    height,
+                    version,
+                    merkle_root,
+                    final_sapling_root,
+                    sapling_tree_size,
+                    time,
+                    nonce,
+                    solution,
+                    bits,
+                    difficulty,
+                    previous_block_hash,
+                    next_block_hash,
+                } = *header_obj;
+
+                let transactions_response: Vec<GetBlockTransaction> = match txids_or_fullblock {
+                    Ok(ReadResponse::TransactionIdsForBlock(Some(txids))) => Ok(txids
+                        .iter()
+                        .copied()
+                        .map(GetBlockTransaction::Hash)
+                        .collect()),
+                    Ok(ReadResponse::Block(Some(block))) => Ok(block
+                        .transactions
+                        .iter()
+                        .map(|transaction| {
+                            GetBlockTransaction::Object(TransactionObject {
+                                hex: transaction.as_ref().into(),
+                                height: Some(height.0),
+                                // Confirmations should never be greater than the current block height
+                                confirmations: Some(confirmations as u32),
+                            })
+                        })
+                        .collect()),
+                    Ok(ReadResponse::TransactionIdsForBlock(None))
+                    | Ok(ReadResponse::Block(None)) => {
+                        Err(StateServiceError::RpcError(RpcError::new_from_legacycode(
+                            LegacyCode::InvalidParameter,
+                            "block not found",
+                        )))
+                    }
+                    Ok(unexpected) => {
+                        unreachable!("Unexpected response from state service: {unexpected:?}")
+                    }
+                    Err(e) => Err(e),
+                }?;
+
+                let orchard_tree_response = orchard_tree_response?;
+                let orchard_tree = expected_read_response!(orchard_tree_response, OrchardTree)
+                    .ok_or(StateServiceError::RpcError(RpcError::new_from_legacycode(
+                        LegacyCode::Misc,
+                        "missing orchard tree",
+                    )))?;
+
+                let final_orchard_root =
+                    match NetworkUpgrade::Nu5.activation_height(&self.config.network) {
+                        Some(activation_height) if height >= activation_height => {
+                            Some(orchard_tree.root().into())
+                        }
+                        _otherwise => None,
+                    };
+
+                let trees = GetBlockTrees::new(sapling_tree_size, orchard_tree.count());
+
+                Ok(GetBlock::Object {
+                    hash,
+                    confirmations,
+                    height: Some(height),
+                    version: Some(version),
+                    merkle_root: Some(merkle_root),
+                    time: Some(time),
+                    nonce: Some(nonce),
+                    solution: Some(solution),
+                    bits: Some(bits),
+                    difficulty: Some(difficulty),
+                    tx: transactions_response,
+                    trees,
+                    size: None,
+                    final_sapling_root: Some(final_sapling_root),
+                    final_orchard_root,
+                    previous_block_hash: Some(previous_block_hash),
+                    next_block_hash,
+                })
+            }
+            more_than_two => Err(StateServiceError::RpcError(RpcError::new_from_legacycode(
+                LegacyCode::InvalidParameter,
+                format!("invalid verbosity of {more_than_two}"),
+            ))),
+        }
+    }
+
+    async fn get_raw_mempool(&self) -> Result<Vec<String>, Self::Error> {
+        let txids = self.rpc_client.get_raw_mempool().await?;
+        Ok(txids.transactions)
+    }
+
+    async fn z_get_treestate(&self, hash_or_height: String) -> Result<GetTreestate, Self::Error> {
+        let hash_or_height = HashOrHeight::from_str(&hash_or_height)?;
+        let block_header_response = self
+            .checked_call(ReadRequest::BlockHeader(hash_or_height))
+            .await?;
+        let (header, hash, height) = match block_header_response {
+            ReadResponse::BlockHeader {
+                header,
+                hash,
+                height,
+                ..
+            } => (header, hash, height),
+            unexpected => {
+                unreachable!("Unexpected response from state service: {unexpected:?}")
+            }
+        };
+
+        let sapling = match NetworkUpgrade::Sapling.activation_height(&self.config.network) {
+            Some(activation_height) if height >= activation_height => Some(
+                self.checked_call(ReadRequest::SaplingTree(hash_or_height))
+                    .await?,
+            ),
+            _ => None,
+        }
+        .map(|sap_response| {
+            expected_read_response!(sap_response, SaplingTree).map(|tree| tree.to_rpc_bytes())
+        })
+        .flatten();
+        let orchard = match NetworkUpgrade::Nu5.activation_height(&self.config.network) {
+            Some(activation_height) if height >= activation_height => Some(
+                self.checked_call(ReadRequest::OrchardTree(hash_or_height))
+                    .await?,
+            ),
+            _ => None,
+        }
+        .map(|orch_response| {
+            expected_read_response!(orch_response, OrchardTree).map(|tree| tree.to_rpc_bytes())
+        })
+        .flatten();
+        Ok(GetTreestate::from_parts(
+            hash,
+            height,
+            // If the timestamp is pre-unix epoch, something has gone terribly wrong
+            u32::try_from(header.time.timestamp()).unwrap(),
+            sapling,
+            orchard,
+        ))
+    }
+
+    async fn z_get_subtrees_by_index(
+        &self,
+        pool: String,
+        start_index: NoteCommitmentSubtreeIndex,
+        limit: Option<NoteCommitmentSubtreeIndex>,
+    ) -> Result<GetSubtrees, Self::Error> {
+        match pool.as_str() {
+            "sapling" => {
+                let request = zebra_state::ReadRequest::SaplingSubtrees { start_index, limit };
+                let response = self.checked_call(request).await?;
+                let sapling_subtrees = expected_read_response!(response, SaplingSubtrees);
+                let subtrees = sapling_subtrees
+                    .values()
+                    .map(|subtree| SubtreeRpcData {
+                        root: subtree.root.encode_hex(),
+                        end_height: subtree.end_height,
+                    })
+                    .collect();
+                Ok(GetSubtrees {
+                    pool,
+                    start_index,
+                    subtrees,
+                })
+            }
+            "orchard" => {
+                let request = zebra_state::ReadRequest::OrchardSubtrees { start_index, limit };
+                let response = self.checked_call(request).await?;
+                let orchard_subtrees = expected_read_response!(response, OrchardSubtrees);
+                let subtrees = orchard_subtrees
+                    .values()
+                    .map(|subtree| SubtreeRpcData {
+                        root: subtree.root.encode_hex(),
+                        end_height: subtree.end_height,
+                    })
+                    .collect();
+                Ok(GetSubtrees {
+                    pool,
+                    start_index,
+                    subtrees,
+                })
+            }
+            otherwise => Err(StateServiceError::RpcError(RpcError::new_from_legacycode(
+                LegacyCode::Misc,
+                format!("invalid pool name \"{otherwise}\", must be \"sapling\" or \"orchard\""),
+            ))),
+        }
+    }
+
+    async fn get_raw_transaction(
+        &self,
+        txid_hex: String,
+        verbose: Option<u8>,
+    ) -> Result<GetRawTransaction, Self::Error> {
+        let txid = zebra_chain::transaction::Hash::from_hex(txid_hex).map_err(|e| {
+            RpcError::new_from_legacycode(LegacyCode::InvalidAddressOrKey, e.to_string())
+        })?;
+
+        // check the mempool for the transaction
+        let mempool_transaction_future = self.rpc_client.get_raw_mempool().then(|result| async {
+            result.map(|TxidsResponse { transactions }| {
+                transactions
+                    .into_iter()
+                    .find(|mempool_txid| *mempool_txid == txid.to_string())
+            })
+        });
+        let onchain_transaction_future = self.checked_call(ReadRequest::Transaction(txid));
+
+        futures::pin_mut!(mempool_transaction_future);
+        futures::pin_mut!(onchain_transaction_future);
+
+        // This might be overengineered...try to find the txid on chain and in the mempool,
+        // whichever one resolves first is tried first.
+        let resolution =
+            futures::future::select(mempool_transaction_future, onchain_transaction_future).await;
+
+        let handle_mempool = |txid| async {
+            self.rpc_client
+                .get_raw_transaction(txid, verbose)
+                .await
+                .map(|gtr| GetRawTransaction::from(gtr))
+                .map_err(StateServiceError::JsonRpcConnectorError)
+        };
+
+        let handle_onchain = |response| {
+            let transaction = expected_read_response!(response, Transaction);
+            match transaction {
+                Some(MinedTx {
+                    tx,
+                    height,
+                    confirmations,
+                }) => Ok(match verbose {
+                    Some(_verbosity) => GetRawTransaction::Object(TransactionObject {
+                        hex: tx.into(),
+                        height: Some(height.0),
+                        confirmations: Some(confirmations),
+                    }),
+                    None => GetRawTransaction::Raw(tx.into()),
+                }),
+                None => Err(StateServiceError::RpcError(RpcError::new_from_legacycode(
+                    LegacyCode::InvalidAddressOrKey,
+                    "No such mempool or main chain transaction",
+                ))),
+            }
+        };
+
+        match resolution {
+            futures::future::Either::Left((response, other_fut)) => match response? {
+                Some(txid) => handle_mempool(txid).await,
+                None => {
+                    let response = other_fut.await?;
+                    handle_onchain(response)
+                }
+            },
+            futures::future::Either::Right((response, other_fut)) => {
+                match handle_onchain(response?) {
+                    Ok(val) => Ok(val),
+                    Err(e) => match other_fut.await? {
+                        Some(txid) => handle_mempool(txid).await,
+                        None => Err(e),
+                    },
+                }
+            }
+        }
+    }
+
+    async fn get_address_tx_ids(
+        &self,
+        request: GetAddressTxIdsRequest,
+    ) -> Result<Vec<String>, Self::Error> {
+        let (addresses, start, end) = request.into_parts();
+        let chain_height =
+            self.latest_chain_tip
+                .best_tip_height()
+                .ok_or(RpcError::new_from_legacycode(
+                    LegacyCode::Misc,
+                    "no blocks in chain",
+                ))?;
+
+        let mut error_string = None;
+        if start == 0 || end == 0 {
+            error_string = Some(format!(
+                "start {start:?} and end {end:?} must both be greater than zero"
+            ));
+        }
+        if start > end {
+            error_string = Some(format!(
+                "start {start:?} must be less than or equal to end {end:?}"
+            ));
+        }
+        if Height(start) > chain_height || Height(end) > chain_height {
+            error_string = Some(format!(
+            "start {start:?} and end {end:?} must both be less than or equal to the chain tip {chain_height:?}")
+            );
+        }
+
+        if let Some(e) = error_string {
+            return Err(StateServiceError::RpcError(RpcError::new_from_legacycode(
+                LegacyCode::InvalidParameter,
+                e,
+            )));
+        }
+
+        let request = ReadRequest::TransactionIdsByAddresses {
+            addresses: AddressStrings::new_valid(addresses)
+                .and_then(|addrs| addrs.valid_addresses())
+                .map_err(|e| RpcError::new_from_errorobject(e, "invalid adddress"))?,
+
+            height_range: Height(start)..=Height(end),
+        };
+
+        let response = self.checked_call(request).await?;
+
+        let hashes = expected_read_response!(response, AddressesTransactionIds);
+
+        let mut last_tx_location = TransactionLocation::from_usize(Height(0), 0);
+
+        Ok(hashes
+            .iter()
+            .map(|(tx_loc, tx_id)| {
+                // Check that the returned transactions are in chain order.
+                assert!(
+                    *tx_loc > last_tx_location,
+                    "Transactions were not in chain order:\n\
+                                 {tx_loc:?} {tx_id:?} was after:\n\
+                                 {last_tx_location:?}",
+                );
+
+                last_tx_location = *tx_loc;
+
+                tx_id.to_string()
+            })
+            .collect())
+    }
+
+    async fn z_get_address_utxos(
+        &self,
+        address_strings: AddressStrings,
+    ) -> Result<Vec<GetAddressUtxos>, Self::Error> {
+        let valid_addresses = address_strings
+            .valid_addresses()
+            .map_err(|e| RpcError::new_from_errorobject(e, "invalid address"))?;
+        let request = ReadRequest::UtxosByAddresses(valid_addresses);
+        let response = self.checked_call(request).await?;
+        let utxos = expected_read_response!(response, AddressUtxos);
+        let mut last_output_location = OutputLocation::from_usize(Height(0), 0, 0);
+        Ok(utxos
+            .utxos()
+            .map(|utxo| {
+                assert!(utxo.2 > &last_output_location);
+                last_output_location = *utxo.2;
+                // What an odd argument order for from_parts
+                // at least they are all different types, so they can't be
+                // supplied in the wrong order
+                GetAddressUtxos::from_parts(
+                    utxo.0,
+                    *utxo.1,
+                    utxo.2.output_index(),
+                    utxo.3.lock_script.clone(),
+                    u64::from(utxo.3.value()),
+                    utxo.2.height(),
+                )
+            })
+            .collect())
     }
 }
 
