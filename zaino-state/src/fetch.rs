@@ -234,7 +234,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .fetcher
             .get_address_balance(address_strings.valid_address_strings().map_err(|error| {
                 FetchServiceError::RpcError(RpcError {
-                    code: error.code() as i32 as i64,
+                    code: error.code() as i64,
                     message: "Invalid address provided".to_string(),
                     data: None,
                 })
@@ -458,7 +458,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .fetcher
             .get_address_utxos(address_strings.valid_address_strings().map_err(|error| {
                 FetchServiceError::RpcError(RpcError {
-                    code: error.code() as i32 as i64,
+                    code: error.code() as i64,
                     message: "Invalid address provided".to_string(),
                     data: None,
                 })
@@ -1827,11 +1827,25 @@ mod tests {
         launch_fetch_service("zebrad", ZEBRAD_CHAIN_CACHE_BIN.clone()).await;
     }
 
-    async fn launch_fetch_service(validator: &str, chain_cache: Option<std::path::PathBuf>) {
-        let mut test_manager =
-            TestManager::launch(validator, None, chain_cache, false, true, true, false)
-                .await
-                .unwrap();
+    async fn create_test_manager_and_fetch_service(
+        validator: &str,
+        chain_cache: Option<std::path::PathBuf>,
+        enable_zaino: bool,
+        zaino_no_sync: bool,
+        zaino_no_db: bool,
+        enable_clients: bool,
+    ) -> (TestManager, FetchService, FetchServiceSubscriber) {
+        let test_manager = TestManager::launch(
+            validator,
+            None,
+            chain_cache,
+            enable_zaino,
+            zaino_no_sync,
+            zaino_no_db,
+            enable_clients,
+        )
+        .await
+        .unwrap();
 
         let fetch_service = FetchService::spawn(
             FetchServiceConfig::new(
@@ -1859,14 +1873,23 @@ mod tests {
             AtomicStatus::new(StatusType::Spawning.into()),
         )
         .await
-        .unwrap()
-        .get_subscriber()
-        .inner();
+        .unwrap();
+        let subscriber = fetch_service.get_subscriber().inner();
+        (test_manager, fetch_service, subscriber)
+    }
 
-        assert_eq!(fetch_service.status(), StatusType::Ready);
-        dbg!(fetch_service.data.clone());
-        dbg!(fetch_service.get_info().await.unwrap());
-        dbg!(fetch_service.get_blockchain_info().await.unwrap().blocks());
+    async fn launch_fetch_service(validator: &str, chain_cache: Option<std::path::PathBuf>) {
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, chain_cache, false, true, true, false)
+                .await;
+        assert_eq!(fetch_service_subscriber.status(), StatusType::Ready);
+        dbg!(fetch_service_subscriber.data.clone());
+        dbg!(fetch_service_subscriber.get_info().await.unwrap());
+        dbg!(fetch_service_subscriber
+            .get_blockchain_info()
+            .await
+            .unwrap()
+            .blocks());
 
         test_manager.close().await;
     }
@@ -1877,9 +1900,8 @@ mod tests {
     }
 
     async fn fetch_service_get_address_balance(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-            .await
-            .unwrap();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
         let clients = test_manager
             .clients
@@ -1898,37 +1920,7 @@ mod tests {
         clients.recipient.do_sync(true).await.unwrap();
         let recipient_balance = clients.recipient.do_balance().await;
 
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap()
-        .get_subscriber()
-        .inner();
-
-        let fetch_service_balance = fetch_service
+        let fetch_service_balance = fetch_service_subscriber
             .z_get_address_balance(AddressStrings::new_valid(vec![recipient_address]).unwrap())
             .await
             .unwrap();
@@ -1951,41 +1943,10 @@ mod tests {
     }
 
     async fn fetch_service_get_block_raw(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, false, true, true, false)
-            .await
-            .unwrap();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, false, true, true, false).await;
 
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap()
-        .get_subscriber()
-        .inner();
-
-        dbg!(fetch_service
+        dbg!(fetch_service_subscriber
             .z_get_block("1".to_string(), Some(0))
             .await
             .unwrap());
@@ -1999,41 +1960,10 @@ mod tests {
     }
 
     async fn fetch_service_get_block_object(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, false, true, true, false)
-            .await
-            .unwrap();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, false, true, true, false).await;
 
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap()
-        .get_subscriber()
-        .inner();
-
-        dbg!(fetch_service
+        dbg!(fetch_service_subscriber
             .z_get_block("1".to_string(), Some(1))
             .await
             .unwrap());
@@ -2047,9 +1977,8 @@ mod tests {
     }
 
     async fn fetch_service_get_raw_mempool(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-            .await
-            .unwrap();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
         let clients = test_manager
             .clients
             .as_ref()
@@ -2057,35 +1986,6 @@ mod tests {
         let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
             .parse::<http::Uri>()
             .expect("Failed to convert URL to URI");
-
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap();
-        let fetch_service_subscriber = fetch_service.get_subscriber().inner();
 
         let json_service = JsonRpcConnector::new(
             zebra_uri,
@@ -2137,9 +2037,8 @@ mod tests {
     }
 
     async fn fetch_service_z_get_treestate(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-            .await
-            .unwrap();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
         let clients = test_manager
             .clients
@@ -2160,37 +2059,7 @@ mod tests {
 
         test_manager.local_net.generate_blocks(1).await.unwrap();
 
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap()
-        .get_subscriber()
-        .inner();
-
-        dbg!(fetch_service
+        dbg!(fetch_service_subscriber
             .z_get_treestate("2".to_string())
             .await
             .unwrap());
@@ -2204,9 +2073,8 @@ mod tests {
     }
 
     async fn fetch_service_z_get_subtrees_by_index(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-            .await
-            .unwrap();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
         let clients = test_manager
             .clients
@@ -2227,37 +2095,7 @@ mod tests {
 
         test_manager.local_net.generate_blocks(1).await.unwrap();
 
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap()
-        .get_subscriber()
-        .inner();
-
-        dbg!(fetch_service
+        dbg!(fetch_service_subscriber
             .z_get_subtrees_by_index("orchard".to_string(), NoteCommitmentSubtreeIndex(0), None)
             .await
             .unwrap());
@@ -2271,9 +2109,8 @@ mod tests {
     }
 
     async fn fetch_service_get_raw_transaction(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-            .await
-            .unwrap();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
         let clients = test_manager
             .clients
@@ -2294,37 +2131,7 @@ mod tests {
 
         test_manager.local_net.generate_blocks(1).await.unwrap();
 
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap()
-        .get_subscriber()
-        .inner();
-
-        dbg!(fetch_service
+        dbg!(fetch_service_subscriber
             .get_raw_transaction(tx.first().to_string(), Some(1))
             .await
             .unwrap());
@@ -2338,9 +2145,8 @@ mod tests {
     }
 
     async fn fetch_service_get_address_tx_ids(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-            .await
-            .unwrap();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
         let clients = test_manager
             .clients
@@ -2357,37 +2163,7 @@ mod tests {
         .unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
 
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap()
-        .get_subscriber()
-        .inner();
-
-        let fetch_service_txids = fetch_service
+        let fetch_service_txids = fetch_service_subscriber
             .get_address_tx_ids(GetAddressTxIdsRequest::from_parts(
                 vec![recipient_address],
                 0,
@@ -2409,9 +2185,8 @@ mod tests {
     }
 
     async fn fetch_service_get_address_utxos(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-            .await
-            .unwrap();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
         let clients = test_manager
             .clients
@@ -2429,37 +2204,7 @@ mod tests {
         test_manager.local_net.generate_blocks(1).await.unwrap();
         clients.faucet.do_sync(true).await.unwrap();
 
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap()
-        .get_subscriber()
-        .inner();
-
-        let fetch_service_utxos = fetch_service
+        let fetch_service_utxos = fetch_service_subscriber
             .z_get_address_utxos(AddressStrings::new_valid(vec![recipient_address]).unwrap())
             .await
             .unwrap();
@@ -2478,39 +2223,8 @@ mod tests {
     }
 
     async fn fetch_service_get_latest_block(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-            .await
-            .unwrap();
-
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap();
-
-        let fetch_service_subscriber = fetch_service.get_subscriber().inner();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
         let fetch_service_get_latest_block =
             dbg!(fetch_service_subscriber.get_latest_block().await.unwrap());
@@ -2526,47 +2240,18 @@ mod tests {
     }
 
     async fn fetch_service_get_block(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-            .await
-            .unwrap();
-
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap()
-        .get_subscriber()
-        .inner();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
         let block_id = BlockId {
             height: 1,
             hash: Vec::new(),
         };
 
-        let fetch_service_get_block =
-            dbg!(fetch_service.get_block(block_id.clone()).await.unwrap());
+        let fetch_service_get_block = dbg!(fetch_service_subscriber
+            .get_block(block_id.clone())
+            .await
+            .unwrap());
 
         assert_eq!(fetch_service_get_block.height, block_id.height);
 
@@ -2579,46 +2264,15 @@ mod tests {
     }
 
     async fn fetch_service_get_block_nullifiers(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-            .await
-            .unwrap();
-
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap()
-        .get_subscriber()
-        .inner();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
         let block_id = BlockId {
             height: 1,
             hash: Vec::new(),
         };
 
-        let fetch_service_get_block_nullifiers = dbg!(fetch_service
+        let fetch_service_get_block_nullifiers = dbg!(fetch_service_subscriber
             .get_block_nullifiers(block_id.clone())
             .await
             .unwrap());
@@ -2634,40 +2288,9 @@ mod tests {
     }
 
     async fn fetch_service_get_block_range(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-            .await
-            .unwrap();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
         test_manager.local_net.generate_blocks(10).await.unwrap();
-
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap()
-        .get_subscriber()
-        .inner();
 
         let block_range = BlockRange {
             start: Some(BlockId {
@@ -2680,7 +2303,7 @@ mod tests {
             }),
         };
 
-        let fetch_service_stream = fetch_service
+        let fetch_service_stream = fetch_service_subscriber
             .get_block_range(block_range.clone())
             .await
             .unwrap();
@@ -2702,40 +2325,9 @@ mod tests {
     }
 
     async fn fetch_service_get_block_range_nullifiers(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-            .await
-            .unwrap();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
         test_manager.local_net.generate_blocks(10).await.unwrap();
-
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap()
-        .get_subscriber()
-        .inner();
 
         let block_range = BlockRange {
             start: Some(BlockId {
@@ -2748,7 +2340,7 @@ mod tests {
             }),
         };
 
-        let fetch_service_stream = fetch_service
+        let fetch_service_stream = fetch_service_subscriber
             .get_block_range_nullifiers(block_range.clone())
             .await
             .unwrap();
@@ -2770,44 +2362,13 @@ mod tests {
     }
 
     async fn fetch_service_get_transaction_mined(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-            .await
-            .unwrap();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
         let clients = test_manager
             .clients
             .as_ref()
             .expect("Clients are not initialized");
-
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap()
-        .get_subscriber()
-        .inner();
 
         clients.faucet.do_sync(true).await.unwrap();
 
@@ -2829,7 +2390,7 @@ mod tests {
             hash: tx.first().as_ref().to_vec(),
         };
 
-        let fetch_service_get_transaction = dbg!(fetch_service
+        let fetch_service_get_transaction = dbg!(fetch_service_subscriber
             .get_transaction(tx_filter.clone())
             .await
             .unwrap());
@@ -2845,44 +2406,13 @@ mod tests {
     }
 
     async fn fetch_service_get_transaction_mempool(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-            .await
-            .unwrap();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
         let clients = test_manager
             .clients
             .as_ref()
             .expect("Clients are not initialized");
-
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap()
-        .get_subscriber()
-        .inner();
 
         clients.faucet.do_sync(true).await.unwrap();
 
@@ -2903,7 +2433,7 @@ mod tests {
             hash: tx.first().as_ref().to_vec(),
         };
 
-        let fetch_service_get_transaction = dbg!(fetch_service
+        let fetch_service_get_transaction = dbg!(fetch_service_subscriber
             .get_transaction(tx_filter.clone())
             .await
             .unwrap());
@@ -2919,45 +2449,14 @@ mod tests {
     }
 
     async fn fetch_service_get_taddress_txids(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-            .await
-            .unwrap();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
         let clients = test_manager
             .clients
             .as_ref()
             .expect("Clients are not initialized");
         let recipient_address = clients.get_recipient_address("transparent").await;
-
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap()
-        .get_subscriber()
-        .inner();
 
         clients.faucet.do_sync(true).await.unwrap();
         let tx = zingolib::testutils::lightclient::from_inputs::quick_send(
@@ -2982,7 +2481,7 @@ mod tests {
             }),
         };
 
-        let fetch_service_stream = fetch_service
+        let fetch_service_stream = fetch_service_subscriber
             .get_taddress_txids(block_filter.clone())
             .await
             .unwrap();
@@ -3005,45 +2504,14 @@ mod tests {
     }
 
     async fn fetch_service_get_taddress_balance(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-            .await
-            .unwrap();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
         let clients = test_manager
             .clients
             .as_ref()
             .expect("Clients are not initialized");
         let recipient_address = clients.get_recipient_address("transparent").await;
-
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap()
-        .get_subscriber()
-        .inner();
 
         clients.faucet.do_sync(true).await.unwrap();
         zingolib::testutils::lightclient::from_inputs::quick_send(
@@ -3060,7 +2528,7 @@ mod tests {
             addresses: vec![recipient_address],
         };
 
-        let fetch_service_balance = fetch_service
+        let fetch_service_balance = fetch_service_subscriber
             .get_taddress_balance(address_list.clone())
             .await
             .unwrap();
@@ -3080,42 +2548,12 @@ mod tests {
     }
 
     async fn fetch_service_get_mempool_tx(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-            .await
-            .unwrap();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
         let clients = test_manager
             .clients
             .as_ref()
             .expect("Clients are not initialized");
-
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap();
-        let fetch_service_subscriber = fetch_service.get_subscriber().inner();
 
         test_manager.local_net.generate_blocks(1).await.unwrap();
         clients.faucet.do_sync(true).await.unwrap();
@@ -3199,43 +2637,13 @@ mod tests {
     }
 
     async fn fetch_service_get_mempool_stream(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-            .await
-            .unwrap();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
         let clients = test_manager
             .clients
             .as_ref()
             .expect("Clients are not initialized");
-
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap();
-        let fetch_service_subscriber = fetch_service.get_subscriber().inner();
 
         test_manager.local_net.generate_blocks(1).await.unwrap();
         clients.faucet.do_sync(true).await.unwrap();
@@ -3291,46 +2699,15 @@ mod tests {
     }
 
     async fn fetch_service_get_tree_state(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-            .await
-            .unwrap();
-
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap()
-        .get_subscriber()
-        .inner();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
         let block_id = BlockId {
             height: 1,
             hash: Vec::new(),
         };
 
-        let fetch_service_get_tree_state = dbg!(fetch_service
+        let fetch_service_get_tree_state = dbg!(fetch_service_subscriber
             .get_tree_state(block_id.clone())
             .await
             .unwrap());
@@ -3346,41 +2723,13 @@ mod tests {
     }
 
     async fn fetch_service_get_latest_tree_state(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
+
+        dbg!(fetch_service_subscriber
+            .get_latest_tree_state()
             .await
-            .unwrap();
-
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap()
-        .get_subscriber()
-        .inner();
-
-        dbg!(fetch_service.get_latest_tree_state().await.unwrap());
+            .unwrap());
 
         test_manager.close().await;
     }
@@ -3391,39 +2740,8 @@ mod tests {
     }
 
     async fn fetch_service_get_subtree_roots(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-            .await
-            .unwrap();
-
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap()
-        .get_subscriber()
-        .inner();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
         let subtree_roots_arg = GetSubtreeRootsArg {
             start_index: 0,
@@ -3431,7 +2749,7 @@ mod tests {
             max_entries: 0,
         };
 
-        let fetch_service_stream = fetch_service
+        let fetch_service_stream = fetch_service_subscriber
             .get_subtree_roots(subtree_roots_arg.clone())
             .await
             .unwrap();
@@ -3453,45 +2771,14 @@ mod tests {
     }
 
     async fn fetch_service_get_taddress_utxos(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-            .await
-            .unwrap();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
         let clients = test_manager
             .clients
             .as_ref()
             .expect("Clients are not initialized");
         let recipient_address = clients.get_recipient_address("transparent").await;
-
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap()
-        .get_subscriber()
-        .inner();
 
         clients.faucet.do_sync(true).await.unwrap();
         let tx = zingolib::testutils::lightclient::from_inputs::quick_send(
@@ -3508,7 +2795,7 @@ mod tests {
             max_entries: 0,
         };
 
-        let fetch_service_get_taddress_utxos = fetch_service
+        let fetch_service_get_taddress_utxos = fetch_service_subscriber
             .get_address_utxos(utxos_arg.clone())
             .await
             .unwrap();
@@ -3525,45 +2812,14 @@ mod tests {
     }
 
     async fn fetch_service_get_taddress_utxos_stream(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-            .await
-            .unwrap();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
         let clients = test_manager
             .clients
             .as_ref()
             .expect("Clients are not initialized");
         let recipient_address = clients.get_recipient_address("transparent").await;
-
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap()
-        .get_subscriber()
-        .inner();
 
         clients.faucet.do_sync(true).await.unwrap();
         zingolib::testutils::lightclient::from_inputs::quick_send(
@@ -3580,7 +2836,7 @@ mod tests {
             max_entries: 0,
         };
 
-        let fetch_service_stream = fetch_service
+        let fetch_service_stream = fetch_service_subscriber
             .get_address_utxos_stream(utxos_arg.clone())
             .await
             .unwrap();
@@ -3602,41 +2858,10 @@ mod tests {
     }
 
     async fn fetch_service_get_lightd_info(validator: &str) {
-        let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-            .await
-            .unwrap();
+        let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+            create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
-        let fetch_service = FetchService::spawn(
-            FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                test_manager
-                    .local_net
-                    .data_dir()
-                    .path()
-                    .to_path_buf()
-                    .join("zaino"),
-                None,
-                Network::new_regtest(Some(1), Some(1)),
-                true,
-                true,
-            ),
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap()
-        .get_subscriber()
-        .inner();
-
-        dbg!(fetch_service.get_lightd_info().await.unwrap());
+        dbg!(fetch_service_subscriber.get_lightd_info().await.unwrap());
 
         test_manager.close().await;
     }

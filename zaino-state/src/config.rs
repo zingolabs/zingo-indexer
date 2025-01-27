@@ -80,6 +80,7 @@ pub struct FetchServiceConfig {
 
 impl FetchServiceConfig {
     /// Returns a new instance of [`FetchServiceConfig`].
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         validator_rpc_address: std::net::SocketAddr,
         validator_rpc_user: Option<String>,

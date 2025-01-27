@@ -92,6 +92,10 @@ pub enum ValidatorConfig {
 }
 
 /// Available zcash-local-net configurations.
+#[allow(
+    clippy::large_enum_variant,
+    reason = "Maybe this issue: https://github.com/rust-lang/rust-clippy/issues/9798"
+)]
 pub enum LocalNet {
     /// Zcash-local-net backed by Zcashd.
     Zcashd(

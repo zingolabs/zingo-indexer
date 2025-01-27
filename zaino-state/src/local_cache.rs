@@ -100,21 +100,21 @@ impl BlockCacheSubscriber {
 
         if self
             .non_finalised_state
-            .conatins_hash_or_height(hash_or_height)
+            .contains_hash_or_height(hash_or_height)
             .await
         {
             // Fetch from non-finalised state.
             self.non_finalised_state
                 .get_compact_block(hash_or_height)
                 .await
-                .map_err(|e| BlockCacheError::NonFinalisedStateError(e))
+                .map_err(BlockCacheError::NonFinalisedStateError)
         } else {
             match &self.finalised_state {
                 // Fetch from finalised state.
                 Some(finalised_state) => finalised_state
                     .get_compact_block(hash_or_height)
                     .await
-                    .map_err(|e| BlockCacheError::FinalisedStateError(e)),
+                    .map_err(BlockCacheError::FinalisedStateError),
                 // Fetch from Validator.
                 None => {
                     let (_, block) = fetch_block_from_node(&self.fetcher, hash_or_height).await?;
@@ -129,7 +129,7 @@ impl BlockCacheSubscriber {
         self.non_finalised_state
             .get_chain_height()
             .await
-            .map_err(|e| BlockCacheError::NonFinalisedStateError(e))
+            .map_err(BlockCacheError::NonFinalisedStateError)
     }
 
     /// Returns the status of the [`BlockCache`]..

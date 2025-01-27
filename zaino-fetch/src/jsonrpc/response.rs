@@ -155,7 +155,7 @@ impl<'de> serde::Deserialize<'de> for SerializedBlock {
     {
         struct HexVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for HexVisitor {
+        impl serde::de::Visitor<'_> for HexVisitor {
             type Value = SerializedBlock;
 
             fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
