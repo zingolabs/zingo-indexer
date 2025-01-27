@@ -79,8 +79,15 @@ impl NonFinalisedState {
         }
 
         let chain_height = fetcher.get_blockchain_info().await?.blocks.0;
-        // We do not fetch the genesis block.
-        for height in chain_height.saturating_sub(99).max(1)..=chain_height {
+        // We do not fetch pre sapling activation.
+        for height in chain_height.saturating_sub(99).max(
+            non_finalised_state
+                .config
+                .network
+                .sapling_activation_height()
+                .0,
+        )..=chain_height
+        {
             loop {
                 match fetch_block_from_node(
                     &non_finalised_state.fetcher,
@@ -267,9 +274,12 @@ impl NonFinalisedState {
             };
         }
 
-        // Refill from reorg_height[+1].
+        // Refill from max(reorg_height[+1], sapling_activation_height).
         let validator_height = self.fetcher.get_blockchain_info().await?.blocks.0;
-        for block_height in (reorg_height.0 + 1)..=validator_height {
+        for block_height in ((reorg_height.0 + 1)
+            .max(self.config.network.sapling_activation_height().0))
+            ..=validator_height
+        {
             // Either pop the reorged block or pop the oldest block in non-finalised state.
             // If we pop the oldest (valid) block we send it to the finalised state to be saved to disk.
             if self.heights_to_hashes.contains_key(&Height(block_height)) {

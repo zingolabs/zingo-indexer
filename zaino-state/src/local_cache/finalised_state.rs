@@ -391,7 +391,7 @@ impl FinalisedState {
             };
         }
 
-        // Refill from reorg_height[+1] to current server (finalised state) height.
+        // Refill from max(reorg_height[+1], sapling_activation_height) to current server (finalised state) height.
         let mut sync_height = self
             .fetcher
             .get_blockchain_info()
@@ -399,7 +399,10 @@ impl FinalisedState {
             .blocks
             .0
             .saturating_sub(99);
-        for block_height in (reorg_height.0 + 1)..=sync_height {
+        for block_height in ((reorg_height.0 + 1)
+            .max(self.config.network.sapling_activation_height().0))
+            ..=sync_height
+        {
             if self.get_hash(block_height).is_ok() {
                 self.delete_block(Height(block_height))?;
             }
@@ -412,6 +415,10 @@ impl FinalisedState {
                 {
                     Ok((hash, block)) => {
                         self.insert_block((Height(block_height), hash, block))?;
+                        println!(
+                            "Block at height {} successfully inserted in finalised state.",
+                            block_height
+                        );
                         break;
                     }
                     Err(e) => {
@@ -442,6 +449,10 @@ impl FinalisedState {
                         {
                             Ok((hash, block)) => {
                                 self.insert_block((Height(block_height), hash, block))?;
+                                println!(
+                                    "Block at height {} successfully inserted in finalised state.",
+                                    block_height
+                                );
                                 break;
                             }
                             Err(e) => {
