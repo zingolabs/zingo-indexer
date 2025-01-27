@@ -6,7 +6,7 @@ use crate::{
     config::FetchServiceConfig,
     error::FetchServiceError,
     indexer::{IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService},
-    local_cache::BlockCache,
+    local_cache::{BlockCache, BlockCacheSubscriber},
     mempool::{Mempool, MempoolSubscriber},
     status::{AtomicStatus, StatusType},
     stream::{
@@ -116,6 +116,7 @@ impl ZcashService for FetchService {
     fn get_subscriber(&self) -> IndexerSubscriber<FetchServiceSubscriber> {
         IndexerSubscriber::new(FetchServiceSubscriber {
             fetcher: self.fetcher.clone(),
+            block_cache: self.block_cache.subscriber(),
             mempool: self.mempool.subscriber(),
             data: self.data.clone(),
             config: self.config.clone(),
@@ -147,7 +148,8 @@ impl Drop for FetchService {
 pub struct FetchServiceSubscriber {
     /// JsonRPC Client.
     fetcher: JsonRpcConnector,
-    // TODO: Add Internal Non-Finalised State
+    /// Local compact block cache.
+    block_cache: BlockCacheSubscriber,
     /// Internal mempool.
     mempool: MempoolSubscriber,
     /// Service metadata.
