@@ -6,6 +6,7 @@
 use once_cell::sync::Lazy;
 use std::{path::PathBuf, str::FromStr};
 use tempfile::TempDir;
+use tracing_subscriber::EnvFilter;
 use zcash_local_net::validator::Validator;
 
 /// Path for zcashd binary.
@@ -318,6 +319,12 @@ impl TestManager {
         zaino_no_db: bool,
         enable_clients: bool,
     ) -> Result<Self, std::io::Error> {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(EnvFilter::from_default_env()) // Uses `RUST_LOG`
+            .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339()) // Adds timestamps
+            .with_target(true) // Shows crate/module name in logs
+            .try_init();
+
         let validator_kind = ValidatorKind::from_str(validator).unwrap();
         let network = network.unwrap_or(zcash_local_net::network::Network::Regtest);
         if enable_clients && !enable_zaino {
