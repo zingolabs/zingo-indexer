@@ -1826,7 +1826,7 @@ mod tests {
 
     use super::*;
     use zaino_testutils::{TestManager, ZCASHD_CHAIN_CACHE_BIN, ZEBRAD_CHAIN_CACHE_BIN};
-    use zcash_local_net::validator::Validator;
+    use zingo_infra_testutils::validator::Validator;
     use zebra_chain::parameters::Network;
 
     #[tokio::test]
