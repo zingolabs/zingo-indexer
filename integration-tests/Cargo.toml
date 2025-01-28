@@ -1,10 +1,12 @@
 [package]
 name = "integration-tests"
 description = "Crate containing Zaino's integration-tests."
-edition = { workspace = true }
 authors = { workspace = true }
-license = { workspace = true }
 repository = { workspace = true }
+homepage = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+version = { workspace = true }
 
 [dependencies]
 # Test utility

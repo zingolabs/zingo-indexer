@@ -1,11 +1,12 @@
 [package]
 name = "zaino-state"
 description = "A mempool and chain-fetching service built on top of zebra's ReadStateService and TrustedChainSync."
-edition = { workspace = true }
 authors = { workspace = true }
-license = { workspace = true }
 repository = { workspace = true }
-
+homepage = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+version = { workspace = true }
 
 [dependencies]
 zaino-fetch = { path = "../zaino-fetch" }
