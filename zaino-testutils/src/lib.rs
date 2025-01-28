@@ -320,9 +320,11 @@ impl TestManager {
         enable_clients: bool,
     ) -> Result<Self, std::io::Error> {
         let _ = tracing_subscriber::fmt()
-            .with_env_filter(EnvFilter::from_default_env()) // Uses `RUST_LOG`
-            .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339()) // Adds timestamps
-            .with_target(true) // Shows crate/module name in logs
+            .with_env_filter(
+                EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+            )
+            .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339())
+            .with_target(true)
             .try_init();
 
         let validator_kind = ValidatorKind::from_str(validator).unwrap();
