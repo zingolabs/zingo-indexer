@@ -29,9 +29,12 @@ pub struct ServerStatus {
     pub server_status: AtomicStatus,
     /// Status of the chain fetch service.
     pub service_status: AtomicStatus,
-    tcp_ingestor_status: AtomicStatus,
-    workerpool_status: WorkerPoolStatus,
-    request_queue_status: Arc<AtomicUsize>,
+    /// Status of the TcpIngestor.
+    pub tcp_ingestor_status: AtomicStatus,
+    /// Status of the Workers in the WorkerPool
+    pub workerpool_status: WorkerPoolStatus,
+    /// Number of requests in the RequestsQueue.
+    pub request_queue_status: Arc<AtomicUsize>,
 }
 
 impl ServerStatus {

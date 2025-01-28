@@ -163,8 +163,8 @@ impl Worker {
 /// Holds the status of the worker pool and its workers.
 #[derive(Debug, Clone)]
 pub struct WorkerPoolStatus {
-    workers: Arc<AtomicUsize>,
-    statuses: Vec<AtomicStatus>,
+    pub workers: Arc<AtomicUsize>,
+    pub statuses: Vec<AtomicStatus>,
 }
 
 impl WorkerPoolStatus {

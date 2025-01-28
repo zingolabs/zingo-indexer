@@ -33,13 +33,9 @@ async fn main() {
         return;
     }
 
-    info!("Starting Zaino..");
-
     let config_path = args
         .config
         .unwrap_or_else(|| PathBuf::from("./zainod/zindexer.toml"));
-
-    info!(?config_path, "Using configuration file");
 
     match Indexer::start(load_config(&config_path)).await {
         Ok(_) => info!("Zaino Indexer started successfully."),
