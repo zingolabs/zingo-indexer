@@ -4,9 +4,9 @@
 #![forbid(unsafe_code)]
 
 use once_cell::sync::Lazy;
+use services::validator::Validator;
 use std::{path::PathBuf, str::FromStr};
 use tempfile::TempDir;
-use zingo_infra_testutils::validator::Validator;
 
 /// Path for zcashd binary.
 pub static ZCASHD_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
@@ -86,9 +86,9 @@ impl std::str::FromStr for ValidatorKind {
 /// Config for validators.
 pub enum ValidatorConfig {
     /// Zcashd Config.
-    ZcashdConfig(zingo_infra_testutils::validator::ZcashdConfig),
+    ZcashdConfig(services::validator::ZcashdConfig),
     /// Zebrad Config.
-    ZebradConfig(zingo_infra_testutils::validator::ZebradConfig),
+    ZebradConfig(services::validator::ZebradConfig),
 }
 
 /// Available zcash-local-net configurations.
@@ -98,22 +98,12 @@ pub enum ValidatorConfig {
 )]
 pub enum LocalNet {
     /// Zcash-local-net backed by Zcashd.
-    Zcashd(
-        zingo_infra_testutils::LocalNet<
-            zingo_infra_testutils::indexer::Empty,
-            zingo_infra_testutils::validator::Zcashd,
-        >,
-    ),
+    Zcashd(services::LocalNet<services::indexer::Empty, services::validator::Zcashd>),
     /// Zcash-local-net backed by Zebrad.
-    Zebrad(
-        zingo_infra_testutils::LocalNet<
-            zingo_infra_testutils::indexer::Empty,
-            zingo_infra_testutils::validator::Zebrad,
-        >,
-    ),
+    Zebrad(services::LocalNet<services::indexer::Empty, services::validator::Zebrad>),
 }
 
-impl zingo_infra_testutils::validator::Validator for LocalNet {
+impl services::validator::Validator for LocalNet {
     const CONFIG_FILENAME: &str = "";
 
     type Config = ValidatorConfig;
@@ -121,27 +111,22 @@ impl zingo_infra_testutils::validator::Validator for LocalNet {
     #[allow(clippy::manual_async_fn)]
     fn launch(
         config: Self::Config,
-    ) -> impl std::future::Future<Output = Result<Self, zingo_infra_testutils::error::LaunchError>> + Send
-    {
+    ) -> impl std::future::Future<Output = Result<Self, services::error::LaunchError>> + Send {
         async move {
             match config {
                 ValidatorConfig::ZcashdConfig(cfg) => {
-                    let net = zingo_infra_testutils::LocalNet::<
-                        zingo_infra_testutils::indexer::Empty,
-                        zingo_infra_testutils::validator::Zcashd,
-                    >::launch(
-                        zingo_infra_testutils::indexer::EmptyConfig {}, cfg
-                    )
+                    let net = services::LocalNet::<
+                        services::indexer::Empty,
+                        services::validator::Zcashd,
+                    >::launch(services::indexer::EmptyConfig {}, cfg)
                     .await;
                     Ok(LocalNet::Zcashd(net))
                 }
                 ValidatorConfig::ZebradConfig(cfg) => {
-                    let net = zingo_infra_testutils::LocalNet::<
-                        zingo_infra_testutils::indexer::Empty,
-                        zingo_infra_testutils::validator::Zebrad,
-                    >::launch(
-                        zingo_infra_testutils::indexer::EmptyConfig {}, cfg
-                    )
+                    let net = services::LocalNet::<
+                        services::indexer::Empty,
+                        services::validator::Zebrad,
+                    >::launch(services::indexer::EmptyConfig {}, cfg)
                     .await;
                     Ok(LocalNet::Zebrad(net))
                 }
@@ -215,7 +200,7 @@ impl zingo_infra_testutils::validator::Validator for LocalNet {
         }
     }
 
-    fn network(&self) -> zingo_infra_testutils::network::Network {
+    fn network(&self) -> services::network::Network {
         match self {
             LocalNet::Zcashd(net) => net.validator().network(),
             LocalNet::Zebrad(net) => *net.validator().network(),
@@ -234,16 +219,16 @@ impl zingo_infra_testutils::validator::Validator for LocalNet {
     fn load_chain(
         chain_cache: PathBuf,
         validator_data_dir: PathBuf,
-        validator_network: zingo_infra_testutils::network::Network,
+        validator_network: services::network::Network,
     ) -> PathBuf {
         if chain_cache.to_string_lossy().contains("zcashd") {
-            zingo_infra_testutils::validator::Zcashd::load_chain(
+            services::validator::Zcashd::load_chain(
                 chain_cache,
                 validator_data_dir,
                 validator_network,
             )
         } else if chain_cache.to_string_lossy().contains("zebrad") {
-            zingo_infra_testutils::validator::Zebrad::load_chain(
+            services::validator::Zebrad::load_chain(
                 chain_cache,
                 validator_data_dir,
                 validator_network,
@@ -288,7 +273,7 @@ pub struct TestManager {
     /// Data directory for the validator.
     pub data_dir: PathBuf,
     /// Network (chain) type:
-    pub network: zingo_infra_testutils::network::Network,
+    pub network: services::network::Network,
     /// Zebrad/Zcashd JsonRpc listen port.
     pub zebrad_rpc_listen_port: u16,
     /// Zaino Indexer JoinHandle.
@@ -301,6 +286,7 @@ pub struct TestManager {
     pub online: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
+use zingo_infra_testutils::services;
 impl TestManager {
     /// Launches zcash-local-net<Empty, Validator>.
     ///
@@ -311,7 +297,7 @@ impl TestManager {
     /// If clients is set to active zingolib lightclients will be created for test use.
     pub async fn launch(
         validator: &str,
-        network: Option<zingo_infra_testutils::network::Network>,
+        network: Option<services::network::Network>,
         chain_cache: Option<PathBuf>,
         enable_zaino: bool,
         zaino_no_sync: bool,
@@ -319,7 +305,7 @@ impl TestManager {
         enable_clients: bool,
     ) -> Result<Self, std::io::Error> {
         let validator_kind = ValidatorKind::from_str(validator).unwrap();
-        let network = network.unwrap_or(zingo_infra_testutils::network::Network::Regtest);
+        let network = network.unwrap_or(services::network::Network::Regtest);
         if enable_clients && !enable_zaino {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
@@ -332,25 +318,25 @@ impl TestManager {
         let zebrad_rpc_listen_port = portpicker::pick_unused_port().expect("No ports free");
         let validator_config = match validator_kind {
             ValidatorKind::Zcashd => {
-                let cfg = zingo_infra_testutils::validator::ZcashdConfig {
+                let cfg = services::validator::ZcashdConfig {
                     zcashd_bin: ZCASHD_BIN.clone(),
                     zcash_cli_bin: ZCASH_CLI_BIN.clone(),
-                    rpc_port: Some(zebrad_rpc_listen_port),
-                    activation_heights: zingo_infra_testutils::network::ActivationHeights::default(),
+                    rpc_listen_port: Some(zebrad_rpc_listen_port),
+                    activation_heights: services::network::ActivationHeights::default(),
                     miner_address: Some(zingolib::testvectors::REG_O_ADDR_FROM_ABANDONART),
                     chain_cache,
                 };
                 ValidatorConfig::ZcashdConfig(cfg)
             }
             ValidatorKind::Zebrad => {
-                let cfg = zingo_infra_testutils::validator::ZebradConfig {
+                let cfg = services::validator::ZebradConfig {
                     zebrad_bin: ZEBRAD_BIN.clone(),
                     network_listen_port: None,
                     rpc_listen_port: Some(zebrad_rpc_listen_port),
-                    activation_heights: zingo_infra_testutils::network::ActivationHeights::default(),
-                    miner_address: zingo_infra_testutils::validator::ZEBRAD_DEFAULT_MINER,
+                    activation_heights: services::network::ActivationHeights::default(),
+                    miner_address: services::validator::ZEBRAD_DEFAULT_MINER,
                     chain_cache,
-                    network: zingo_infra_testutils::network::Network::Regtest,
+                    network: services::network::Network::Regtest,
                 };
                 ValidatorConfig::ZebradConfig(cfg)
             }
@@ -550,7 +536,7 @@ mod tests {
             .await
             .unwrap();
         let mut grpc_client =
-            zingo_infra_testutils::client::build_client(zingo_infra_testutils::network::localhost_uri(
+            zingo_infra_testutils::client::build_client(services::network::localhost_uri(
                 test_manager
                     .zaino_grpc_listen_port
                     .expect("Zaino listen port not available but zaino is active."),
@@ -572,7 +558,7 @@ mod tests {
             .await
             .unwrap();
         let mut grpc_client =
-            zingo_infra_testutils::client::build_client(zingo_infra_testutils::network::localhost_uri(
+            zingo_infra_testutils::client::build_client(services::network::localhost_uri(
                 test_manager
                     .zaino_grpc_listen_port
                     .expect("Zaino listen port is not available but zaino is active."),
@@ -805,7 +791,7 @@ mod tests {
     async fn launch_testmanager_zebrad_zaino_testnet() {
         let mut test_manager = TestManager::launch(
             "zebrad",
-            Some(zingo_infra_testutils::network::Network::Testnet),
+            Some(services::network::Network::Testnet),
             ZEBRAD_TESTNET_CACHE_BIN.clone(),
             true,
             true,

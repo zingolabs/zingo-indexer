@@ -39,7 +39,7 @@ zebra-rpc = { git = "https://github.com/ZcashFoundation/zebra.git", branch = "ma
 
 
 # Zingo-infra-testutils
-zingo-infra-testutils = { git = "https://github.com/zancas/infrastructure.git", branch = "turn_off_fetch" }
+zingo-infra-testutils = { git = "https://github.com/zancas/infrastructure.git", branch = "add_reexports" }
 
 # Miscellaneous
 tokio = { version = "1.38", features = ["full"] }
