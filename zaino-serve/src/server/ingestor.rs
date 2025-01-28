@@ -8,6 +8,7 @@ use std::{
     },
 };
 use tokio::net::TcpListener;
+use tracing::{debug, error, info, warn};
 
 use crate::server::{
     error::{IngestorError, QueueError},
@@ -38,7 +39,7 @@ impl TcpIngestor {
     ) -> Result<Self, IngestorError> {
         status.store(StatusType::Spawning.into());
         let listener = TcpListener::bind(listen_addr).await?;
-        println!(" - TcpIngestor listening at: {}.", listen_addr);
+        info!(" - TcpIngestor listening at: {}.", listen_addr);
         Ok(TcpIngestor {
             ingestor: listener,
             queue,
@@ -72,20 +73,20 @@ impl TcpIngestor {
                             Ok((stream, _)) => {
                                 match self.queue.try_send(ZingoIndexerRequest::new_from_grpc(stream)) {
                                     Ok(_) => {
-                                        println!("[TEST] Requests in Queue: {}", self.queue.queue_length());
+                                        debug!("[TEST] Requests in Queue: {}", self.queue.queue_length());
                                     }
                                     Err(QueueError::QueueFull(_request)) => {
-                                        eprintln!("Queue Full.");
+                                        warn!("Queue Full.");
                                         // TODO: Return queue full tonic status over tcpstream and close (that TcpStream..).
                                     }
                                     Err(e) => {
-                                        eprintln!("Queue Closed. Failed to send request to queue: {}", e);
+                                        error!("Queue Closed. Failed to send request to queue: {}", e);
                                         // TODO: Handle queue closed error here.
                                     }
                                 }
                             }
                             Err(e) => {
-                                eprintln!("Failed to accept connection with client: {}", e);
+                                warn!("Failed to accept connection with client: {}", e);
                                 // TODO: Handle failed connection errors here (count errors and restart ingestor / proxy or initiate shutdown?)
                             }
                         }

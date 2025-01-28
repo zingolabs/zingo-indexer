@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 
+use tracing::{error, info, warn};
 use zaino_fetch::jsonrpc::connector::JsonRpcConnector;
 use zaino_proto::proto::compact_formats::CompactBlock;
 use zebra_chain::block::{Hash, Height};
@@ -43,7 +44,7 @@ impl NonFinalisedState {
         block_sender: tokio::sync::mpsc::Sender<(Height, Hash, CompactBlock)>,
         config: BlockCacheConfig,
     ) -> Result<Self, NonFinalisedStateError> {
-        println!("Launching Non-Finalised State..");
+        info!("Launching Non-Finalised State..");
         let mut non_finalised_state = NonFinalisedState {
             fetcher: fetcher.clone(),
             heights_to_hashes: Broadcast::new(config.map_capacity, config.map_shard_amount),
@@ -74,7 +75,7 @@ impl NonFinalisedState {
                     }
                     Err(e) => {
                         non_finalised_state.update_status_and_notify(StatusType::RecoverableError);
-                        eprintln!("{e}");
+                        warn!("{e}");
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     }
                 }
@@ -95,7 +96,7 @@ impl NonFinalisedState {
                 {
                     break;
                 } else {
-                    println!(" - Validator syncing with network. Validator chain height: {}, Estimated Network chain height: {}",
+                    info!(" - Validator syncing with network. Validator chain height: {}, Estimated Network chain height: {}",
                         &blockchain_info.blocks.0,
                         &blockchain_info.estimated_height.0
                     );
@@ -134,7 +135,7 @@ impl NonFinalisedState {
                     }
                     Err(e) => {
                         non_finalised_state.update_status_and_notify(StatusType::RecoverableError);
-                        eprintln!("{e}");
+                        warn!("{e}");
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     }
                 }
@@ -152,7 +153,7 @@ impl NonFinalisedState {
                     }
                     Err(e) => {
                         non_finalised_state.update_status_and_notify(StatusType::RecoverableError);
-                        eprintln!("{e}");
+                        warn!("{e}");
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                         continue;
                     }
@@ -173,13 +174,13 @@ impl NonFinalisedState {
                             Err(NonFinalisedStateError::Critical(e)) => {
                                 non_finalised_state
                                     .update_status_and_notify(StatusType::CriticalError);
-                                eprintln!("{e}");
+                                error!("{e}");
                                 return;
                             }
                             Err(e) => {
                                 non_finalised_state
                                     .update_status_and_notify(StatusType::RecoverableError);
-                                eprintln!("{e}");
+                                warn!("{e}");
                                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                             }
                         }
@@ -256,7 +257,7 @@ impl NonFinalisedState {
                             }
                             Err(e) => {
                                 self.update_status_and_notify(StatusType::RecoverableError);
-                                eprintln!("{e}");
+                                warn!("{e}");
                                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                             }
                         }
@@ -342,7 +343,7 @@ impl NonFinalisedState {
                     }
                     Err(e) => {
                         self.update_status_and_notify(StatusType::RecoverableError);
-                        eprintln!("{e}");
+                        warn!("{e}");
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     }
                 }

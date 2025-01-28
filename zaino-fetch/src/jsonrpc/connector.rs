@@ -14,6 +14,7 @@ use std::{
         Arc,
     },
 };
+use tracing::error;
 
 use crate::jsonrpc::{
     error::JsonRpcConnectorError,
@@ -478,6 +479,6 @@ pub async fn test_node_and_return_uri(
         }
         interval.tick().await;
     }
-    eprintln!("Error: Could not establish connection with node. \nPlease check config and confirm node is listening at the correct address and the correct authorisation details have been entered. \nExiting..");
+    error!("Error: Could not establish connection with node. Please check config and confirm node is listening at the correct address and the correct authorisation details have been entered. Exiting..");
     std::process::exit(1);
 }

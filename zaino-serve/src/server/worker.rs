@@ -5,6 +5,7 @@ use std::sync::{
     Arc,
 };
 use tonic::transport::Server;
+use tracing::{error, warn};
 
 use crate::{
     rpc::GrpcClient,
@@ -113,7 +114,7 @@ impl Worker {
                             }
                             Err(_e) => {
                                 self.atomic_status.store(StatusType::Offline.into());
-                                eprintln!("Queue closed, worker shutting down.");
+                                error!("Queue closed, worker shutting down.");
                                 // TODO: Handle queue closed error here. (return correct error / update status to correct err code.)
                                 return Ok(());
                             }
@@ -298,7 +299,7 @@ impl WorkerPool {
                     }
                     Err(e) => {
                         self.status.statuses[worker_index].store(6);
-                        eprintln!("Worker returned error on shutdown: {}", e);
+                        warn!("Worker returned error on shutdown: {}", e);
                         // TODO: Handle the inner WorkerError. Return error.
                         self.status.workers.fetch_sub(1, Ordering::SeqCst);
                         Ok(())
@@ -306,7 +307,7 @@ impl WorkerPool {
                 },
                 Err(e) => {
                     self.status.statuses[worker_index].store(6);
-                    eprintln!("Worker returned error on shutdown: {}", e);
+                    warn!("Worker returned error on shutdown: {}", e);
                     // TODO: Handle the JoinError. Return error.
                     self.status.workers.fetch_sub(1, Ordering::SeqCst);
                     Ok(())
@@ -356,14 +357,14 @@ impl WorkerPool {
                         }
                         Err(e) => {
                             self.status.statuses[i].store(6);
-                            eprintln!("Worker returned error on shutdown: {}", e);
+                            warn!("Worker returned error on shutdown: {}", e);
                             // TODO: Handle the inner WorkerError
                             self.status.workers.fetch_sub(1, Ordering::SeqCst);
                         }
                     },
                     Err(e) => {
                         self.status.statuses[i].store(6);
-                        eprintln!("Worker returned error on shutdown: {}", e);
+                        warn!("Worker returned error on shutdown: {}", e);
                         // TODO: Handle the JoinError
                         self.status.workers.fetch_sub(1, Ordering::SeqCst);
                     }

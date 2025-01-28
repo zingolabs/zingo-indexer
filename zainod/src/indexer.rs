@@ -9,6 +9,7 @@ use std::{
     },
 };
 
+use tracing::info;
 use zaino_fetch::jsonrpc::connector::test_node_and_return_uri;
 use zaino_serve::server::{
     director::{Server, ServerStatus},
@@ -72,7 +73,6 @@ impl Indexer {
         let online = Arc::new(AtomicBool::new(true));
         set_ctrlc(online.clone());
         startup_message();
-        println!("Launching Zaino..");
         let indexer: Indexer = Indexer::new(config, online.clone()).await?;
         indexer.serve().await?.await?
     }
@@ -87,14 +87,14 @@ impl Indexer {
             std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
             config.listen_port,
         );
-        println!("Checking connection with node..");
+        info!("Checking connection with node..");
         let zebrad_uri = test_node_and_return_uri(
             &config.zebrad_port,
             config.node_user.clone(),
             config.node_password.clone(),
         )
         .await?;
-        println!(
+        info!(
             " - Connected to node using JsonRPC at address {}.",
             zebrad_uri
         );
@@ -132,7 +132,7 @@ impl Indexer {
             )
             .await?,
         );
-        println!("Server Ready.");
+        info!("Server Ready.");
         Ok(Indexer {
             config,
             server,
@@ -158,7 +158,7 @@ impl Indexer {
             };
 
             self.status.indexer_status.store(StatusType::Ready.into());
-            println!("Zaino listening on port {:?}.", self.config.listen_port);
+            info!("Zaino listening on port {:?}.", self.config.listen_port);
             loop {
                 self.status.load();
                 // indexer.log_status();

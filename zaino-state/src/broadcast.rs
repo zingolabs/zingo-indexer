@@ -3,6 +3,7 @@
 use dashmap::DashMap;
 use std::{collections::HashSet, hash::Hash, sync::Arc};
 use tokio::sync::watch;
+use tracing::debug;
 
 use crate::status::StatusType;
 
@@ -141,7 +142,7 @@ impl<K: Eq + Hash + Clone, V: Clone> Broadcast<K, V> {
     /// Broadcasts an update.
     pub(crate) fn notify(&self, status: StatusType) {
         if self.notifier.send(status).is_err() {
-            eprintln!("No subscribers are currently listening for updates.");
+            debug!("No subscribers are currently listening for updates.");
         }
     }
 }
