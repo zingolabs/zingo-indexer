@@ -38,8 +38,8 @@ zebra-state = { git = "https://github.com/ZcashFoundation/zebra.git", branch = "
 zebra-rpc = { git = "https://github.com/ZcashFoundation/zebra.git", branch = "main" }
 
 
-# Zcash-Local-Net
-zingo_infra_testutils = { git = "https://github.com/zingolabs/infrastructure/testutils.git" }
+# Zingo-infra-testutils
+zingo-infra-testutils = { git = "https://github.com/zingolabs/infrastructure.git" }
 
 # Miscellaneous
 tokio = { version = "1.38", features = ["full"] }

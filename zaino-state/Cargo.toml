@@ -42,7 +42,7 @@ prost = { workspace = true }
 zaino-testutils = { path = "../zaino-testutils" }
 
 # Test Utilities
-zcash_local_net = { workspace = true, features = ["test_fixtures"] }
+zingo-infra-testutils = { workspace = true }
 
 # ZingoLib
 zingolib = { workspace = true }
