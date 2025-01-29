@@ -319,10 +319,29 @@ impl FinalisedState {
             {
                 let response = match finalised_state.get_block(hash_or_height) {
                     Ok(block) => Ok(block),
-                    Err(_) => Err(FinalisedStateError::MissingData(format!(
-                        "Block {:?} not found in finalised state.",
-                        hash_or_height
-                    ))),
+                    Err(_) => {
+                        eprintln!("Failed to fetch block from DB, re-fetching from validator.");
+                        match fetch_block_from_node(&finalised_state.fetcher, hash_or_height).await
+                        {
+                            Ok((hash, block)) => {
+                                match finalised_state.insert_block((
+                                    Height(block.height as u32),
+                                    hash,
+                                    block.clone(),
+                                )) {
+                                    Ok(_) => Ok(block),
+                                    Err(_) => {
+                                        eprintln!("Failed to insert missing block into DB, serving from validator.");
+                                        Ok(block)
+                                    }
+                                }
+                            }
+                            Err(_) => Err(FinalisedStateError::MissingData(format!(
+                                "Block {:?} not found in finalised state or validator.",
+                                hash_or_height
+                            ))),
+                        }
+                    }
                 };
 
                 if response_channel.send(response).is_err() {
