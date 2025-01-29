@@ -6281,7 +6281,7 @@ dependencies = [
 [[package]]
 name = "zingo-infra-services"
 version = "0.1.0"
-source = "git+https://github.com/zancas/infrastructure.git?branch=add_reexports#94f90b6ce8002b6d394dc230e18c93e123b681d5"
+source = "git+https://github.com/zingolabs/infrastructure.git#18cce79116589ce88b24310a18ad88e3e3023d7c"
 dependencies = [
  "getset",
  "hex",
@@ -6305,7 +6305,7 @@ dependencies = [
 [[package]]
 name = "zingo-infra-testutils"
 version = "0.1.0"
-source = "git+https://github.com/zancas/infrastructure.git?branch=add_reexports#94f90b6ce8002b6d394dc230e18c93e123b681d5"
+source = "git+https://github.com/zingolabs/infrastructure.git#18cce79116589ce88b24310a18ad88e3e3023d7c"
 dependencies = [
  "http",
  "portpicker",
