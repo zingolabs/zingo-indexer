@@ -5,7 +5,10 @@ use prost::Message;
 use serde::{Deserialize, Serialize};
 use std::{fs, sync::Arc};
 
-use zebra_chain::block::{Hash, Height};
+use zebra_chain::{
+    block::{Hash, Height},
+    parameters::NetworkKind,
+};
 use zebra_state::HashOrHeight;
 
 use zaino_fetch::jsonrpc::connector::JsonRpcConnector;
@@ -128,14 +131,20 @@ impl FinalisedState {
     ) -> Result<Self, FinalisedStateError> {
         println!("Launching Finalised State..");
         let db_size = config.db_size.unwrap_or(8);
-        if !config.db_path.exists() {
-            fs::create_dir_all(&config.db_path)?;
+        let db_path_dir = match config.network.kind() {
+            NetworkKind::Mainnet => "live",
+            NetworkKind::Testnet => "test",
+            NetworkKind::Regtest => "local",
+        };
+        let db_path = config.db_path.join(db_path_dir);
+        if !db_path.exists() {
+            fs::create_dir_all(&db_path)?;
         }
         let database = Arc::new(
             Environment::new()
                 .set_max_dbs(2)
                 .set_map_size(db_size * 1024 * 1024 * 1024)
-                .open(&config.db_path)?,
+                .open(&db_path)?,
         );
 
         let heights_to_hashes = match database.open_db(Some("heights_to_hashes")) {
