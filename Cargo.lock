@@ -3446,6 +3446,7 @@ dependencies = [
  "tokio",
  "tokio-native-tls",
  "tokio-rustls",
+ "tokio-util",
  "tower 0.5.2",
  "tower-service",
  "url",
@@ -5410,10 +5411,10 @@ dependencies = [
  "zaino-fetch",
  "zaino-proto",
  "zaino-testutils",
- "zcash_local_net",
  "zebra-chain 1.0.0-beta.44 (git+https://github.com/ZcashFoundation/zebra.git?branch=main)",
  "zebra-rpc 1.0.0-beta.44 (git+https://github.com/ZcashFoundation/zebra.git?branch=main)",
  "zebra-state 1.0.0-beta.44 (git+https://github.com/ZcashFoundation/zebra.git?branch=main)",
+ "zingo-infra-services",
  "zingolib",
 ]
 
@@ -5433,6 +5434,7 @@ dependencies = [
  "zcash_client_backend",
  "zcash_protocol 0.4.0",
  "zebra-chain 1.0.0-beta.44 (git+https://github.com/ZcashFoundation/zebra.git?branch=main)",
+ "zingo-infra-testutils",
  "zingolib",
 ]
 
@@ -5580,33 +5582,6 @@ dependencies = [
  "zcash_primitives 0.19.0 (git+https://github.com/zingolabs/librustzcash.git?tag=zcash_client_sqlite-0.12.1_plus_zingolabs_changes-test_2)",
  "zcash_protocol 0.4.0",
  "zip32",
-]
-
-[[package]]
-name = "zcash_local_net"
-version = "0.1.0"
-source = "git+https://github.com/zingolabs/zcash-local-net.git?rev=d64b76cab748455c5b9e1e4412f1689fb66f7d41#d64b76cab748455c5b9e1e4412f1689fb66f7d41"
-dependencies = [
- "getset",
- "hex",
- "http",
- "json",
- "portpicker",
- "serde_json",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "tokio-stream",
- "tonic",
- "tracing",
- "zcash_client_backend",
- "zcash_primitives 0.19.0 (git+https://github.com/zingolabs/librustzcash.git?tag=zcash_client_sqlite-0.12.1_plus_zingolabs_changes-test_2)",
- "zcash_protocol 0.4.0",
- "zebra-chain 1.0.0-beta.44 (git+https://github.com/ZcashFoundation/zebra.git)",
- "zebra-node-services 1.0.0-beta.44 (git+https://github.com/ZcashFoundation/zebra.git)",
- "zebra-rpc 1.0.0-beta.44 (git+https://github.com/ZcashFoundation/zebra.git)",
- "zingo-netutils",
- "zingolib",
 ]
 
 [[package]]
@@ -6301,6 +6276,50 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.96",
+]
+
+[[package]]
+name = "zingo-infra-services"
+version = "0.1.0"
+source = "git+https://github.com/zancas/infrastructure.git?branch=add_reexports#177e27eab93e219a8128e9136db7f42178c4bb37"
+dependencies = [
+ "getset",
+ "hex",
+ "http",
+ "json",
+ "portpicker",
+ "reqwest",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "zcash_primitives 0.19.0 (git+https://github.com/zingolabs/librustzcash.git?tag=zcash_client_sqlite-0.12.1_plus_zingolabs_changes-test_2)",
+ "zcash_protocol 0.4.0",
+ "zebra-chain 1.0.0-beta.44 (git+https://github.com/ZcashFoundation/zebra.git)",
+ "zebra-node-services 1.0.0-beta.44 (git+https://github.com/ZcashFoundation/zebra.git)",
+ "zebra-rpc 1.0.0-beta.44 (git+https://github.com/ZcashFoundation/zebra.git)",
+]
+
+[[package]]
+name = "zingo-infra-testutils"
+version = "0.1.0"
+source = "git+https://github.com/zancas/infrastructure.git?branch=add_reexports#177e27eab93e219a8128e9136db7f42178c4bb37"
+dependencies = [
+ "http",
+ "portpicker",
+ "tempfile",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tracing-subscriber",
+ "zcash_client_backend",
+ "zcash_primitives 0.19.0 (git+https://github.com/zingolabs/librustzcash.git?tag=zcash_client_sqlite-0.12.1_plus_zingolabs_changes-test_2)",
+ "zcash_protocol 0.4.0",
+ "zingo-infra-services",
+ "zingo-netutils",
+ "zingolib",
 ]
 
 [[package]]
