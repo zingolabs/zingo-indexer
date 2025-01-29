@@ -14,7 +14,7 @@ zaino-testutils = { path = "../zaino-testutils" }
 zaino-fetch = { path = "../zaino-fetch" }
 
 # Test fixtures
-zingo-infra-testutils = { workspace = true, features = [ "services" ] }
+zingo-infra-testutils = { workspace = true }
 
 # Lightclient
 zingolib = { workspace = true }
