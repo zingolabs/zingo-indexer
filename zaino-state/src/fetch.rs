@@ -1826,8 +1826,8 @@ mod tests {
 
     use super::*;
     use zaino_testutils::{TestManager, ZCASHD_CHAIN_CACHE_BIN, ZEBRAD_CHAIN_CACHE_BIN};
-    use zingo_infra_testutils::validator::Validator;
     use zebra_chain::parameters::Network;
+    use zingo_infra_services::validator::Validator;
 
     #[tokio::test]
     async fn launch_fetch_service_zcashd_regtest_no_cache() {

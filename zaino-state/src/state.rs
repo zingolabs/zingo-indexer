@@ -1066,8 +1066,8 @@ mod tests {
     use futures::stream::StreamExt;
     use zaino_proto::proto::service::BlockId;
     use zaino_testutils::{TestManager, ZEBRAD_CHAIN_CACHE_BIN, ZEBRAD_TESTNET_CACHE_BIN};
-    use zingo_infra_testutils::validator::Validator;
     use zebra_chain::parameters::Network;
+    use zingo_infra_services::validator::Validator;
 
     #[tokio::test]
     async fn launch_state_regtest_service_no_cache() {
@@ -1689,7 +1689,7 @@ mod tests {
     async fn state_service_testnet_get_block_range_large() {
         let mut test_manager = TestManager::launch(
             "zebrad",
-            Some(zingo_infra_testutils::network::Network::Testnet),
+            Some(zingo_infra_services::network::Network::Testnet),
             ZEBRAD_TESTNET_CACHE_BIN.clone(),
             false,
             true,
