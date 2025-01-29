@@ -27,7 +27,7 @@ zebra-chain = { workspace = true }
 zingolib = { workspace = true }
 
 # Test Utilities
-zingo-infra-testutils = { workspace = true, features = [ "services" ] }
+zingo-infra-testutils = { workspace = true }
 
 # Miscellaneous
 tokio = { workspace = true }
