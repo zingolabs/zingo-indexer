@@ -1,10 +1,12 @@
 [package]
 name = "zaino-testutils"
 description = "Crate containing Zaino test specific functionality."
-edition = { workspace = true }
 authors = { workspace = true }
-license = { workspace = true }
 repository = { workspace = true }
+homepage = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+version = { workspace = true }
 
 [features]
 # Used by zcash-local-net:
