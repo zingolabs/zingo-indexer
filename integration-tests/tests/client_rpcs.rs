@@ -5,7 +5,7 @@
 //! See `Testing` section of README.md for more details.
 
 use zaino_testutils::{LIGHTWALLETD_BIN, ZAINOD_BIN, ZCASHD_BIN, ZCASH_CLI_BIN, ZEBRAD_BIN};
-use zingo_infra_testutils::network::Network;
+use zingo_infra_testutils::services::network::Network;
 
 pub mod client_rpcs {
     use super::*;

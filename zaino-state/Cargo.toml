@@ -40,9 +40,7 @@ prost = { workspace = true }
 
 [dev-dependencies]
 zaino-testutils = { path = "../zaino-testutils" }
-
-# Test Utilities
-zingo-infra-testutils = { workspace = true }
+zingo-infra-services = { workspace = true }
 
 # ZingoLib
 zingolib = { workspace = true }
