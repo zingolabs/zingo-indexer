@@ -164,7 +164,7 @@ impl Indexer {
             info!("Zaino listening on port {:?}.", self.config.listen_port);
 
             let mut last_log_time = Instant::now();
-            let log_interval = Duration::from_secs(5);
+            let log_interval = Duration::from_secs(10);
             loop {
                 self.status.load();
 
@@ -267,7 +267,7 @@ impl Indexer {
         let max_requests = self.config.max_queue_size;
 
         format!(
-            "Statuses | Indexer: {} - Service: {} - Server: {} - TcpIngestor: {} - Workers: [{}] {}/{}/{} - RequestQueue: {}/{} |",
+            "Statuses | Indexer:{} Service:{} Server:{} TcpIngestor:{} Workers:[{}] {}/{}/{} RequestQueue:{}/{} |",
             indexer, service, server, tcp_ingestor, worker_visual, busy_workers, total_workers, max_workers, request_queue_size, max_requests,
         )
     }
@@ -301,7 +301,7 @@ impl Indexer {
         let max_requests = self.config.max_queue_size;
 
         format!(
-            "| {} - {} - {} {}/{}/{} - {}/{} |",
+            "| {}-{}-{} {}/{}/{}-{}/{} |",
             service,
             tcp_ingestor,
             worker_visual,
