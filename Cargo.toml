@@ -38,9 +38,9 @@ zebra-state = { git = "https://github.com/ZcashFoundation/zebra.git", branch = "
 zebra-rpc = { git = "https://github.com/ZcashFoundation/zebra.git", branch = "main" }
 
 
-# Zcash-Local-Net
-# Zcash test framework.
-zcash_local_net = { git = "https://github.com/zingolabs/zcash-local-net.git", rev = "d64b76cab748455c5b9e1e4412f1689fb66f7d41", features = [ "test_fixtures" ] }
+# Zingo-infra-testutils
+zingo-infra-testutils = { git = "https://github.com/zingolabs/infrastructure.git" }
+zingo-infra-services = { git = "https://github.com/zingolabs/infrastructure.git" }
 
 # Runtime
 tokio = { version = "1.38", features = ["full"] }
