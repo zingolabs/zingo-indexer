@@ -248,7 +248,7 @@ mod tests {
     use super::*;
     use core::panic;
     use zaino_testutils::TestManager;
-    use zcash_local_net::validator::Validator;
+    use zingo_infra_services::validator::Validator;
 
     async fn create_test_manager_and_block_cache(
         validator: &str,
@@ -376,15 +376,15 @@ mod tests {
         for _ in 1..=batches {
             // Generate blocks
             //
-            // NOTE: Generating blocks with zcashd blocks the tokio main thread, stopping background processes from running,
+            // NOTE: Generating blocks with zcashd blocks the tokio main thread???, stopping background processes from running,
             //       for this reason we generate blocks 1 at a time and sleep to let other tasks run.
             for height in 1..=100 {
                 println!("Generating block at height: {}", height);
                 test_manager.local_net.generate_blocks(1).await.unwrap();
-                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             }
 
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
 
             // Check chain height in validator, non-finalised state and finalised state.
             let validator_height = dbg!(json_service.get_blockchain_info().await.unwrap().blocks.0);
