@@ -29,23 +29,23 @@ use crate::{
 ///
 /// The future plan is to also add a TonicService and DarksideService to this to enable wallets to use a single unified chain fetch service.
 ///
-/// NOTE: Work to implement a unified endpoint for IndexerService will be completed in Milestone 3 of the Zaino Dev Grant.
+/// NOTE: Work to implement a unified endpoint for ChainStateProcessHandler will be completed in Milestone 3 of the Zaino Dev Grant.
 #[derive(Clone)]
-pub struct IndexerService<Service: ZcashService> {
+pub struct ChainStateProcessHandler<Service: ZcashService> {
     /// Underlying Service.
     service: Service,
 }
 
-impl<Service> IndexerService<Service>
+impl<Service> ChainStateProcessHandler<Service>
 where
     Service: ZcashService,
 {
-    /// Creates a new `IndexerService` using the provided `config`.
+    /// Creates a new `ChainStateProcessHandler` using the provided `config`.
     pub async fn spawn(
         config: Service::Config,
         status: AtomicStatus,
     ) -> Result<Self, Service::Error> {
-        Ok(IndexerService {
+        Ok(ChainStateProcessHandler {
             service: Service::spawn(config, status).await?,
         })
     }
@@ -55,7 +55,7 @@ where
         &self.service
     }
 
-    /// Consumes the `IndexerService` and returns the inner service.
+    /// Consumes the `ChainStateProcessHandler` and returns the inner service.
     pub fn inner(self) -> Service {
         self.service
     }
@@ -77,7 +77,7 @@ pub trait ZcashService: Sized {
     async fn spawn(config: Self::Config, status: AtomicStatus) -> Result<Self, Self::Error>;
 
     /// Returns a [`ServiceSubscriber`].
-    fn get_subscriber(&self) -> IndexerSubscriber<Self::Subscriber>;
+    fn get_chainstate(&self) -> ChainStateInterface<Self::Subscriber>;
 
     /// Fetches the current status
     fn status(&self) -> StatusType;
@@ -90,18 +90,18 @@ pub trait ZcashService: Sized {
 ///
 /// The future plan is to also add a TonicServiceSubscriber and DarksideServiceSubscriber to this to enable wallets to use a single unified chain fetch service.
 #[derive(Clone)]
-pub struct IndexerSubscriber<Subscriber: Clone + ZcashIndexer + LightWalletIndexer> {
+pub struct ChainStateInterface<Subscriber: Clone + ZcashIndexer + LightWalletIndexer> {
     /// Underlying Service Subscriber.
     subscriber: Subscriber,
 }
 
-impl<Subscriber> IndexerSubscriber<Subscriber>
+impl<Subscriber> ChainStateInterface<Subscriber>
 where
     Subscriber: Clone + ZcashIndexer + LightWalletIndexer,
 {
-    /// Creates a new [`IndexerSubscriber`].
+    /// Creates a new [`ChainStateInterface`].
     pub fn new(subscriber: Subscriber) -> Self {
-        IndexerSubscriber { subscriber }
+        ChainStateInterface { subscriber }
     }
 
     /// Returns a reference to the inner service.
@@ -114,7 +114,7 @@ where
         self.subscriber.clone()
     }
 
-    /// Consumes the `IndexerService` and returns the inner service.
+    /// Consumes the `ChainStateProcessHandler` and returns the inner service.
     pub fn inner(self) -> Subscriber {
         self.subscriber
     }

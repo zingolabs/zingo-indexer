@@ -17,7 +17,7 @@ use zaino_serve::server::{
 use zaino_state::{
     config::FetchServiceConfig,
     fetch::FetchService,
-    indexer::{IndexerService, ZcashService},
+    indexer::{ChainStateProcessHandler, ZcashService},
     status::{AtomicStatus, StatusType},
 };
 
@@ -57,7 +57,7 @@ pub struct Indexer {
     /// GRPC server.
     server: Option<Server>,
     /// Internal block cache.
-    _service: IndexerService<FetchService>,
+    _service: ChainStateProcessHandler<FetchService>,
     /// Indexers status.
     status: IndexerStatus,
     /// Online status of the indexer.
@@ -99,7 +99,7 @@ impl Indexer {
             zebrad_uri
         );
         status.indexer_status.store(StatusType::Spawning.into());
-        let service = IndexerService::<FetchService>::spawn(
+        let service = ChainStateProcessHandler::<FetchService>::spawn(
             FetchServiceConfig::new(
                 SocketAddr::new(
                     std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
@@ -122,7 +122,7 @@ impl Indexer {
         .await?;
         let server = Some(
             Server::spawn(
-                service.inner_ref().get_subscriber(),
+                service.inner_ref().get_chainstate(),
                 tcp_ingestor_listen_addr,
                 config.max_queue_size,
                 config.max_worker_pool_size,

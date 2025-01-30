@@ -30,10 +30,10 @@ macro_rules! client_method_helper {
     // access variables in an outer scope unless they are passed in
     ($self:ident $input:ident $method_name:ident) => {
         tonic::Response::new(
-            // offload to the service_subscriber's implementation of
+            // offload to the chainstate_interface's implementation of
             // $method_name, unpacking $input
             $self
-                .service_subscriber
+                .chainstate_interface
                 .inner_ref()
                 .$method_name($input.into_inner())
                 .await?,
@@ -45,7 +45,7 @@ macro_rules! client_method_helper {
         // extra Box::pin here
         tonic::Response::new(Box::pin(
             $self
-                .service_subscriber
+                .chainstate_interface
                 .inner_ref()
                 .$method_name($input.into_inner())
                 .await?,
@@ -53,13 +53,23 @@ macro_rules! client_method_helper {
     };
     // for the no-input variant
     (empty $self:ident $input:ident $method_name:ident) => {
-        tonic::Response::new($self.service_subscriber.inner_ref().$method_name().await?)
+        tonic::Response::new(
+            $self
+                .chainstate_interface
+                .inner_ref()
+                .$method_name()
+                .await?,
+        )
     };
     // WOMBO-COMBO!!
     (streamingempty $self:ident $input:ident $method_name:ident) => {
         // extra Box::pin here
         tonic::Response::new(Box::pin(
-            $self.service_subscriber.inner_ref().$method_name().await?,
+            $self
+                .chainstate_interface
+                .inner_ref()
+                .$method_name()
+                .await?,
         ))
     };
 }
@@ -220,7 +230,7 @@ impl CompactTxStreamer for GrpcClient {
             let address_stream = AddressStream::new(channel_rx);
 
             Ok(tonic::Response::new(
-                self.service_subscriber
+                self.chainstate_interface
                     .inner_ref()
                     .get_taddress_balance_stream(address_stream)
                     .await?,

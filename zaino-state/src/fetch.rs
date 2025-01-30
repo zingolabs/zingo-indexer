@@ -5,7 +5,7 @@ use std::time;
 use crate::{
     config::FetchServiceConfig,
     error::FetchServiceError,
-    indexer::{IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService},
+    indexer::{ChainStateInterface, LightWalletIndexer, ZcashIndexer, ZcashService},
     mempool::{Mempool, MempoolSubscriber},
     status::{AtomicStatus, StatusType},
     stream::{
@@ -135,8 +135,8 @@ impl ZcashService for FetchService {
     }
 
     /// Returns a [`FetchServiceSubscriber`].
-    fn get_subscriber(&self) -> IndexerSubscriber<FetchServiceSubscriber> {
-        IndexerSubscriber::new(FetchServiceSubscriber {
+    fn get_chainstate(&self) -> ChainStateInterface<FetchServiceSubscriber> {
+        ChainStateInterface::new(FetchServiceSubscriber {
             fetcher: self.fetcher.clone(),
             mempool: self.mempool.subscriber(),
             data: self.data.clone(),
@@ -1896,7 +1896,7 @@ mod tests {
         )
         .await
         .unwrap();
-        let subscriber = fetch_service.get_subscriber().inner();
+        let subscriber = fetch_service.get_chainstate().inner();
         (test_manager, fetch_service, subscriber)
     }
 

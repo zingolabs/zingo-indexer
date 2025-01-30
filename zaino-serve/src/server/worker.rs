@@ -17,7 +17,7 @@ use crate::{
 use zaino_proto::proto::service::compact_tx_streamer_server::CompactTxStreamerServer;
 use zaino_state::{
     fetch::FetchServiceSubscriber,
-    indexer::IndexerSubscriber,
+    indexer::ChainStateInterface,
     status::{AtomicStatus, StatusType},
 };
 
@@ -50,13 +50,13 @@ impl Worker {
         _worker_id: usize,
         queue: QueueReceiver<ZingoIndexerRequest>,
         requeue: QueueSender<ZingoIndexerRequest>,
-        service_subscriber: IndexerSubscriber<FetchServiceSubscriber>,
+        service_subscriber: ChainStateInterface<FetchServiceSubscriber>,
         service_status: AtomicStatus,
         atomic_status: AtomicStatus,
         online: Arc<AtomicBool>,
     ) -> Self {
         let grpc_client = GrpcClient {
-            service_subscriber: service_subscriber.clone(),
+            chainstate_interface: service_subscriber.clone(),
             online: online.clone(),
         };
         Worker {
@@ -189,7 +189,7 @@ impl WorkerPoolStatus {
 #[derive(Clone)]
 pub(crate) struct WorkerPool {
     /// Chain fetch service subscriber.
-    service_subscriber: IndexerSubscriber<FetchServiceSubscriber>,
+    service_subscriber: ChainStateInterface<FetchServiceSubscriber>,
     /// Service status.
     service_status: AtomicStatus,
     /// Maximum number of concurrent workers allowed.
@@ -208,7 +208,7 @@ impl WorkerPool {
     /// Creates a new worker pool containing [idle_workers] workers.
     #[allow(clippy::too_many_arguments)]
     pub(crate) async fn spawn(
-        service_subscriber: IndexerSubscriber<FetchServiceSubscriber>,
+        service_subscriber: ChainStateInterface<FetchServiceSubscriber>,
         service_status: AtomicStatus,
         max_size: u16,
         idle_size: u16,

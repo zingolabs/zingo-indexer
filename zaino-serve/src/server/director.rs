@@ -17,7 +17,7 @@ use crate::server::{
 };
 use zaino_state::{
     fetch::FetchServiceSubscriber,
-    indexer::IndexerSubscriber,
+    indexer::ChainStateInterface,
     status::{AtomicStatus, StatusType},
 };
 
@@ -73,7 +73,7 @@ impl Server {
     /// Spawns a new Server.
     #[allow(clippy::too_many_arguments)]
     pub async fn spawn(
-        service_subscriber: IndexerSubscriber<FetchServiceSubscriber>,
+        service_subscriber: ChainStateInterface<FetchServiceSubscriber>,
         tcp_ingestor_listen_addr: SocketAddr,
         max_queue_size: u16,
         max_worker_pool_size: u16,
