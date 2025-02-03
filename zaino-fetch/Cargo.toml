@@ -1,10 +1,12 @@
 [package]
 name = "zaino-fetch"
 description = "A mempool-fetching, chain-fetching and transaction submission service that uses zebra's RPC interface."
-edition = { workspace = true }
 authors = { workspace = true }
-license = { workspace = true }
 repository = { workspace = true }
+homepage = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+version = { workspace = true }
 
 [dependencies]
 zaino-proto = { path = "../zaino-proto" }

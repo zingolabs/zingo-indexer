@@ -1,10 +1,12 @@
 [package]
 name = "integration-tests"
 description = "Crate containing Zaino's integration-tests."
-edition = { workspace = true }
 authors = { workspace = true }
-license = { workspace = true }
 repository = { workspace = true }
+homepage = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+version = { workspace = true }
 
 [dependencies]
 # Test utility
@@ -12,7 +14,7 @@ zaino-testutils = { path = "../zaino-testutils" }
 zaino-fetch = { path = "../zaino-fetch" }
 
 # Test fixtures
-zcash_local_net = { workspace = true, features = ["test_fixtures"] }
+zingo-infra-testutils = { workspace = true }
 
 # Lightclient
 zingolib = { workspace = true }

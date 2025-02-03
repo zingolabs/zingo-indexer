@@ -439,7 +439,7 @@ impl NonFinalisedStateSubscriber {
         Ok(height)
     }
 
-    ///
+    /// Predicate checks for presence of Hash..  or Height?
     pub async fn contains_hash_or_height(&self, hash_or_height: HashOrHeight) -> bool {
         match hash_or_height {
             HashOrHeight::Height(height) => self.heights_to_hashes.contains_key(&height),
