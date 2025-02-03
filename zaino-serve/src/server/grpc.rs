@@ -1,0 +1,102 @@
+//! Zaino's gRPC Server Implementation.
+
+use std::{net::SocketAddr, time::Duration};
+
+use tokio::time::interval;
+use tonic::transport::Server;
+use zaino_proto::proto::service::compact_tx_streamer_server::CompactTxStreamerServer;
+use zaino_state::{
+    fetch::FetchServiceSubscriber,
+    indexer::IndexerSubscriber,
+    status::{AtomicStatus, StatusType},
+};
+
+use crate::{
+    rpc::GrpcClient,
+    server::{config::GrpcConfig, error::ServerError},
+};
+
+/// LightWallet server capable of servicing clients over TCP.
+pub struct TonicServer {
+    /// Current status of the server.
+    pub status: AtomicStatus,
+    /// JoinHandle for the servers `serve` task.
+    pub server_handle: Option<tokio::task::JoinHandle<Result<(), ServerError>>>,
+}
+
+impl TonicServer {
+    /// Starts the gRPC service.
+    ///
+    /// Launches all components then enters command loop:
+    /// - Updates the ServerStatus.
+    /// - Checks for shutdown signal, shutting down server if received.
+    pub async fn spawn(
+        service_subscriber: IndexerSubscriber<FetchServiceSubscriber>,
+        server_config: GrpcConfig,
+        status: AtomicStatus,
+    ) -> Result<Self, ServerError> {
+        status.store(StatusType::Spawning as usize);
+
+        let listen_addr: SocketAddr = server_config.is_private_listen_addr()?;
+
+        let svc = CompactTxStreamerServer::new(GrpcClient {
+            service_subscriber: service_subscriber.clone(),
+        });
+
+        let mut server_builder = Server::builder();
+        if let Some(tls_config) = server_config.get_valid_tls().await? {
+            server_builder = server_builder.tls_config(tls_config).map_err(|e| {
+                ServerError::ServerConfigError(format!("TLS configuration error: {}", e))
+            })?;
+        }
+
+        let shutdown_check_status = status.clone();
+        let mut shutdown_check_interval = interval(Duration::from_millis(100));
+        let shutdown_signal = async move {
+            loop {
+                shutdown_check_interval.tick().await;
+                if StatusType::from(shutdown_check_status.load()) == StatusType::Closing {
+                    break;
+                }
+            }
+        };
+        let server_future = server_builder
+            .add_service(svc)
+            .serve_with_shutdown(listen_addr, shutdown_signal);
+
+        let server_handle = tokio::task::spawn(async move {
+            server_future.await?;
+            Ok(())
+        });
+
+        Ok(TonicServer {
+            status,
+            server_handle: Some(server_handle),
+        })
+    }
+
+    /// Sets the servers to close gracefully.
+    pub async fn shutdown(&mut self) {
+        self.status.store(StatusType::Closing as usize);
+
+        if let Some(handle) = self.server_handle.take() {
+            handle.await.unwrap().unwrap();
+        }
+    }
+
+    /// Returns the servers current status.
+    pub fn status(&self) -> StatusType {
+        self.status.load().into()
+    }
+}
+
+impl Drop for TonicServer {
+    fn drop(&mut self) {
+        if let Some(handle) = self.server_handle.take() {
+            handle.abort();
+            eprintln!(
+                "Warning: TonicServer dropped without explicit shutdown. Aborting server task."
+            );
+        }
+    }
+}

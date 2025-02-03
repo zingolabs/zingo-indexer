@@ -10,10 +10,7 @@ use std::{
 };
 
 use zaino_fetch::jsonrpc::connector::test_node_and_return_uri;
-use zaino_serve::server::{
-    director::{Server, ServerStatus},
-    error::ServerError,
-};
+use zaino_serve::server::{error::ServerError, grpc::TonicServer};
 use zaino_state::{
     config::FetchServiceConfig,
     fetch::FetchService,
@@ -28,24 +25,24 @@ use crate::{config::IndexerConfig, error::IndexerError};
 pub struct IndexerStatus {
     indexer_status: AtomicStatus,
     service_status: AtomicStatus,
-    server_status: ServerStatus,
+    tonic_server_status: AtomicStatus,
 }
 
 impl IndexerStatus {
     /// Creates a new IndexerStatus.
-    pub fn new(max_workers: u16) -> Self {
-        let server_status = ServerStatus::new(max_workers);
+    pub fn new() -> Self {
         IndexerStatus {
             indexer_status: AtomicStatus::new(StatusType::Offline.into()),
-            service_status: server_status.service_status.clone(),
-            server_status,
+            service_status: AtomicStatus::new(StatusType::Offline.into()),
+            tonic_server_status: AtomicStatus::new(StatusType::Offline.into()),
         }
     }
 
     /// Returns the IndexerStatus.
     pub fn load(&self) -> IndexerStatus {
         self.indexer_status.load();
-        self.server_status.load();
+        self.service_status.load();
+        self.tonic_server_status.load();
         self.clone()
     }
 }
@@ -55,7 +52,7 @@ pub struct Indexer {
     /// Indexer configuration data.
     config: IndexerConfig,
     /// GRPC server.
-    server: Option<Server>,
+    server: Option<TonicServer>,
     /// Internal block cache.
     _service: IndexerService<FetchService>,
     /// Indexers status.
@@ -82,7 +79,7 @@ impl Indexer {
     /// Currently only takes an IndexerConfig.
     pub async fn new(config: IndexerConfig, online: Arc<AtomicBool>) -> Result<Self, IndexerError> {
         config.check_config()?;
-        let status = IndexerStatus::new(config.max_worker_pool_size);
+        let status = IndexerStatus::new();
         let tcp_ingestor_listen_addr = SocketAddr::new(
             std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
             config.listen_port,
@@ -120,18 +117,7 @@ impl Indexer {
             status.service_status.clone(),
         )
         .await?;
-        let server = Some(
-            Server::spawn(
-                service.inner_ref().get_subscriber(),
-                tcp_ingestor_listen_addr,
-                config.max_queue_size,
-                config.max_worker_pool_size,
-                config.idle_worker_pool_size,
-                status.server_status.clone(),
-                online.clone(),
-            )
-            .await?,
-        );
+        let server = Some(todo!());
         println!("Server Ready.");
         Ok(Indexer {
             config,
