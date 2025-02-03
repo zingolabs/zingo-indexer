@@ -163,3 +163,17 @@ impl BlockCacheConfig {
         }
     }
 }
+
+impl From<FetchServiceConfig> for BlockCacheConfig {
+    fn from(value: FetchServiceConfig) -> Self {
+        Self {
+            map_capacity: value.map_capacity,
+            map_shard_amount: value.map_shard_amount,
+            db_path: value.db_path,
+            db_size: value.db_size,
+            network: value.network,
+            no_sync: value.no_sync,
+            no_db: value.no_db,
+        }
+    }
+}

@@ -1,15 +1,19 @@
 //! Compact Block Cache finalised state implementation.
 
-use std::{fs, sync::Arc};
-
 use lmdb::{Cursor, Database, Environment, Transaction};
 use prost::Message;
 use serde::{Deserialize, Serialize};
+use std::{fs, sync::Arc};
 use tracing::{error, info, warn};
+
+use zebra_chain::{
+    block::{Hash, Height},
+    parameters::NetworkKind,
+};
+use zebra_state::HashOrHeight;
+
 use zaino_fetch::jsonrpc::connector::JsonRpcConnector;
 use zaino_proto::proto::compact_formats::CompactBlock;
-use zebra_chain::block::{Hash, Height};
-use zebra_state::HashOrHeight;
 
 use crate::{
     config::BlockCacheConfig,
@@ -21,6 +25,22 @@ use crate::{
 /// Wrapper for `Height`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 struct DbHeight(pub Height);
+
+impl DbHeight {
+    /// Converts `[DbHeight]` to 4-byte **big-endian** bytes.
+    /// Used when storing as an LMDB key.
+    fn to_be_bytes(self) -> [u8; 4] {
+        self.0 .0.to_be_bytes()
+    }
+
+    /// Parse a 4-byte **big-endian** array into a `[DbHeight]`.
+    fn from_be_bytes(bytes: &[u8]) -> Result<Self, FinalisedStateError> {
+        let arr: [u8; 4] = bytes
+            .try_into()
+            .map_err(|_| FinalisedStateError::Custom("Invalid height key length".to_string()))?;
+        Ok(DbHeight(Height(u32::from_be_bytes(arr))))
+    }
+}
 
 /// Wrapper for `Hash`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -110,15 +130,22 @@ impl FinalisedState {
         block_receiver: tokio::sync::mpsc::Receiver<(Height, Hash, CompactBlock)>,
         config: BlockCacheConfig,
     ) -> Result<Self, FinalisedStateError> {
+        info!("Launching Finalised State..");
         let db_size = config.db_size.unwrap_or(8);
-        if !config.db_path.exists() {
-            fs::create_dir_all(&config.db_path)?;
+        let db_path_dir = match config.network.kind() {
+            NetworkKind::Mainnet => "live",
+            NetworkKind::Testnet => "test",
+            NetworkKind::Regtest => "local",
+        };
+        let db_path = config.db_path.join(db_path_dir);
+        if !db_path.exists() {
+            fs::create_dir_all(&db_path)?;
         }
         let database = Arc::new(
             Environment::new()
                 .set_max_dbs(2)
                 .set_map_size(db_size * 1024 * 1024 * 1024)
-                .open(&config.db_path)?,
+                .open(&db_path)?,
         );
 
         let heights_to_hashes = match database.open_db(Some("heights_to_hashes")) {
@@ -182,7 +209,10 @@ impl FinalisedState {
                 loop {
                     match finalised_state.insert_block((height, hash, compact_block.clone())) {
                         Ok(_) => {
-                            info!("Block at height {} successfully inserted.", height.0);
+                            info!(
+                                "Block at height {} successfully inserted in finalised state.",
+                                height.0
+                            );
                             break;
                         }
                         Err(FinalisedStateError::LmdbError(lmdb::Error::KeyExist)) => {
@@ -299,10 +329,29 @@ impl FinalisedState {
             {
                 let response = match finalised_state.get_block(hash_or_height) {
                     Ok(block) => Ok(block),
-                    Err(_) => Err(FinalisedStateError::MissingData(format!(
-                        "Block {:?} not found in finalised state.",
-                        hash_or_height
-                    ))),
+                    Err(_) => {
+                        warn!("Failed to fetch block from DB, re-fetching from validator.");
+                        match fetch_block_from_node(&finalised_state.fetcher, hash_or_height).await
+                        {
+                            Ok((hash, block)) => {
+                                match finalised_state.insert_block((
+                                    Height(block.height as u32),
+                                    hash,
+                                    block.clone(),
+                                )) {
+                                    Ok(_) => Ok(block),
+                                    Err(_) => {
+                                        warn!("Failed to insert missing block into DB, serving from validator.");
+                                        Ok(block)
+                                    }
+                                }
+                            }
+                            Err(_) => Err(FinalisedStateError::MissingData(format!(
+                                "Block {:?} not found in finalised state or validator.",
+                                hash_or_height
+                            ))),
+                        }
+                    }
                 };
 
                 if response_channel.send(response).is_err() {
@@ -319,9 +368,9 @@ impl FinalisedState {
     /// waits for server to sync with P2P network,
     /// Checks for reorg before syncing.
     async fn sync_db_from_reorg(&self) -> Result<(), FinalisedStateError> {
-        let mut reorg_height = self.get_db_height()?;
+        let mut reorg_height = self.get_db_height().unwrap_or(Height(0));
 
-        let mut reorg_hash = self.get_hash(reorg_height.0)?;
+        let mut reorg_hash = self.get_hash(reorg_height.0).unwrap_or(Hash([0u8; 32]));
 
         let mut check_hash = match self
             .fetcher
@@ -343,30 +392,13 @@ impl FinalisedState {
             match reorg_height.previous() {
                 Ok(height) => reorg_height = height,
                 // Underflow error meaning reorg_height = start of chain.
-                // This means the whole non-finalised state is old.
-                // We fetch the first block in the chain here as the later refill logic always starts from [reorg_height + 1].
+                // This means the whole finalised state is old or corrupt.
                 Err(_) => {
-                    let mut txn = self.database.begin_rw_txn()?;
-                    txn.clear_db(self.heights_to_hashes)?;
-                    txn.clear_db(self.hashes_to_blocks)?;
-                    txn.commit()?;
-                    loop {
-                        match fetch_block_from_node(
-                            &self.fetcher,
-                            HashOrHeight::Height(reorg_height),
-                        )
-                        .await
-                        {
-                            Ok((hash, block)) => {
-                                self.insert_block((reorg_height, hash, block))?;
-                                break;
-                            }
-                            Err(e) => {
-                                self.status.store(StatusType::RecoverableError.into());
-                                warn!("{e}");
-                                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                            }
-                        }
+                    {
+                        let mut txn = self.database.begin_rw_txn()?;
+                        txn.clear_db(self.heights_to_hashes)?;
+                        txn.clear_db(self.hashes_to_blocks)?;
+                        txn.commit()?;
                     }
                     break;
                 }
@@ -388,9 +420,18 @@ impl FinalisedState {
             };
         }
 
-        // Refill from reorg_height[+1] to current server (finalised state) height.
-        let mut sync_height = self.fetcher.get_blockchain_info().await?.blocks.0 - 99;
-        for block_height in (reorg_height.0 + 1)..sync_height {
+        // Refill from max(reorg_height[+1], sapling_activation_height) to current server (finalised state) height.
+        let mut sync_height = self
+            .fetcher
+            .get_blockchain_info()
+            .await?
+            .blocks
+            .0
+            .saturating_sub(99);
+        for block_height in ((reorg_height.0 + 1)
+            .max(self.config.network.sapling_activation_height().0))
+            ..=sync_height
+        {
             if self.get_hash(block_height).is_ok() {
                 self.delete_block(Height(block_height))?;
             }
@@ -403,6 +444,10 @@ impl FinalisedState {
                 {
                     Ok((hash, block)) => {
                         self.insert_block((Height(block_height), hash, block))?;
+                        info!(
+                            "Block at height {} successfully inserted in finalised state.",
+                            block_height
+                        );
                         break;
                     }
                     Err(e) => {
@@ -433,6 +478,10 @@ impl FinalisedState {
                         {
                             Ok((hash, block)) => {
                                 self.insert_block((Height(block_height), hash, block))?;
+                                info!(
+                                    "Block at height {} successfully inserted in finalised state.",
+                                    block_height
+                                );
                                 break;
                             }
                             Err(e) => {
@@ -467,7 +516,8 @@ impl FinalisedState {
     /// Inserts a block into the finalised state.
     fn insert_block(&self, block: (Height, Hash, CompactBlock)) -> Result<(), FinalisedStateError> {
         let (height, hash, compact_block) = block;
-        let height_key = serde_json::to_vec(&DbHeight(height))?;
+        // let height_key = serde_json::to_vec(&DbHeight(height))?;
+        let height_key = DbHeight(height).to_be_bytes();
         let hash_key = serde_json::to_vec(&DbHash(hash))?;
         let block_value = serde_json::to_vec(&DbCompactBlock(compact_block))?;
 
@@ -501,7 +551,8 @@ impl FinalisedState {
     /// Deletes a block from the finalised state.
     fn delete_block(&self, height: Height) -> Result<(), FinalisedStateError> {
         let hash = self.get_hash(height.0)?;
-        let height_key = serde_json::to_vec(&DbHeight(height))?;
+        // let height_key = serde_json::to_vec(&DbHeight(height))?;
+        let height_key = DbHeight(height).to_be_bytes();
         let hash_key = serde_json::to_vec(&DbHash(hash))?;
 
         let mut txn = self.database.begin_rw_txn()?;
@@ -519,7 +570,8 @@ impl FinalisedState {
 
         let hash_key = match height_or_hash {
             HashOrHeight::Height(height) => {
-                let height_key = serde_json::to_vec(&DbHeight(height))?;
+                // let height_key = serde_json::to_vec(&DbHeight(height))?;
+                let height_key = DbHeight(height).to_be_bytes();
                 let hash_bytes: &[u8] = txn.get(self.heights_to_hashes, &height_key)?;
                 hash_bytes.to_vec()
             }
@@ -535,7 +587,8 @@ impl FinalisedState {
     fn get_hash(&self, height: u32) -> Result<Hash, FinalisedStateError> {
         let txn = self.database.begin_ro_txn()?;
 
-        let height_key = serde_json::to_vec(&DbHeight(Height(height)))?;
+        // let height_key = serde_json::to_vec(&DbHeight(Height(height)))?;
+        let height_key = DbHeight(Height(height)).to_be_bytes();
 
         let hash_bytes: &[u8] = match txn.get(self.heights_to_hashes, &height_key) {
             Ok(bytes) => bytes,
@@ -553,12 +606,13 @@ impl FinalisedState {
     }
 
     /// Fetches the highest stored height from LMDB.
-    fn get_db_height(&self) -> Result<Height, FinalisedStateError> {
+    pub(crate) fn get_db_height(&self) -> Result<Height, FinalisedStateError> {
         let txn = self.database.begin_ro_txn()?;
         let mut cursor = txn.open_ro_cursor(self.heights_to_hashes)?;
 
         if let Some((height_bytes, _)) = cursor.iter().last() {
-            let height: DbHeight = serde_json::from_slice(height_bytes)?;
+            // let height: DbHeight = serde_json::from_slice(height_bytes)?;
+            let height = DbHeight::from_be_bytes(height_bytes)?;
             Ok(height.0)
         } else {
             Err(FinalisedStateError::MissingData(
@@ -591,7 +645,7 @@ impl FinalisedState {
         }
 
         if let Err(e) = self.database.sync(true) {
-            eprintln!("Error syncing LMDB before shutdown: {:?}", e);
+            error!("Error syncing LMDB before shutdown: {:?}", e);
         }
     }
 }
@@ -607,7 +661,7 @@ impl Drop for FinalisedState {
         }
 
         if let Err(e) = self.database.sync(true) {
-            eprintln!("Error syncing LMDB before shutdown: {:?}", e);
+            error!("Error syncing LMDB before shutdown: {:?}", e);
         }
     }
 }
