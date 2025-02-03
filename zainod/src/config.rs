@@ -1,6 +1,9 @@
 //! Zaino config.
 
-use std::path::PathBuf;
+use std::{
+    net::{IpAddr, SocketAddr},
+    path::PathBuf,
+};
 
 use tracing::warn;
 
@@ -10,20 +13,20 @@ use crate::error::IndexerError;
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(default)]
 pub struct IndexerConfig {
-    /// TcpIngestors listen port
-    pub listen_port: u16,
+    /// gRPC server bind addr.
+    pub grpc_listen_address: SocketAddr,
+    /// Enables TLS.
+    pub tls: bool,
+    /// Path to the TLS certificate file in PEM format.
+    pub tls_cert_path: Option<String>,
+    /// Path to the TLS private key file in PEM format.
+    pub tls_key_path: Option<String>,
     /// Full node / validator listen port.
     pub zebrad_port: u16,
     /// Full node / validator Username.
     pub node_user: Option<String>,
     /// full node / validator Password.
     pub node_password: Option<String>,
-    /// Maximum requests allowed in the request queue.
-    pub max_queue_size: u16,
-    /// Maximum workers allowed in the worker pool
-    pub max_worker_pool_size: u16,
-    /// Minimum number of workers held in the workerpool when idle.
-    pub idle_worker_pool_size: u16,
     /// Capacity of the Dashmaps used for the Mempool.
     /// Also use by the BlockCache::NonFinalisedState when using the FetchService.
     ///
@@ -65,7 +68,6 @@ impl IndexerConfig {
     /// Performs checks on config data.
     ///
     /// - Checks that at least 1 ingestor is active.
-    /// - Checks listen port is given is tcp is active.
     pub(crate) fn check_config(&self) -> Result<(), IndexerError> {
         if (self.network != "Regtest") && (self.network != "Testnet") && (self.network != "Mainnet")
         {
@@ -73,7 +75,74 @@ impl IndexerConfig {
                 "Incorrect network name given.".to_string(),
             ));
         }
+
+        if self.loopback_listen_addr().is_err() && !self.tls {
+            return Err(IndexerError::ConfigError(
+                "TLS required when connecting to external addresses.".to_string(),
+            ));
+        }
+
         Ok(())
+    }
+
+    /// Validates that the configured `bind_address` is either:
+    /// - An RFC1918 (private) IPv4 address, or
+    /// - An IPv6 Unique Local Address (ULA) (using `is_unique_local()`)
+    ///
+    /// Returns `Ok(BindAddress)` if valid.
+    pub(crate) fn private_listen_addr(&self) -> Result<SocketAddr, IndexerError> {
+        let ip = self.grpc_listen_address.ip();
+        match ip {
+            IpAddr::V4(ipv4) => {
+                if ipv4.is_private() {
+                    Ok(self.grpc_listen_address)
+                } else {
+                    Err(IndexerError::ConfigError(format!(
+                        "{} is not an RFC1918 IPv4 address",
+                        ipv4
+                    )))
+                }
+            }
+            IpAddr::V6(ipv6) => {
+                if ipv6.is_unique_local() {
+                    Ok(self.grpc_listen_address)
+                } else {
+                    Err(IndexerError::ConfigError(format!(
+                        "{} is not a unique local IPv6 address",
+                        ipv6
+                    )))
+                }
+            }
+        }
+    }
+
+    /// Validates that the configured `bind_address` is a loopback address.
+    ///
+    /// Returns `Ok(BindAddress)` if valid.
+    pub(crate) fn loopback_listen_addr(&self) -> Result<SocketAddr, IndexerError> {
+        let ip = self.grpc_listen_address.ip();
+        match ip {
+            IpAddr::V4(ipv4) => {
+                if ipv4.is_loopback() {
+                    Ok(self.grpc_listen_address)
+                } else {
+                    Err(IndexerError::ConfigError(format!(
+                        "{} is not an RFC1918 IPv4 address",
+                        ipv4
+                    )))
+                }
+            }
+            IpAddr::V6(ipv6) => {
+                if ipv6.is_loopback() {
+                    Ok(self.grpc_listen_address)
+                } else {
+                    Err(IndexerError::ConfigError(format!(
+                        "{} is not a unique local IPv6 address",
+                        ipv6
+                    )))
+                }
+            }
+        }
     }
 
     /// Returns the network type currently being used by the server.
@@ -95,13 +164,13 @@ impl IndexerConfig {
 impl Default for IndexerConfig {
     fn default() -> Self {
         Self {
-            listen_port: 8137,
+            grpc_listen_address: "127.0.0.1:8137".parse().unwrap(),
+            tls: false,
+            tls_cert_path: None,
+            tls_key_path: None,
             zebrad_port: 18232,
             node_user: Some("xxxxxx".to_string()),
             node_password: Some("xxxxxx".to_string()),
-            max_queue_size: 1024,
-            max_worker_pool_size: 32,
-            idle_worker_pool_size: 4,
             map_capacity: None,
             map_shard_amount: None,
             db_path: default_db_path(),

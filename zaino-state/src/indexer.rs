@@ -90,7 +90,7 @@ pub trait ZcashService: Sized {
 ///
 /// The future plan is to also add a TonicServiceSubscriber and DarksideServiceSubscriber to this to enable wallets to use a single unified chain fetch service.
 #[derive(Clone)]
-pub struct IndexerSubscriber<Subscriber: Clone + ZcashIndexer + LightWalletIndexer> {
+pub struct IndexerSubscriber<Subscriber: Clone + ZcashIndexer + LightWalletIndexer + Send + Sync> {
     /// Underlying Service Subscriber.
     subscriber: Subscriber,
 }
