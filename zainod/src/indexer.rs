@@ -1,19 +1,10 @@
 //! Zingo-Indexer implementation.
 
-use std::{
-    net::SocketAddr,
-    process,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
-use tokio::time::Instant;
+use std::{net::SocketAddr, process};
 use tracing::info;
 
 use zaino_fetch::jsonrpc::connector::test_node_and_return_uri;
-use zaino_serve::server::{config::GrpcConfig, error::ServerError, grpc::TonicServer};
+use zaino_serve::server::{config::GrpcConfig, grpc::TonicServer};
 use zaino_state::{
     config::FetchServiceConfig,
     fetch::FetchService,
@@ -26,9 +17,12 @@ use crate::{config::IndexerConfig, error::IndexerError};
 /// Holds the status of the server and all its components.
 #[derive(Debug, Clone)]
 pub struct IndexerStatus {
+    /// Status of the indexer.
     pub indexer_status: AtomicStatus,
-    service_status: AtomicStatus,
-    grpc_server_status: AtomicStatus,
+    /// Status of the chain state service.
+    pub service_status: AtomicStatus,
+    /// Status of the gRPC server.
+    pub grpc_server_status: AtomicStatus,
 }
 
 impl IndexerStatus {
@@ -48,12 +42,23 @@ impl IndexerStatus {
         self.grpc_server_status.load();
         self.clone()
     }
+
+    /// Logs the indexers status.
+    pub fn log(&self) {
+        let statuses = self.load();
+        let indexer_status = StatusType::from(statuses.indexer_status).get_status_symbol();
+        let service_status = StatusType::from(statuses.service_status).get_status_symbol();
+        let grpc_server_status = StatusType::from(statuses.grpc_server_status).get_status_symbol();
+
+        info!(
+            "Zaino status check - Indexer:{} Service:{} gRPC Server:{}",
+            indexer_status, service_status, grpc_server_status
+        );
+    }
 }
 
 /// Zingo-Indexer.
 pub struct Indexer {
-    /// Indexer configuration data.
-    config: IndexerConfig,
     /// GRPC server.
     server: Option<TonicServer>,
     /// Chain fetch service state process handler..
@@ -67,19 +72,19 @@ impl Indexer {
     ///
     /// Currently only takes an IndexerConfig.
     pub async fn start(config: IndexerConfig) -> Result<(), IndexerError> {
-        let online = Arc::new(AtomicBool::new(true));
-        set_ctrlc(online.clone());
+        let indexer_status = IndexerStatus::new();
+        set_ctrlc(indexer_status.clone());
         startup_message();
         info!("Starting Zaino..");
-        let indexer: Indexer = Indexer::new(config, online.clone()).await?;
-        indexer.serve().await?.await?
+        Indexer::spawn(config, indexer_status).await?.await??;
+        Ok(())
     }
 
     /// Spawns a new Indexer server.
     pub async fn spawn(
         config: IndexerConfig,
         status: IndexerStatus,
-    ) -> Result<(Self, tokio::task::JoinHandle<Result<(), IndexerError>>), IndexerError> {
+    ) -> Result<tokio::task::JoinHandle<Result<(), IndexerError>>, IndexerError> {
         config.check_config()?;
         info!("Checking connection with node..");
         let zebrad_uri = test_node_and_return_uri(
@@ -131,17 +136,21 @@ impl Indexer {
         .unwrap();
 
         let mut indexer = Indexer {
-            config,
             server: Some(grpc_server),
             service: Some(chain_state_service),
             status,
         };
 
+        indexer
+            .status
+            .indexer_status
+            .store(StatusType::Ready.into());
+
         // NOTE: This interval may need to be reduced or removed / moved once scale testing begins.
         let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(50));
         let serve_task = tokio::task::spawn(async move {
             loop {
-                indexer.status.load();
+                indexer.status();
                 if indexer.check_for_shutdown() {
                     indexer.shutdown().await;
                     return Ok(());
@@ -150,7 +159,7 @@ impl Indexer {
             }
         });
 
-        Ok((indexer, serve_task))
+        Ok(serve_task)
     }
 
     /// Checks indexers online status and servers internal status for closure signal.
@@ -162,7 +171,7 @@ impl Indexer {
     }
 
     /// Sets the servers to close gracefully.
-    pub async fn shutdown(&mut self) {
+    async fn shutdown(&mut self) {
         self.status
             .grpc_server_status
             .store(StatusType::Closing.into());
@@ -170,7 +179,7 @@ impl Indexer {
         self.status.indexer_status.store(StatusType::Closing.into());
 
         if let Some(mut server) = self.server.take() {
-            server.shutdown();
+            server.shutdown().await;
             self.status
                 .grpc_server_status
                 .store(StatusType::Offline.into());
@@ -200,9 +209,11 @@ impl Indexer {
     }
 }
 
-fn set_ctrlc(online: Arc<AtomicBool>) {
+fn set_ctrlc(status: IndexerStatus) {
     ctrlc::set_handler(move || {
-        online.store(false, Ordering::SeqCst);
+        status.grpc_server_status.store(StatusType::Closing.into());
+        status.service_status.store(StatusType::Closing.into());
+        status.indexer_status.store(StatusType::Closing.into());
         process::exit(0);
     })
     .expect("Error setting Ctrl-C handler");
@@ -240,41 +251,4 @@ fn startup_message() {
 ****** Please note Zaino is currently in development and should not be used to run mainnet nodes. ******
     "#;
     println!("{}", welcome_message);
-}
-
-/// Generates a 10-symbol visualization of worker statuses
-fn generate_worker_pool_status_visual(worker_statuses: &[AtomicStatus]) -> String {
-    let green = worker_statuses
-        .iter()
-        .filter(|s| s.load() == StatusType::Ready as usize)
-        .count();
-    let yellow = worker_statuses
-        .iter()
-        .filter(|s| s.load() == StatusType::Busy as usize)
-        .count();
-    let red = worker_statuses
-        .iter()
-        .filter(|s| {
-            let status = s.load();
-            status == StatusType::RecoverableError as usize
-                || status == StatusType::CriticalError as usize
-        })
-        .count();
-
-    let total_shown = green + yellow + red;
-
-    let green_count = (green as f64 / total_shown as f64 * 10.0).round() as usize;
-    let yellow_count = (yellow as f64 / total_shown as f64 * 10.0).round() as usize;
-    let red_count = 10 - green_count - yellow_count;
-
-    let green_symbol = "\x1b[32m\u{25CF}\x1b[0m";
-    let yellow_symbol = "\x1b[33m\u{25CF}\x1b[0m";
-    let red_symbol = "\x1b[31m\u{25CF}\x1b[0m";
-
-    format!(
-        "{}{}{}",
-        green_symbol.repeat(green_count),
-        yellow_symbol.repeat(yellow_count),
-        red_symbol.repeat(red_count)
-    )
 }

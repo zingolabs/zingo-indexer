@@ -5,9 +5,15 @@
 
 use once_cell::sync::Lazy;
 use services::validator::Validator;
-use std::{path::PathBuf, str::FromStr};
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    path::PathBuf,
+    str::FromStr,
+};
 use tempfile::TempDir;
 use tracing_subscriber::EnvFilter;
+use zaino_state::status::StatusType;
+use zainodlib::indexer::IndexerStatus;
 
 /// Path for zcashd binary.
 pub static ZCASHD_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
@@ -284,7 +290,7 @@ pub struct TestManager {
     /// Zingolib lightclients.
     pub clients: Option<Clients>,
     /// Online status of Zingo-Indexer.
-    pub online: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub indexer_status: IndexerStatus,
 }
 
 use zingo_infra_testutils::services;
@@ -321,7 +327,6 @@ impl TestManager {
                 "Cannot enable clients when zaino is not enabled.",
             ));
         }
-        let online = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
 
         // Launch LocalNet:
         let zebrad_rpc_listen_port = portpicker::pick_unused_port().expect("No ports free");
@@ -354,18 +359,22 @@ impl TestManager {
         let data_dir = local_net.data_dir().path().to_path_buf();
         let db_path = data_dir.join("zaino");
 
+        let indexer_status = IndexerStatus::new();
+
         // Launch Zaino:
         let (zaino_grpc_listen_port, zaino_handle) = if enable_zaino {
             let zaino_grpc_listen_port = portpicker::pick_unused_port().expect("No ports free");
-            // NOTE: queue and workerpool sizes may need to be changed here.
+            let grpc_listen_address =
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), zaino_grpc_listen_port);
+
             let indexer_config = zainodlib::config::IndexerConfig {
-                listen_port: zaino_grpc_listen_port,
+                grpc_listen_address,
+                tls: false,
+                tls_cert_path: None,
+                tls_key_path: None,
                 zebrad_port: zebrad_rpc_listen_port,
                 node_user: Some("xxxxxx".to_string()),
                 node_password: Some("xxxxxx".to_string()),
-                max_queue_size: 512,
-                max_worker_pool_size: 64,
-                idle_worker_pool_size: 4,
                 map_capacity: None,
                 map_shard_amount: None,
                 db_path,
@@ -375,12 +384,10 @@ impl TestManager {
                 no_db: zaino_no_db,
                 no_state: false,
             };
-            let handle = zainodlib::indexer::Indexer::new(indexer_config, online.clone())
-                .await
-                .unwrap()
-                .serve()
+            let handle = zainodlib::indexer::Indexer::spawn(indexer_config, indexer_status.clone())
                 .await
                 .unwrap();
+
             // NOTE: This is required to give the server time to launch, this is not used in production code but could be rewritten to improve testing efficiency.
             tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
             (Some(zaino_grpc_listen_port), Some(handle))
@@ -414,14 +421,22 @@ impl TestManager {
             zaino_handle,
             zaino_grpc_listen_port,
             clients,
-            online,
+            indexer_status,
         })
     }
 
     /// Closes the TestManager.
     pub async fn close(&mut self) {
-        self.online
-            .store(false, std::sync::atomic::Ordering::SeqCst);
+        self.indexer_status
+            .grpc_server_status
+            .store(StatusType::Closing.into());
+        self.indexer_status
+            .service_status
+            .store(StatusType::Closing.into());
+        self.indexer_status
+            .indexer_status
+            .store(StatusType::Closing.into());
+
         if let Some(zaino_handle) = self.zaino_handle.take() {
             if let Err(e) = zaino_handle.await {
                 eprintln!("Error awaiting zaino_handle: {:?}", e);
@@ -432,8 +447,15 @@ impl TestManager {
 
 impl Drop for TestManager {
     fn drop(&mut self) {
-        self.online
-            .store(false, std::sync::atomic::Ordering::SeqCst);
+        self.indexer_status
+            .grpc_server_status
+            .store(StatusType::Closing.into());
+        self.indexer_status
+            .service_status
+            .store(StatusType::Closing.into());
+        self.indexer_status
+            .indexer_status
+            .store(StatusType::Closing.into());
     }
 }
 
