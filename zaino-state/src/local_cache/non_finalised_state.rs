@@ -54,29 +54,7 @@ impl NonFinalisedState {
             config,
         };
 
-        // If no_db is active wait for server to sync with p2p network.
-        if non_finalised_state.config.no_db
-            && !non_finalised_state.config.network.is_regtest()
-            && !non_finalised_state.config.no_sync
-        {
-            non_finalised_state.status.store(StatusType::Syncing.into());
-            loop {
-                let blockchain_info = fetcher.get_blockchain_info().await?;
-                if (blockchain_info.blocks.0 as i64 - blockchain_info.estimated_height.0 as i64)
-                    .abs()
-                    <= 10
-                {
-                    break;
-                } else {
-                    println!(" - Validator syncing with network. Validator chain height: {}, Estimated Network chain height: {}",
-                        &blockchain_info.blocks.0,
-                        &blockchain_info.estimated_height.0
-                    );
-                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                    continue;
-                }
-            }
-        }
+        non_finalised_state.wait_on_server().await?;
 
         let chain_height = fetcher.get_blockchain_info().await?.blocks.0;
         // We do not fetch pre sapling activation.
@@ -275,6 +253,8 @@ impl NonFinalisedState {
         }
 
         // Refill from max(reorg_height[+1], sapling_activation_height).
+        //
+        // reorg_height + 1 is used here as reorg_height represents the last "valid" block known.
         let validator_height = self.fetcher.get_blockchain_info().await?.blocks.0;
         for block_height in ((reorg_height.0 + 1)
             .max(self.config.network.sapling_activation_height().0))
@@ -352,6 +332,33 @@ impl NonFinalisedState {
         }
 
         Ok(())
+    }
+
+    /// Waits for server to sync with p2p network.
+    pub async fn wait_on_server(&self) -> Result<(), NonFinalisedStateError> {
+        // If no_db is active wait for server to sync with p2p network.
+        if self.config.no_db && !self.config.network.is_regtest() && !self.config.no_sync {
+            self.status.store(StatusType::Syncing.into());
+            loop {
+                let blockchain_info = self.fetcher.get_blockchain_info().await?;
+                if (blockchain_info.blocks.0 as i64 - blockchain_info.estimated_height.0 as i64)
+                    .abs()
+                    <= 10
+                {
+                    break;
+                } else {
+                    println!(" - Validator syncing with network. Validator chain height: {}, Estimated Network chain height: {}",
+                        &blockchain_info.blocks.0,
+                        &blockchain_info.estimated_height.0
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    continue;
+                }
+            }
+            Ok(())
+        } else {
+            Ok(())
+        }
     }
 
     /// Returns a [`NonFinalisedStateSubscriber`].
