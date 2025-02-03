@@ -1629,6 +1629,46 @@ mod tests {
     use zaino_testutils::{TestManager, ZEBRAD_CHAIN_CACHE_BIN, ZEBRAD_TESTNET_CACHE_BIN};
     use zebra_chain::parameters::Network;
     use zingo_infra_services::validator::Validator;
+    async fn create_test_manager_and_state_service(
+        enable_zaino: bool,
+        zaino_no_sync: bool,
+        zaino_no_db: bool,
+        enable_clients: bool,
+    ) -> (TestManager, StateService) {
+        let test_manager = TestManager::launch(
+            "zebrad",
+            Some(zingo_infra_services::network::Network::Testnet),
+            ZEBRAD_TESTNET_CACHE_BIN.clone(),
+            enable_zaino,
+            zaino_no_sync,
+            zaino_no_db,
+            enable_clients,
+        )
+        .await
+        .unwrap();
+
+        let state_service = StateService::spawn(StateServiceConfig::new(
+            zebra_state::Config {
+                cache_dir: test_manager.data_dir.clone(),
+                ephemeral: false,
+                delete_old_database: true,
+                debug_stop_at_height: None,
+                debug_validity_check_interval: None,
+            },
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                test_manager.zebrad_rpc_listen_port,
+            ),
+            None,
+            None,
+            None,
+            None,
+            Network::new_default_testnet(),
+        ))
+        .await
+        .unwrap();
+        (test_manager, state_service)
+    }
 
     #[tokio::test]
     async fn launch_state_regtest_service_no_cache() {
@@ -1947,38 +1987,8 @@ mod tests {
 
     #[tokio::test]
     async fn state_service_regtest_get_block_raw() {
-        let mut test_manager = TestManager::launch(
-            "zebrad",
-            None,
-            ZEBRAD_CHAIN_CACHE_BIN.clone(),
-            false,
-            true,
-            true,
-            false,
-        )
-        .await
-        .unwrap();
-
-        let state_service = StateService::spawn(StateServiceConfig::new(
-            zebra_state::Config {
-                cache_dir: test_manager.data_dir.clone(),
-                ephemeral: false,
-                delete_old_database: true,
-                debug_stop_at_height: None,
-                debug_validity_check_interval: None,
-            },
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
-            ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-        ))
-        .await
-        .unwrap();
+        let (mut test_manager, state_service) =
+            create_test_manager_and_state_service(false, true, true, false).await;
         let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new(
             url::Url::parse(&format!(
                 "http://127.0.0.1:{}",
@@ -2020,38 +2030,8 @@ mod tests {
 
     #[tokio::test]
     async fn state_service_regtest_get_block_object() {
-        let mut test_manager = TestManager::launch(
-            "zebrad",
-            None,
-            ZEBRAD_CHAIN_CACHE_BIN.clone(),
-            false,
-            true,
-            true,
-            false,
-        )
-        .await
-        .unwrap();
-
-        let state_service = StateService::spawn(StateServiceConfig::new(
-            zebra_state::Config {
-                cache_dir: test_manager.data_dir.clone(),
-                ephemeral: false,
-                delete_old_database: true,
-                debug_stop_at_height: None,
-                debug_validity_check_interval: None,
-            },
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
-            ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-        ))
-        .await
-        .unwrap();
+        let (mut test_manager, state_service) =
+            create_test_manager_and_state_service(false, true, true, false).await;
         let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new(
             url::Url::parse(&format!(
                 "http://127.0.0.1:{}",
@@ -2124,38 +2104,8 @@ mod tests {
     /// WARNING: This tests needs refactoring due to code removed in zaino-state.
     #[tokio::test]
     async fn state_service_regtest_get_block_compact() {
-        let mut test_manager = TestManager::launch(
-            "zebrad",
-            None,
-            ZEBRAD_CHAIN_CACHE_BIN.clone(),
-            false,
-            true,
-            true,
-            false,
-        )
-        .await
-        .unwrap();
-
-        let state_service = StateService::spawn(StateServiceConfig::new(
-            zebra_state::Config {
-                cache_dir: test_manager.data_dir.clone(),
-                ephemeral: false,
-                delete_old_database: true,
-                debug_stop_at_height: None,
-                debug_validity_check_interval: None,
-            },
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
-            ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-        ))
-        .await
-        .unwrap();
+        let (mut test_manager, state_service) =
+            create_test_manager_and_state_service(false, true, true, false).await;
 
         let state_start = tokio::time::Instant::now();
         let state_service_get_compact_block = StateService::get_compact_block(
@@ -2180,17 +2130,8 @@ mod tests {
     /// WARNING: This tests needs refactoring due to code removed in zaino-state.
     #[tokio::test]
     async fn state_service_regtest_get_block_range() {
-        let mut test_manager = TestManager::launch(
-            "zebrad",
-            None,
-            ZEBRAD_CHAIN_CACHE_BIN.clone(),
-            false,
-            true,
-            true,
-            false,
-        )
-        .await
-        .unwrap();
+        let (mut test_manager, state_service) =
+            create_test_manager_and_state_service(false, true, true, false).await;
         let block_range = BlockRange {
             start: Some(BlockId {
                 height: 50,
@@ -2201,26 +2142,6 @@ mod tests {
                 hash: Vec::new(),
             }),
         };
-        let state_service = StateService::spawn(StateServiceConfig::new(
-            zebra_state::Config {
-                cache_dir: test_manager.data_dir.clone(),
-                ephemeral: false,
-                delete_old_database: true,
-                debug_stop_at_height: None,
-                debug_validity_check_interval: None,
-            },
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
-            ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_regtest(Some(1), Some(1)),
-        ))
-        .await
-        .unwrap();
 
         let state_start = tokio::time::Instant::now();
         let state_service_stream = state_service
@@ -2248,17 +2169,8 @@ mod tests {
 
     #[tokio::test]
     async fn state_service_testnet_get_block_range_large() {
-        let mut test_manager = TestManager::launch(
-            "zebrad",
-            Some(zingo_infra_services::network::Network::Testnet),
-            ZEBRAD_TESTNET_CACHE_BIN.clone(),
-            false,
-            true,
-            true,
-            false,
-        )
-        .await
-        .unwrap();
+        let (mut test_manager, state_service) =
+            create_test_manager_and_state_service(false, true, true, false).await;
 
         let block_range = BlockRange {
             start: Some(BlockId {
@@ -2270,27 +2182,6 @@ mod tests {
                 hash: Vec::new(),
             }),
         };
-
-        let state_service = StateService::spawn(StateServiceConfig::new(
-            zebra_state::Config {
-                cache_dir: test_manager.data_dir.clone(),
-                ephemeral: false,
-                delete_old_database: true,
-                debug_stop_at_height: None,
-                debug_validity_check_interval: None,
-            },
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
-            ),
-            None,
-            None,
-            None,
-            None,
-            Network::new_default_testnet(),
-        ))
-        .await
-        .unwrap();
 
         let num_blocks =
             block_range.clone().end.unwrap().height - block_range.clone().start.unwrap().height;
@@ -2312,6 +2203,35 @@ mod tests {
         println!("First block in range: {:?}", state_blocks.first());
         println!("Last block in range: {:?}", state_blocks.last());
         println!("GetBlockRange response received. State-Service fetch 1,000,000 blocks in processing time: {:?}.", state_service_duration);
+
+        test_manager.close().await;
+    }
+    #[tokio::test]
+    async fn state_service_testnet_get_blockchain_info() {
+        let (mut test_manager, state_service) =
+            create_test_manager_and_state_service(false, true, true, false).await;
+
+        let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new(
+            url::Url::parse(&format!(
+                "http://127.0.0.1:{}",
+                test_manager.zebrad_rpc_listen_port
+            ))
+            .expect("Failed to construct URL")
+            .as_str()
+            .try_into()
+            .expect("Failed to convert URL to URI"),
+            Some("xxxxxx".to_string()),
+            Some("xxxxxx".to_string()),
+        )
+        .await
+        .unwrap();
+        let state_service_bcinfo = state_service.get_blockchain_info().await.unwrap();
+        let fetch_service_bcinfo = fetch_service.get_blockchain_info().await.unwrap();
+
+        dbg!(state_service_bcinfo);
+        dbg!(fetch_service_bcinfo);
+
+        // assert_eq!(state_service_bcinfo, fetch_service_bcinfo);
 
         test_manager.close().await;
     }
