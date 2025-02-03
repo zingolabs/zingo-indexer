@@ -505,10 +505,9 @@ impl ZcashIndexer for StateService {
             ),
             _ => None,
         }
-        .map(|sap_response| {
+        .and_then(|sap_response| {
             expected_read_response!(sap_response, SaplingTree).map(|tree| tree.to_rpc_bytes())
-        })
-        .flatten();
+        });
         let orchard = match NetworkUpgrade::Nu5.activation_height(&self.config.network) {
             Some(activation_height) if height >= activation_height => Some(
                 self.checked_call(ReadRequest::OrchardTree(hash_or_height))
@@ -516,10 +515,9 @@ impl ZcashIndexer for StateService {
             ),
             _ => None,
         }
-        .map(|orch_response| {
+        .and_then(|orch_response| {
             expected_read_response!(orch_response, OrchardTree).map(|tree| tree.to_rpc_bytes())
-        })
-        .flatten();
+        });
         Ok(GetTreestate::from_parts(
             hash,
             height,
@@ -609,7 +607,7 @@ impl ZcashIndexer for StateService {
             self.rpc_client
                 .get_raw_transaction(txid, verbose)
                 .await
-                .map(|gtr| GetRawTransaction::from(gtr))
+                .map(GetRawTransaction::from)
                 .map_err(StateServiceError::JsonRpcConnectorError)
         };
 
