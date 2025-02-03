@@ -2048,7 +2048,9 @@ mod tests {
 
         dbg!(&fetch_service_mempool);
         dbg!(&json_service_mempool);
-        assert_eq!(json_service_mempool.sort(), fetch_service_mempool.sort());
+        json_service_mempool.sort();
+        fetch_service_mempool.sort();
+        assert_eq!(json_service_mempool, fetch_service_mempool);
 
         test_manager.close().await;
     }
