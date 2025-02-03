@@ -1,29 +1,24 @@
 //! Zcash chain fetch and tx submission service backed by zcashds JsonRPC service.
 
-use std::time;
-
-use crate::{
-    config::FetchServiceConfig,
-    error::FetchServiceError,
-    indexer::{IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService},
-    mempool::{Mempool, MempoolSubscriber},
-    status::{AtomicStatus, StatusType},
-    stream::{
-        AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
-        SubtreeRootReplyStream, UtxoReplyStream,
-    },
-    utils::{get_build_info, ServiceMetadata},
-};
 use futures::StreamExt;
 use hex::FromHex;
+use std::time;
 use tokio::{sync::mpsc, time::timeout};
 use tonic::async_trait;
+
+use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
+use zebra_rpc::methods::{
+    trees::{GetSubtrees, GetTreestate},
+    AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
+    GetBlockChainInfo, GetInfo, GetRawTransaction, SentTransactionHash,
+};
+
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
     jsonrpc::connector::{test_node_and_return_uri, JsonRpcConnector, RpcError},
 };
 use zaino_proto::proto::{
-    compact_formats::{ChainMetadata, CompactBlock, CompactOrchardAction, CompactTx},
+    compact_formats::CompactBlock,
     service::{
         AddressList, Balance, BlockId, BlockRange, Duration, Exclude, GetAddressUtxosArg,
         GetAddressUtxosReply, GetAddressUtxosReplyList, GetSubtreeRootsArg, LightdInfo,
@@ -31,11 +26,19 @@ use zaino_proto::proto::{
         TransparentAddressBlockFilter, TreeState, TxFilter,
     },
 };
-use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
-use zebra_rpc::methods::{
-    trees::{GetSubtrees, GetTreestate},
-    AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
-    GetBlockChainInfo, GetBlockTransaction, GetInfo, GetRawTransaction, SentTransactionHash,
+
+use crate::{
+    config::FetchServiceConfig,
+    error::FetchServiceError,
+    indexer::{IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService},
+    local_cache::{BlockCache, BlockCacheSubscriber},
+    mempool::{Mempool, MempoolSubscriber},
+    status::{AtomicStatus, StatusType},
+    stream::{
+        AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
+        SubtreeRootReplyStream, UtxoReplyStream,
+    },
+    utils::{get_build_info, ServiceMetadata},
 };
 
 /// Chain fetch service backed by Zcashd's JsonRPC engine.
@@ -50,7 +53,8 @@ use zebra_rpc::methods::{
 pub struct FetchService {
     /// JsonRPC Client.
     fetcher: JsonRpcConnector,
-    // TODO: Add internal compact block cache.
+    /// Local compact block cache.
+    block_cache: BlockCache,
     /// Internal mempool.
     mempool: Mempool,
     /// Service metadata.
@@ -95,38 +99,14 @@ impl ZcashService for FetchService {
             zebra_build_data.subversion,
         );
 
-        // If Network is Mainnet or Testnet wait for validator to sync before spawning Mempool.
-        //
-        // We compare estimated (network) chain height against the internal validator chain height and wait for the validator to syn with the network.
-        //
-        // NOTE: The internal compact block cache should start its sync process while the validator is syncing with the network.
-        if !config.no_sync {
-            status.store(StatusType::Syncing.into());
-            if !config.network.is_regtest() {
-                loop {
-                    let blockchain_info = fetcher.get_blockchain_info().await?;
-                    if (blockchain_info.blocks.0 as i64 - blockchain_info.estimated_height.0 as i64)
-                        .abs()
-                        <= 10
-                    {
-                        break;
-                    } else {
-                        println!(" - Validator syncing with network. Validator chain height: {}, Estimated Network chain height: {}",
-                            &blockchain_info.blocks.0,
-                            &blockchain_info.estimated_height.0
-                        );
-                        tokio::time::sleep(time::Duration::from_millis(500)).await;
-                        continue;
-                    }
-                }
-            }
-        }
+        let block_cache = BlockCache::spawn(&fetcher, config.clone().into()).await?;
         let mempool = Mempool::spawn(&fetcher, None).await?;
 
         status.store(StatusType::Ready.into());
 
         Ok(Self {
             fetcher,
+            block_cache,
             mempool,
             data,
             config,
@@ -138,6 +118,7 @@ impl ZcashService for FetchService {
     fn get_subscriber(&self) -> IndexerSubscriber<FetchServiceSubscriber> {
         IndexerSubscriber::new(FetchServiceSubscriber {
             fetcher: self.fetcher.clone(),
+            block_cache: self.block_cache.subscriber(),
             mempool: self.mempool.subscriber(),
             data: self.data.clone(),
             config: self.config.clone(),
@@ -169,7 +150,8 @@ impl Drop for FetchService {
 pub struct FetchServiceSubscriber {
     /// JsonRPC Client.
     fetcher: JsonRpcConnector,
-    // TODO: Add Internal Non-Finalised State
+    /// Local compact block cache.
+    block_cache: BlockCacheSubscriber,
     /// Internal mempool.
     mempool: MempoolSubscriber,
     /// Service metadata.
@@ -523,7 +505,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                 ));
             }
         };
-        match self.get_compact_block(&height).await {
+        match self.block_cache.get_compact_block(height.to_string()).await {
             Ok(block) => Ok(block),
             Err(e) => {
                 let chain_height = self.get_blockchain_info().await?.blocks().0;
@@ -561,7 +543,11 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                 ));
             }
         };
-        match self.get_nullifiers(&height).await {
+        match self
+            .block_cache
+            .get_compact_block_nullifiers(height.to_string())
+            .await
+        {
             Ok(block) => Ok(block),
             Err(e) => {
                 let chain_height = self.get_blockchain_info().await?.blocks().0;
@@ -644,8 +630,8 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                         } else {
                             height
                         };
-                        match fetch_service_clone.get_compact_block(
-                            &height,
+                        match fetch_service_clone.block_cache.get_compact_block(
+                            height.to_string(),
                         ).await {
                             Ok(block) => {
                                 if channel_tx.send(Ok(block)).await.is_err() {
@@ -743,10 +729,13 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                         } else {
                             height
                         };
-                        if let Err(e) =
-                            channel_tx
-                                .send(fetch_service_clone.get_nullifiers(&height).await.map_err(
-                                    |e| {
+                        if let Err(e) = channel_tx
+                            .send(
+                                fetch_service_clone
+                                    .block_cache
+                                    .get_compact_block_nullifiers(height.to_string())
+                                    .await
+                                    .map_err(|e| {
                                         if height >= chain_height {
                                             tonic::Status::out_of_range(format!(
                                             "Error: Height out of range [{}]. Height requested \
@@ -757,9 +746,9 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                                             // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                                             tonic::Status::unknown(e.to_string())
                                         }
-                                    },
-                                ))
-                                .await
+                                    }),
+                            )
+                            .await
                         {
                             eprintln!("Error: Channel closed unexpectedly: {}", e);
                             break;
@@ -1709,114 +1698,6 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         Err(FetchServiceError::TonicStatusError(tonic::Status::unimplemented(
             "Ping not yet implemented. If you require this RPC please open an issue or PR at the Zaino github (https://github.com/zingolabs/zaino.git)."
         )))
-    }
-}
-
-impl FetchServiceSubscriber {
-    /// Fetches CompactBlock from the validator.
-    ///
-    /// Uses 2 calls as z_get_block verbosity=1 is required to fetch txids from zcashd.
-    ///
-    /// NOTE: This implementation is slow due to the absence on an internal CompactBlock cache.
-    async fn get_compact_block(&self, height: &u32) -> Result<CompactBlock, FetchServiceError> {
-        match self.z_get_block(height.to_string(), Some(1)).await {
-            Ok(GetBlock::Object {
-                hash, tx, trees, ..
-            }) => match self.z_get_block(hash.0.to_string(), Some(0)).await {
-                Ok(GetBlock::Object { .. }) => Err(FetchServiceError::TonicStatusError(
-                    tonic::Status::internal("Received block object instead of raw block hex."),
-                )),
-                Ok(GetBlock::Raw(block_hex)) => {
-                    let tx_ids: Result<Vec<_>, _> = tx
-                        .into_iter()
-                        .map(|tx| {
-                            match tx {
-                        GetBlockTransaction::Hash(hash) => Ok(hash.to_string()),
-                        GetBlockTransaction::Object(_) => Err(FetchServiceError::TonicStatusError(
-                            tonic::Status::invalid_argument(
-                                "Found transaction of `Object` type, expected only `Hash` types.",
-                            ),
-                        )),
-                    }
-                        })
-                        .collect();
-                    let tx_ids = tx_ids?;
-                    Ok(zaino_fetch::chain::block::FullBlock::parse_from_hex(
-                        block_hex.as_ref(),
-                        Some(Self::display_txids_to_server(tx_ids)?),
-                    )?
-                    .into_compact(
-                        u32::try_from(trees.sapling())?,
-                        u32::try_from(trees.orchard())?,
-                    )?)
-                }
-                Err(e) => Err(e),
-            },
-            Ok(GetBlock::Raw(_)) => Err(FetchServiceError::TonicStatusError(
-                tonic::Status::internal("Received raw block hex instead of block object."),
-            )),
-            Err(e) => Err(e),
-        }
-    }
-
-    /// Takes a vec of big endian hex encoded txids and returns them as a vec of little endian raw bytes.
-    fn display_txids_to_server(txids: Vec<String>) -> Result<Vec<Vec<u8>>, FetchServiceError> {
-        txids
-            .iter()
-            .map(|txid| {
-                txid.as_bytes()
-                    .chunks(2)
-                    .map(|chunk| {
-                        let hex_pair =
-                            std::str::from_utf8(chunk).map_err(FetchServiceError::from)?;
-                        u8::from_str_radix(hex_pair, 16).map_err(FetchServiceError::from)
-                    })
-                    .rev()
-                    .collect::<Result<Vec<u8>, _>>()
-            })
-            .collect::<Result<Vec<Vec<u8>>, _>>()
-    }
-
-    /// Returns a compact block holding only action nullifiers.
-    ///
-    /// NOTE: This implementation is slow due to the absence on an internal CompactBlock cache.
-    async fn get_nullifiers(&self, height: &u32) -> Result<CompactBlock, FetchServiceError> {
-        match self.get_compact_block(height).await {
-            Ok(block) => Ok(CompactBlock {
-                proto_version: block.proto_version,
-                height: block.height,
-                hash: block.hash,
-                prev_hash: block.prev_hash,
-                time: block.time,
-                header: block.header,
-                vtx: block
-                    .vtx
-                    .into_iter()
-                    .map(|tx| CompactTx {
-                        index: tx.index,
-                        hash: tx.hash,
-                        fee: tx.fee,
-                        spends: tx.spends,
-                        outputs: Vec::new(),
-                        actions: tx
-                            .actions
-                            .into_iter()
-                            .map(|action| CompactOrchardAction {
-                                nullifier: action.nullifier,
-                                cmx: Vec::new(),
-                                ephemeral_key: Vec::new(),
-                                ciphertext: Vec::new(),
-                            })
-                            .collect(),
-                    })
-                    .collect(),
-                chain_metadata: Some(ChainMetadata {
-                    sapling_commitment_tree_size: 0,
-                    orchard_commitment_tree_size: 0,
-                }),
-            }),
-            Err(e) => Err(e),
-        }
     }
 }
 
