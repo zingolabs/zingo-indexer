@@ -53,18 +53,6 @@ pub struct RpcError {
 }
 
 impl RpcError {
-    /// Creates a new `RpcError` from a `LegacyCode`.
-    pub fn new_from_legacycode(
-        code: zebra_rpc::server::error::LegacyCode,
-        message: impl Into<String>,
-    ) -> Self {
-        RpcError {
-            code: code as i64,
-            message: message.into(),
-            data: None,
-        }
-    }
-
     /// Creates a new `RpcError` from jsonrpsee-types `ErrorObject`.
     pub fn new_from_errorobject(
         error_obj: jsonrpsee_types::ErrorObject<'_>,

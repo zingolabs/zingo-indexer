@@ -1,7 +1,7 @@
 //! Zaino config.
 
 use std::{
-    net::{IpAddr, SocketAddr},
+    net::{IpAddr, SocketAddr, ToSocketAddrs},
     path::PathBuf,
 };
 
@@ -191,12 +191,180 @@ fn default_db_path() -> PathBuf {
     }
 }
 
+/// Resolves hostnames to SocketAddr.
+fn fetch_socket_addr_from_hostname(address: &str) -> Result<SocketAddr, IndexerError> {
+    address.parse::<SocketAddr>().or_else(|_| {
+        address
+            .to_socket_addrs()
+            .map_err(|e| {
+                IndexerError::ConfigError(format!("Invalid address '{}': {}", address, e))
+            })?
+            .find(|addr| addr.is_ipv4() || addr.is_ipv6())
+            .ok_or_else(|| {
+                IndexerError::ConfigError(format!("Unable to resolve address '{}'", address))
+            })
+    })
+}
+
 /// Attempts to load config data from a toml file at the specified path else returns a default config.
-pub fn load_config(file_path: &std::path::PathBuf) -> IndexerConfig {
+///
+/// Loads each variable individually to log all default values used and correctly parse hostnames.
+pub fn load_config(file_path: &std::path::PathBuf) -> Result<IndexerConfig, IndexerError> {
+    let default_config = IndexerConfig::default();
+
     if let Ok(contents) = std::fs::read_to_string(file_path) {
-        toml::from_str::<IndexerConfig>(&contents).unwrap_or_default()
+        let parsed_config: toml::Value = toml::from_str(&contents)
+            .map_err(|e| IndexerError::ConfigError(format!("TOML parsing error: {}", e)))?;
+
+        let grpc_listen_address = parsed_config
+            .get("grpc_listen_address")
+            .and_then(|v| v.as_str())
+            .map(|addr| {
+                fetch_socket_addr_from_hostname(addr).unwrap_or_else(|_| {
+                    warn!("Invalid `grpc_listen_address`, using default.");
+                    default_config.grpc_listen_address
+                })
+            })
+            .unwrap_or_else(|| {
+                warn!("Missing `grpc_listen_address`, using default.");
+                default_config.grpc_listen_address
+            });
+
+        let tls = parsed_config
+            .get("tls")
+            .and_then(|v| v.as_bool())
+            .unwrap_or_else(|| {
+                warn!("Missing `tls`, using default.");
+                default_config.tls
+            });
+
+        let tls_cert_path = parsed_config
+            .get("tls_cert_path")
+            .and_then(|v| v.as_str().map(|s| s.to_string()))
+            .or_else(|| {
+                warn!("Missing `tls_cert_path`, using default.");
+                default_config.tls_cert_path.clone()
+            });
+
+        let tls_key_path = parsed_config
+            .get("tls_key_path")
+            .and_then(|v| v.as_str().map(|s| s.to_string()))
+            .or_else(|| {
+                warn!("Missing `tls_key_path`, using default.");
+                default_config.tls_key_path.clone()
+            });
+
+        let zebrad_port = parsed_config
+            .get("zebrad_port")
+            .and_then(|v| v.as_integer())
+            .map(|p| p as u16)
+            .unwrap_or_else(|| {
+                warn!("Missing `zebrad_port`, using default.");
+                default_config.zebrad_port
+            });
+
+        let node_user = parsed_config
+            .get("node_user")
+            .and_then(|v| v.as_str().map(|s| s.to_string()))
+            .or_else(|| {
+                warn!("Missing `node_user`, using default.");
+                default_config.node_user.clone()
+            });
+
+        let node_password = parsed_config
+            .get("node_password")
+            .and_then(|v| v.as_str().map(|s| s.to_string()))
+            .or_else(|| {
+                warn!("Missing `node_password`, using default.");
+                default_config.node_password.clone()
+            });
+
+        let map_capacity = parsed_config
+            .get("map_capacity")
+            .and_then(|v| v.as_integer().map(|n| n as usize))
+            .or_else(|| {
+                warn!("Missing `map_capacity`, using default.");
+                default_config.map_capacity
+            });
+
+        let map_shard_amount = parsed_config
+            .get("map_shard_amount")
+            .and_then(|v| v.as_integer().map(|n| n as usize))
+            .or_else(|| {
+                warn!("Missing `map_shard_amount`, using default.");
+                default_config.map_shard_amount
+            });
+
+        let db_path = parsed_config
+            .get("db_path")
+            .and_then(|v| v.as_str().map(PathBuf::from))
+            .unwrap_or_else(|| {
+                warn!("Missing `db_path`, using default.");
+                default_config.db_path.clone()
+            });
+
+        let db_size = parsed_config
+            .get("db_size")
+            .and_then(|v| v.as_integer().map(|n| n as usize))
+            .or_else(|| {
+                warn!("Missing `db_size`, using default.");
+                default_config.db_size
+            });
+
+        let network = parsed_config
+            .get("network")
+            .and_then(|v| v.as_str().map(|s| s.to_string()))
+            .unwrap_or_else(|| {
+                warn!("Missing `network`, using default.");
+                default_config.network.clone()
+            });
+
+        let no_sync = parsed_config
+            .get("no_sync")
+            .and_then(|v| v.as_bool())
+            .unwrap_or_else(|| {
+                warn!("Missing `no_sync`, using default.");
+                default_config.no_sync
+            });
+
+        let no_db = parsed_config
+            .get("no_db")
+            .and_then(|v| v.as_bool())
+            .unwrap_or_else(|| {
+                warn!("Missing `no_db`, using default.");
+                default_config.no_db
+            });
+
+        let no_state = parsed_config
+            .get("no_state")
+            .and_then(|v| v.as_bool())
+            .unwrap_or_else(|| {
+                warn!("Missing `no_state`, using default.");
+                default_config.no_state
+            });
+
+        let config = IndexerConfig {
+            grpc_listen_address,
+            tls,
+            tls_cert_path,
+            tls_key_path,
+            zebrad_port,
+            node_user,
+            node_password,
+            map_capacity,
+            map_shard_amount,
+            db_path,
+            db_size,
+            network,
+            no_sync,
+            no_db,
+            no_state,
+        };
+
+        config.check_config()?;
+        Ok(config)
     } else {
         warn!("Could not find config file at given path, using default config.");
-        IndexerConfig::default()
+        Ok(default_config)
     }
 }
