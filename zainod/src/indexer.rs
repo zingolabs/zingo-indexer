@@ -10,7 +10,7 @@ use std::{
 };
 
 use zaino_fetch::jsonrpc::connector::test_node_and_return_uri;
-use zaino_serve::server::{error::ServerError, grpc::TonicServer};
+use zaino_serve::server::{config::GrpcConfig, error::ServerError, grpc::TonicServer};
 use zaino_state::{
     config::FetchServiceConfig,
     fetch::FetchService,
@@ -23,9 +23,9 @@ use crate::{config::IndexerConfig, error::IndexerError};
 /// Holds the status of the server and all its components.
 #[derive(Debug, Clone)]
 pub struct IndexerStatus {
-    indexer_status: AtomicStatus,
+    pub indexer_status: AtomicStatus,
     service_status: AtomicStatus,
-    tonic_server_status: AtomicStatus,
+    grpc_server_status: AtomicStatus,
 }
 
 impl IndexerStatus {
@@ -34,7 +34,7 @@ impl IndexerStatus {
         IndexerStatus {
             indexer_status: AtomicStatus::new(StatusType::Offline.into()),
             service_status: AtomicStatus::new(StatusType::Offline.into()),
-            tonic_server_status: AtomicStatus::new(StatusType::Offline.into()),
+            grpc_server_status: AtomicStatus::new(StatusType::Offline.into()),
         }
     }
 
@@ -42,7 +42,7 @@ impl IndexerStatus {
     pub fn load(&self) -> IndexerStatus {
         self.indexer_status.load();
         self.service_status.load();
-        self.tonic_server_status.load();
+        self.grpc_server_status.load();
         self.clone()
     }
 }
@@ -53,12 +53,10 @@ pub struct Indexer {
     config: IndexerConfig,
     /// GRPC server.
     server: Option<TonicServer>,
-    /// Internal block cache.
-    _service: IndexerService<FetchService>,
+    /// Chain fetch service state process handler..
+    service: Option<IndexerService<FetchService>>,
     /// Indexers status.
     status: IndexerStatus,
-    /// Online status of the indexer.
-    online: Arc<AtomicBool>,
 }
 
 impl Indexer {
@@ -74,16 +72,13 @@ impl Indexer {
         indexer.serve().await?.await?
     }
 
-    /// Creates a new Indexer.
-    ///
-    /// Currently only takes an IndexerConfig.
-    pub async fn new(config: IndexerConfig, online: Arc<AtomicBool>) -> Result<Self, IndexerError> {
+    /// Spawns a new Indexer server.
+    pub async fn spawn(
+        config: IndexerConfig,
+        status: IndexerStatus,
+    ) -> Result<(Self, tokio::task::JoinHandle<Result<(), IndexerError>>), IndexerError> {
         config.check_config()?;
-        let status = IndexerStatus::new();
-        let tcp_ingestor_listen_addr = SocketAddr::new(
-            std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-            config.listen_port,
-        );
+
         println!("Checking connection with node..");
         let zebrad_uri = test_node_and_return_uri(
             &config.zebrad_port,
@@ -91,12 +86,15 @@ impl Indexer {
             config.node_password.clone(),
         )
         .await?;
+
         println!(
             " - Connected to node using JsonRPC at address {}.",
             zebrad_uri
         );
+
         status.indexer_status.store(StatusType::Spawning.into());
-        let service = IndexerService::<FetchService>::spawn(
+
+        let chain_state_service = IndexerService::<FetchService>::spawn(
             FetchServiceConfig::new(
                 SocketAddr::new(
                     std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
@@ -117,46 +115,41 @@ impl Indexer {
             status.service_status.clone(),
         )
         .await?;
-        let server = Some(todo!());
-        println!("Server Ready.");
-        Ok(Indexer {
+
+        let grpc_server = TonicServer::spawn(
+            chain_state_service.inner_ref().get_subscriber(),
+            GrpcConfig {
+                grpc_listen_address: config.grpc_listen_address,
+                tls: config.tls,
+                tls_cert_path: config.tls_cert_path.clone(),
+                tls_key_path: config.tls_key_path.clone(),
+            },
+            status.grpc_server_status.clone(),
+        )
+        .await
+        .unwrap();
+
+        let indexer = Indexer {
             config,
-            server,
-            _service: service,
+            server: Some(grpc_server),
+            service: Some(chain_state_service),
             status,
-            online,
-        })
-    }
+        };
 
-    /// Starts Indexer Service and returns its JoinHandle
-    pub async fn serve(
-        mut self,
-    ) -> Result<tokio::task::JoinHandle<Result<(), IndexerError>>, IndexerError> {
-        Ok(tokio::task::spawn(async move {
-            // NOTE: This interval may need to be reduced or removed / moved once scale testing begins.
-            let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(50));
-            let server_handle = if let Some(server) = self.server.take() {
-                Some(server.serve().await)
-            } else {
-                return Err(IndexerError::MiscIndexerError(
-                    "Server Missing! Fatal Error!.".to_string(),
-                ));
-            };
-
-            self.status.indexer_status.store(StatusType::Ready.into());
-            println!("Zaino listening on port {:?}.", self.config.listen_port);
+        // NOTE: This interval may need to be reduced or removed / moved once scale testing begins.
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(50));
+        let serve_task = tokio::task::spawn(async move {
             loop {
-                self.status.load();
-                // indexer.log_status();
-                if self.check_for_shutdown() {
-                    self.status.indexer_status.store(StatusType::Closing.into());
-                    self.shutdown_components(server_handle).await;
-                    self.status.indexer_status.store(StatusType::Offline.into());
+                indexer.status.load();
+                if indexer.check_for_shutdown() {
+                    indexer.shutdown().await;
                     return Ok(());
                 }
                 interval.tick().await;
             }
-        }))
+        });
+
+        Ok((indexer, serve_task))
     }
 
     /// Checks indexers online status and servers internal status for closure signal.
@@ -164,29 +157,30 @@ impl Indexer {
         if self.status() >= 4 {
             return true;
         }
-        if !self.check_online() {
-            return true;
-        }
         false
     }
 
     /// Sets the servers to close gracefully.
-    pub fn shutdown(&mut self) {
-        self.status.indexer_status.store(StatusType::Closing.into())
-    }
+    pub async fn shutdown(&mut self) {
+        self.status
+            .grpc_server_status
+            .store(StatusType::Closing.into());
+        self.status.service_status.store(StatusType::Closing.into());
+        self.status.indexer_status.store(StatusType::Closing.into());
 
-    /// Sets the server's components to close gracefully.
-    async fn shutdown_components(
-        &mut self,
-        server_handle: Option<tokio::task::JoinHandle<Result<(), ServerError>>>,
-    ) {
-        if let Some(handle) = server_handle {
+        if let Some(mut server) = self.server.take() {
+            server.shutdown();
             self.status
-                .server_status
-                .server_status
-                .store(StatusType::Closing.into());
-            handle.await.ok();
+                .grpc_server_status
+                .store(StatusType::Offline.into());
         }
+
+        if let Some(service) = self.service.take() {
+            service.inner().close();
+            self.status.service_status.store(StatusType::Offline.into());
+        }
+
+        self.status.indexer_status.store(StatusType::Offline.into());
     }
 
     /// Returns the indexers current status usize.
@@ -201,13 +195,7 @@ impl Indexer {
 
     /// Returns the status of the indexer and its parts.
     pub fn statuses(&mut self) -> IndexerStatus {
-        self.status.load();
-        self.status.clone()
-    }
-
-    /// Check the online status on the indexer.
-    fn check_online(&self) -> bool {
-        self.online.load(Ordering::SeqCst)
+        self.status.load()
     }
 }
 

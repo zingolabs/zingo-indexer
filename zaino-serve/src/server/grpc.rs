@@ -64,8 +64,10 @@ impl TonicServer {
             .add_service(svc)
             .serve_with_shutdown(listen_addr, shutdown_signal);
 
+        let task_status = status.clone();
         let server_handle = tokio::task::spawn(async move {
             server_future.await?;
+            task_status.store(StatusType::Offline.into());
             Ok(())
         });
 
@@ -80,7 +82,7 @@ impl TonicServer {
         self.status.store(StatusType::Closing as usize);
 
         if let Some(handle) = self.server_handle.take() {
-            handle.await.unwrap().unwrap();
+            let _ = handle.await;
         }
     }
 

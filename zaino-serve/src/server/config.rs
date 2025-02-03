@@ -9,7 +9,7 @@ use super::error::ServerError;
 /// Configuration data for Zaino's gRPC server.
 pub struct GrpcConfig {
     /// gRPC server bind addr.
-    pub bind_address: SocketAddr,
+    pub grpc_listen_address: SocketAddr,
     /// Enables TLS.
     pub tls: bool,
     /// Path to the TLS certificate file in PEM format.
@@ -25,11 +25,11 @@ impl GrpcConfig {
     ///
     /// Returns `Ok(BindAddress)` if valid.
     pub fn is_private_listen_addr(&self) -> Result<SocketAddr, ServerError> {
-        let ip = self.bind_address.ip();
+        let ip = self.grpc_listen_address.ip();
         match ip {
             IpAddr::V4(ipv4) => {
                 if ipv4.is_private() {
-                    Ok(self.bind_address)
+                    Ok(self.grpc_listen_address)
                 } else {
                     Err(ServerError::ServerConfigError(format!(
                         "{} is not an RFC1918 IPv4 address",
@@ -39,7 +39,7 @@ impl GrpcConfig {
             }
             IpAddr::V6(ipv6) => {
                 if ipv6.is_unique_local() {
-                    Ok(self.bind_address)
+                    Ok(self.grpc_listen_address)
                 } else {
                     Err(ServerError::ServerConfigError(format!(
                         "{} is not a unique local IPv6 address",
