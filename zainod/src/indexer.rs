@@ -47,13 +47,22 @@ impl IndexerStatus {
     /// Logs the indexers status.
     pub fn log(&self) {
         let statuses = self.load();
-        let indexer_status = StatusType::from(statuses.indexer_status).get_status_symbol();
-        let service_status = StatusType::from(statuses.service_status).get_status_symbol();
-        let grpc_server_status = StatusType::from(statuses.grpc_server_status).get_status_symbol();
+        let indexer_status = StatusType::from(statuses.indexer_status);
+        let service_status = StatusType::from(statuses.service_status);
+        let grpc_server_status = StatusType::from(statuses.grpc_server_status);
+
+        let indexer_status_symbol = indexer_status.get_status_symbol();
+        let service_status_symbol = service_status.get_status_symbol();
+        let grpc_server_status_symbol = grpc_server_status.get_status_symbol();
 
         info!(
-            "Zaino status check - Indexer:{} Service:{} gRPC Server:{}",
-            indexer_status, service_status, grpc_server_status
+            "Zaino status check - Indexer:{}{} Service:{}{} gRPC Server:{}{}",
+            indexer_status_symbol,
+            indexer_status,
+            service_status_symbol,
+            service_status,
+            grpc_server_status_symbol,
+            grpc_server_status
         );
     }
 }
