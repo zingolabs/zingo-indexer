@@ -281,12 +281,12 @@ pub struct TestManager {
     pub data_dir: PathBuf,
     /// Network (chain) type:
     pub network: services::network::Network,
-    /// Zebrad/Zcashd JsonRpc listen port.
-    pub zebrad_rpc_listen_port: u16,
+    /// Zebrad/Zcashd JsonRpc listen address.
+    pub zebrad_rpc_listen_address: SocketAddr,
     /// Zaino Indexer JoinHandle.
     pub zaino_handle: Option<tokio::task::JoinHandle<Result<(), zainodlib::error::IndexerError>>>,
-    /// Zingo-Indexer gRPC listen port.
-    pub zaino_grpc_listen_port: Option<u16>,
+    /// Zingo-Indexer gRPC listen address.
+    pub zaino_grpc_listen_address: Option<SocketAddr>,
     /// Zingolib lightclients.
     pub clients: Option<Clients>,
     /// Online status of Zingo-Indexer.
@@ -330,7 +330,7 @@ impl TestManager {
 
         // Launch LocalNet:
         let zebrad_rpc_listen_port = portpicker::pick_unused_port().expect("No ports free");
-        let validator_listen_address =
+        let zebrad_rpc_listen_address =
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), zebrad_rpc_listen_port);
 
         let validator_config = match validator_kind {
@@ -365,17 +365,17 @@ impl TestManager {
         let indexer_status = IndexerStatus::new();
 
         // Launch Zaino:
-        let (zaino_grpc_listen_port, zaino_handle) = if enable_zaino {
+        let (zaino_grpc_listen_address, zaino_handle) = if enable_zaino {
             let zaino_grpc_listen_port = portpicker::pick_unused_port().expect("No ports free");
-            let grpc_listen_address =
+            let zaino_grpc_listen_address =
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), zaino_grpc_listen_port);
 
             let indexer_config = zainodlib::config::IndexerConfig {
-                grpc_listen_address,
+                grpc_listen_address: zaino_grpc_listen_address,
                 tls: false,
                 tls_cert_path: None,
                 tls_key_path: None,
-                validator_listen_address,
+                validator_listen_address: zebrad_rpc_listen_address,
                 node_user: Some("xxxxxx".to_string()),
                 node_password: Some("xxxxxx".to_string()),
                 map_capacity: None,
@@ -393,7 +393,7 @@ impl TestManager {
 
             // NOTE: This is required to give the server time to launch, this is not used in production code but could be rewritten to improve testing efficiency.
             tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-            (Some(zaino_grpc_listen_port), Some(handle))
+            (Some(zaino_grpc_listen_address), Some(handle))
         } else {
             (None, None)
         };
@@ -403,8 +403,9 @@ impl TestManager {
             let lightclient_dir = tempfile::tempdir().unwrap();
             let lightclients = zingo_infra_testutils::client::build_lightclients(
                 lightclient_dir.path().to_path_buf(),
-                zaino_grpc_listen_port
-                    .expect("Error launching zingo lightclients. `enable_zaino` is None."),
+                zaino_grpc_listen_address
+                    .expect("Error launching zingo lightclients. `enable_zaino` is None.")
+                    .port(),
             )
             .await;
             Some(Clients {
@@ -420,9 +421,9 @@ impl TestManager {
             local_net,
             data_dir,
             network,
-            zebrad_rpc_listen_port,
+            zebrad_rpc_listen_address,
             zaino_handle,
-            zaino_grpc_listen_port,
+            zaino_grpc_listen_address,
             clients,
             indexer_status,
         })
@@ -572,8 +573,9 @@ mod tests {
         let mut grpc_client =
             zingo_infra_testutils::client::build_client(services::network::localhost_uri(
                 test_manager
-                    .zaino_grpc_listen_port
-                    .expect("Zaino listen port not available but zaino is active."),
+                    .zaino_grpc_listen_address
+                    .expect("Zaino listen port not available but zaino is active.")
+                    .port(),
             ))
             .await
             .unwrap();
@@ -594,8 +596,9 @@ mod tests {
         let mut grpc_client =
             zingo_infra_testutils::client::build_client(services::network::localhost_uri(
                 test_manager
-                    .zaino_grpc_listen_port
-                    .expect("Zaino listen port is not available but zaino is active."),
+                    .zaino_grpc_listen_address
+                    .expect("Zaino listen port is not available but zaino is active.")
+                    .port(),
             ))
             .await
             .unwrap();

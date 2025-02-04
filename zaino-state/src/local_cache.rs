@@ -249,6 +249,7 @@ mod tests {
     use super::*;
     use core::panic;
     use tracing::info;
+    use zaino_fetch::jsonrpc::connector::test_node_and_return_url;
     use zaino_testutils::TestManager;
     use zingo_infra_services::validator::Validator;
 
@@ -277,12 +278,14 @@ mod tests {
         .await
         .unwrap();
 
-        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
-            .parse::<http::Uri>()
-            .expect("Failed to convert URL to URI");
-
         let json_service = JsonRpcConnector::new(
-            zebra_uri,
+            test_node_and_return_url(
+                test_manager.zebrad_rpc_listen_address,
+                Some("xxxxxx".to_string()),
+                Some("xxxxxx".to_string()),
+            )
+            .await
+            .unwrap(),
             Some("xxxxxx".to_string()),
             Some("xxxxxx".to_string()),
         )

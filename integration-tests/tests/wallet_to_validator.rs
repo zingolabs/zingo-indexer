@@ -8,6 +8,8 @@ use zingo_infra_testutils::services::validator::Validator;
 use zingolib::testutils::lightclient::from_inputs;
 
 mod wallet_basic {
+    use zaino_fetch::jsonrpc::connector::test_node_and_return_url;
+
     use super::*;
 
     #[tokio::test]
@@ -189,14 +191,13 @@ mod wallet_basic {
         test_manager.local_net.generate_blocks(1).await.unwrap();
 
         let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new(
-            url::Url::parse(&format!(
-                "http://127.0.0.1:{}",
-                test_manager.zebrad_rpc_listen_port
-            ))
-            .expect("Failed to construct URL")
-            .as_str()
-            .try_into()
-            .expect("Failed to convert URL to URI"),
+            test_node_and_return_url(
+                test_manager.zebrad_rpc_listen_address,
+                Some("xxxxxx".to_string()),
+                Some("xxxxxx".to_string()),
+            )
+            .await
+            .unwrap(),
             Some("xxxxxx".to_string()),
             Some("xxxxxx".to_string()),
         )
@@ -491,14 +492,13 @@ mod wallet_basic {
         // test_manager.local_net.print_stdout();
 
         let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new(
-            url::Url::parse(&format!(
-                "http://127.0.0.1:{}",
-                test_manager.zebrad_rpc_listen_port
-            ))
-            .expect("Failed to construct URL")
-            .as_str()
-            .try_into()
-            .expect("Failed to convert URL to URI"),
+            test_node_and_return_url(
+                test_manager.zebrad_rpc_listen_address,
+                Some("xxxxxx".to_string()),
+                Some("xxxxxx".to_string()),
+            )
+            .await
+            .unwrap(),
             Some("xxxxxx".to_string()),
             Some("xxxxxx".to_string()),
         )

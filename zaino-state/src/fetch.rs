@@ -1705,8 +1705,6 @@ impl LightWalletIndexer for FetchServiceSubscriber {
 
 #[cfg(test)]
 mod tests {
-    use std::net::SocketAddr;
-
     use super::*;
     use zaino_testutils::{TestManager, ZCASHD_CHAIN_CACHE_BIN, ZEBRAD_CHAIN_CACHE_BIN};
     use zebra_chain::parameters::Network;
@@ -1754,10 +1752,7 @@ mod tests {
 
         let fetch_service = FetchService::spawn(
             FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
+                test_manager.zebrad_rpc_listen_address,
                 None,
                 None,
                 None,
@@ -1888,12 +1883,15 @@ mod tests {
             .clients
             .as_ref()
             .expect("Clients are not initialized");
-        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
-            .parse::<http::Uri>()
-            .expect("Failed to convert URL to URI");
 
         let json_service = JsonRpcConnector::new(
-            zebra_uri,
+            test_node_and_return_url(
+                test_manager.zebrad_rpc_listen_address,
+                Some("xxxxxx".to_string()),
+                Some("xxxxxx".to_string()),
+            )
+            .await
+            .unwrap(),
             Some("xxxxxx".to_string()),
             Some("xxxxxx".to_string()),
         )
