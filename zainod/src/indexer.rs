@@ -81,13 +81,14 @@ impl Indexer {
     /// Starts Indexer service.
     ///
     /// Currently only takes an IndexerConfig.
-    pub async fn start(config: IndexerConfig) -> Result<(), IndexerError> {
+    pub async fn start(
+        config: IndexerConfig,
+    ) -> Result<tokio::task::JoinHandle<Result<(), IndexerError>>, IndexerError> {
         let indexer_status = IndexerStatus::new();
         set_ctrlc(indexer_status.clone());
         startup_message();
         info!("Starting Zaino..");
-        Indexer::spawn(config, indexer_status).await?.await??;
-        Ok(())
+        Indexer::spawn(config, indexer_status).await
     }
 
     /// Spawns a new Indexer server.
@@ -160,17 +161,25 @@ impl Indexer {
 
         let serve_task = tokio::task::spawn(async move {
             loop {
-                indexer.status();
-
+                // Log the servers status.
                 if last_log_time.elapsed() >= log_interval {
+                    indexer.statuses();
                     indexer.status.log();
                     last_log_time = Instant::now();
                 }
 
+                // Check for restart signals.
+                if indexer.check_for_critical_errors() {
+                    indexer.shutdown().await;
+                    return Err(IndexerError::Restart);
+                }
+
+                // Check for shutdown signals.
                 if indexer.check_for_shutdown() {
                     indexer.shutdown().await;
                     return Ok(());
                 }
+
                 server_interval.tick().await;
             }
         });
@@ -178,9 +187,22 @@ impl Indexer {
         Ok(serve_task)
     }
 
-    /// Checks indexers online status and servers internal status for closure signal.
+    /// Checks indexers status and servers internal status for error signal.
+    fn check_for_critical_errors(&self) -> bool {
+        let statuses = &self.statuses();
+        if statuses.indexer_status.load() >= 5
+            || statuses.service_status.load() >= 5
+            || statuses.grpc_server_status.load() >= 5
+        {
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Checks indexers status and servers internal status for closure signal.
     fn check_for_shutdown(&self) -> bool {
-        if self.status() >= 4 {
+        if self.status() == 4 {
             return true;
         }
         false
@@ -220,7 +242,7 @@ impl Indexer {
     }
 
     /// Returns the status of the indexer and its parts.
-    pub fn statuses(&mut self) -> IndexerStatus {
+    pub fn statuses(&self) -> IndexerStatus {
         self.status.load()
     }
 }
