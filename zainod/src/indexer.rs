@@ -1,6 +1,7 @@
 //! Zingo-Indexer implementation.
 
 use std::process;
+use tokio::time::Instant;
 use tracing::info;
 
 use zaino_fetch::jsonrpc::connector::test_node_and_return_url;
@@ -144,15 +145,24 @@ impl Indexer {
             .store(StatusType::Ready.into());
 
         // NOTE: This interval may need to be reduced or removed / moved once scale testing begins.
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(50));
+        let mut server_interval = tokio::time::interval(tokio::time::Duration::from_millis(50));
+        let mut last_log_time = Instant::now();
+        let log_interval = tokio::time::Duration::from_secs(10);
+
         let serve_task = tokio::task::spawn(async move {
             loop {
                 indexer.status();
+
+                if last_log_time.elapsed() >= log_interval {
+                    indexer.status.log();
+                    last_log_time = Instant::now();
+                }
+
                 if indexer.check_for_shutdown() {
                     indexer.shutdown().await;
                     return Ok(());
                 }
-                interval.tick().await;
+                server_interval.tick().await;
             }
         });
 
