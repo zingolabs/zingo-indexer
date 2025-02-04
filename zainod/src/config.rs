@@ -16,29 +16,29 @@ pub struct IndexerConfig {
     /// gRPC server bind addr.
     pub grpc_listen_address: SocketAddr,
     /// Enables TLS.
-    pub tls: bool,
-    /// Path to the TLS certificate file in PEM format.
+    pub grpc_tls: bool,
+    /// Path to the TLS certificate file.
     pub tls_cert_path: Option<String>,
-    /// Path to the TLS private key file in PEM format.
+    /// Path to the TLS private key file.
     pub tls_key_path: Option<String>,
     /// Full node / validator listen port.
     pub validator_listen_address: SocketAddr,
+    /// Enable validator rpc cookie authentification.
+    pub validator_cookie_auth: bool,
+    /// Path to the validator cookie file.
+    pub validator_cookie_path: Option<String>,
     /// Full node / validator Username.
-    pub node_user: Option<String>,
+    pub validator_user: Option<String>,
     /// full node / validator Password.
-    pub node_password: Option<String>,
+    pub validator_password: Option<String>,
     /// Capacity of the Dashmaps used for the Mempool.
     /// Also use by the BlockCache::NonFinalisedState when using the FetchService.
-    ///
-    /// NOTE: map_capacity and shard map must both be set for either to be used.
     pub map_capacity: Option<usize>,
     /// Number of shard used in the DashMap used for the Mempool.
     /// Also use by the BlockCache::NonFinalisedState when using the FetchService.
     ///
     /// shard_amount should greater than 0 and be a power of two.
     /// If a shard_amount which is not a power of two is provided, the function will panic.
-    ///
-    /// NOTE: map_capacity and shard map must both be set for either to be used.
     pub map_shard_amount: Option<usize>,
     /// Block Cache database file path.
     ///
@@ -66,9 +66,8 @@ pub struct IndexerConfig {
 
 impl IndexerConfig {
     /// Performs checks on config data.
-    ///
-    /// - Checks that at least 1 ingestor is active.
     pub(crate) fn check_config(&self) -> Result<(), IndexerError> {
+        // Check network type.
         if (self.network != "Regtest") && (self.network != "Testnet") && (self.network != "Mainnet")
         {
             return Err(IndexerError::ConfigError(
@@ -77,15 +76,70 @@ impl IndexerConfig {
             ));
         }
 
-        if !is_loopback_listen_addr(&self.grpc_listen_address) && !self.tls {
+        // Check TLS settings.
+        if self.grpc_tls {
+            if let Some(ref cert_path) = self.tls_cert_path {
+                if !std::path::Path::new(cert_path).exists() {
+                    return Err(IndexerError::ConfigError(format!(
+                        "TLS is enabled, but certificate path '{}' does not exist.",
+                        cert_path
+                    )));
+                }
+            } else {
+                return Err(IndexerError::ConfigError(
+                    "TLS is enabled, but no certificate path is provided.".to_string(),
+                ));
+            }
+
+            if let Some(ref key_path) = self.tls_key_path {
+                if !std::path::Path::new(key_path).exists() {
+                    return Err(IndexerError::ConfigError(format!(
+                        "TLS is enabled, but key path '{}' does not exist.",
+                        key_path
+                    )));
+                }
+            } else {
+                return Err(IndexerError::ConfigError(
+                    "TLS is enabled, but no key path is provided.".to_string(),
+                ));
+            }
+        }
+
+        // Check validator cookie authentication settings
+        if self.validator_cookie_auth {
+            if let Some(ref cookie_path) = self.validator_cookie_path {
+                if !std::path::Path::new(cookie_path).exists() {
+                    return Err(IndexerError::ConfigError(
+                        format!("Validator cookie authentication is enabled, but cookie path '{}' does not exist.", cookie_path),
+                    ));
+                }
+            } else {
+                return Err(IndexerError::ConfigError(
+                    "Validator cookie authentication is enabled, but no cookie path is provided."
+                        .to_string(),
+                ));
+            }
+        }
+
+        // Ensure TLS is used when connecting to external addresses.
+        if !is_loopback_listen_addr(&self.grpc_listen_address) && !self.grpc_tls {
             return Err(IndexerError::ConfigError(
                 "TLS required when connecting to external addresses.".to_string(),
             ));
         }
 
+        // Ensure validator listen address is private.
         if !is_private_listen_addr(&self.validator_listen_address) {
             return Err(IndexerError::ConfigError(
                 "Zaino may only connect to Zebra with private IP addresses.".to_string(),
+            ));
+        }
+
+        // Ensure validator rpc cookie authentication is used when connecting to non-loopback addresses.
+        if !is_loopback_listen_addr(&self.validator_listen_address) && !self.validator_cookie_auth {
+            return Err(IndexerError::ConfigError(
+                "Validator listen address is not loopback, so cookie authentication must be enabled."
+                    .to_string(),
             ));
         }
 
@@ -112,12 +166,14 @@ impl Default for IndexerConfig {
     fn default() -> Self {
         Self {
             grpc_listen_address: "127.0.0.1:8137".parse().unwrap(),
-            tls: false,
+            grpc_tls: false,
             tls_cert_path: None,
             tls_key_path: None,
             validator_listen_address: "127.0.0.1:18232".parse().unwrap(),
-            node_user: Some("xxxxxx".to_string()),
-            node_password: Some("xxxxxx".to_string()),
+            validator_cookie_auth: false,
+            validator_cookie_path: None,
+            validator_user: Some("xxxxxx".to_string()),
+            validator_password: Some("xxxxxx".to_string()),
             map_capacity: None,
             map_shard_amount: None,
             db_path: default_db_path(),
@@ -230,7 +286,7 @@ pub fn load_config(file_path: &std::path::PathBuf) -> Result<IndexerConfig, Inde
             .and_then(|v| v.as_bool())
             .unwrap_or_else(|| {
                 warn!("Missing `tls`, using default.");
-                default_config.tls
+                default_config.grpc_tls
             });
 
         let tls_cert_path = parsed_config
@@ -263,12 +319,28 @@ pub fn load_config(file_path: &std::path::PathBuf) -> Result<IndexerConfig, Inde
                 default_config.grpc_listen_address
             });
 
+        let validator_cookie_auth = parsed_config
+            .get("validator_cookie_auth")
+            .and_then(|v| v.as_bool())
+            .unwrap_or_else(|| {
+                warn!("Missing `validator_cookie_auth`, using default.");
+                default_config.validator_cookie_auth
+            });
+
+        let validator_cookie_path = parsed_config
+            .get("validator_cookie_path")
+            .and_then(|v| v.as_str().map(|s| s.to_string()))
+            .or_else(|| {
+                warn!("Missing `validator_cookie_path`, using default.");
+                default_config.validator_cookie_path.clone()
+            });
+
         let node_user = parsed_config
             .get("node_user")
             .and_then(|v| v.as_str().map(|s| s.to_string()))
             .or_else(|| {
                 warn!("Missing `node_user`, using default.");
-                default_config.node_user.clone()
+                default_config.validator_user.clone()
             });
 
         let node_password = parsed_config
@@ -276,7 +348,7 @@ pub fn load_config(file_path: &std::path::PathBuf) -> Result<IndexerConfig, Inde
             .and_then(|v| v.as_str().map(|s| s.to_string()))
             .or_else(|| {
                 warn!("Missing `node_password`, using default.");
-                default_config.node_password.clone()
+                default_config.validator_password.clone()
             });
 
         let map_capacity = parsed_config
@@ -345,12 +417,14 @@ pub fn load_config(file_path: &std::path::PathBuf) -> Result<IndexerConfig, Inde
 
         let config = IndexerConfig {
             grpc_listen_address,
-            tls,
+            grpc_tls: tls,
             tls_cert_path,
             tls_key_path,
             validator_listen_address,
-            node_user,
-            node_password,
+            validator_cookie_auth,
+            validator_cookie_path,
+            validator_user: node_user,
+            validator_password: node_password,
             map_capacity,
             map_shard_amount,
             db_path,

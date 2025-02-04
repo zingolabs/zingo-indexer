@@ -84,12 +84,11 @@ impl StateService {
             )
             .await??;
 
-        let rpc_client = JsonRpcConnector::new(
+        let rpc_client = JsonRpcConnector::new_with_basic_auth(
             rpc_uri,
-            Some(config.validator_rpc_user.clone()),
-            Some(config.validator_rpc_password.clone()),
-        )
-        .await?;
+            config.validator_rpc_user.clone(),
+            config.validator_rpc_password.clone(),
+        )?;
 
         let zebra_build_data = rpc_client.get_info().await?;
 
@@ -1170,7 +1169,7 @@ mod tests {
         ))
         .await
         .unwrap();
-        let json_service = JsonRpcConnector::new(
+        let json_service = JsonRpcConnector::new_with_basic_auth(
             test_node_and_return_url(
                 test_manager.zebrad_rpc_listen_address,
                 Some("xxxxxx".to_string()),
@@ -1178,10 +1177,9 @@ mod tests {
             )
             .await
             .unwrap(),
-            Some("xxxxxx".to_string()),
-            Some("xxxxxx".to_string()),
+            "xxxxxx".to_string(),
+            "xxxxxx".to_string(),
         )
-        .await
         .unwrap();
 
         let state_start = tokio::time::Instant::now();
@@ -1230,7 +1228,7 @@ mod tests {
         ))
         .await
         .unwrap();
-        let json_service = JsonRpcConnector::new(
+        let json_service = JsonRpcConnector::new_with_basic_auth(
             test_node_and_return_url(
                 test_manager.zebrad_rpc_listen_address,
                 Some("xxxxxx".to_string()),
@@ -1238,10 +1236,9 @@ mod tests {
             )
             .await
             .unwrap(),
-            Some("xxxxxx".to_string()),
-            Some("xxxxxx".to_string()),
+            "xxxxxx".to_string(),
+            "xxxxxx".to_string(),
         )
-        .await
         .unwrap();
 
         let state_start = tokio::time::Instant::now();
@@ -1304,7 +1301,7 @@ mod tests {
         ))
         .await
         .unwrap();
-        let json_service = JsonRpcConnector::new(
+        let json_service = JsonRpcConnector::new_with_basic_auth(
             test_node_and_return_url(
                 test_manager.zebrad_rpc_listen_address,
                 Some("xxxxxx".to_string()),
@@ -1312,10 +1309,9 @@ mod tests {
             )
             .await
             .unwrap(),
-            Some("xxxxxx".to_string()),
-            Some("xxxxxx".to_string()),
+            "xxxxxx".to_string(),
+            "xxxxxx".to_string(),
         )
-        .await
         .unwrap();
 
         let state_start = tokio::time::Instant::now();
@@ -1395,7 +1391,7 @@ mod tests {
         ))
         .await
         .unwrap();
-        let json_service = JsonRpcConnector::new(
+        let json_service = JsonRpcConnector::new_with_basic_auth(
             test_node_and_return_url(
                 test_manager.zebrad_rpc_listen_address,
                 Some("xxxxxx".to_string()),
@@ -1403,10 +1399,9 @@ mod tests {
             )
             .await
             .unwrap(),
-            Some("xxxxxx".to_string()),
-            Some("xxxxxx".to_string()),
+            "xxxxxx".to_string(),
+            "xxxxxx".to_string(),
         )
-        .await
         .unwrap();
 
         let state_start = tokio::time::Instant::now();
@@ -1464,7 +1459,7 @@ mod tests {
         ))
         .await
         .unwrap();
-        let json_service = JsonRpcConnector::new(
+        let json_service = JsonRpcConnector::new_with_basic_auth(
             test_node_and_return_url(
                 test_manager.zebrad_rpc_listen_address,
                 Some("xxxxxx".to_string()),
@@ -1472,10 +1467,9 @@ mod tests {
             )
             .await
             .unwrap(),
-            Some("xxxxxx".to_string()),
-            Some("xxxxxx".to_string()),
+            "xxxxxx".to_string(),
+            "xxxxxx".to_string(),
         )
-        .await
         .unwrap();
 
         let state_start = tokio::time::Instant::now();

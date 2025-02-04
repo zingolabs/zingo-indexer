@@ -80,17 +80,16 @@ impl ZcashService for FetchService {
         let status = status.clone();
         status.store(StatusType::Spawning.into());
 
-        let fetcher = JsonRpcConnector::new(
+        let fetcher = JsonRpcConnector::new_with_basic_auth(
             test_node_and_return_url(
                 config.validator_rpc_address,
                 Some(config.validator_rpc_user.clone()),
                 Some(config.validator_rpc_password.clone()),
             )
             .await?,
-            Some(config.validator_rpc_user.clone()),
-            Some(config.validator_rpc_password.clone()),
-        )
-        .await?;
+            config.validator_rpc_user.clone(),
+            config.validator_rpc_password.clone(),
+        )?;
 
         let zebra_build_data = fetcher.get_info().await?;
         let data = ServiceMetadata::new(
@@ -1884,7 +1883,7 @@ mod tests {
             .as_ref()
             .expect("Clients are not initialized");
 
-        let json_service = JsonRpcConnector::new(
+        let json_service = JsonRpcConnector::new_with_basic_auth(
             test_node_and_return_url(
                 test_manager.zebrad_rpc_listen_address,
                 Some("xxxxxx".to_string()),
@@ -1892,10 +1891,9 @@ mod tests {
             )
             .await
             .unwrap(),
-            Some("xxxxxx".to_string()),
-            Some("xxxxxx".to_string()),
+            "xxxxxx".to_string(),
+            "xxxxxx".to_string(),
         )
-        .await
         .unwrap();
 
         test_manager.local_net.generate_blocks(1).await.unwrap();

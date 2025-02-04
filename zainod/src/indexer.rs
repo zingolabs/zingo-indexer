@@ -90,8 +90,8 @@ impl Indexer {
         info!("Checking connection with node..");
         let zebrad_uri = test_node_and_return_url(
             config.validator_listen_address,
-            config.node_user.clone(),
-            config.node_password.clone(),
+            config.validator_user.clone(),
+            config.validator_password.clone(),
         )
         .await?;
         info!(
@@ -104,8 +104,8 @@ impl Indexer {
         let chain_state_service = IndexerService::<FetchService>::spawn(
             FetchServiceConfig::new(
                 config.validator_listen_address,
-                config.node_user.clone(),
-                config.node_password.clone(),
+                config.validator_user.clone(),
+                config.validator_password.clone(),
                 None,
                 None,
                 config.map_capacity,
@@ -124,7 +124,7 @@ impl Indexer {
             chain_state_service.inner_ref().get_subscriber(),
             GrpcConfig {
                 grpc_listen_address: config.grpc_listen_address,
-                tls: config.tls,
+                tls: config.grpc_tls,
                 tls_cert_path: config.tls_cert_path.clone(),
                 tls_key_path: config.tls_key_path.clone(),
             },

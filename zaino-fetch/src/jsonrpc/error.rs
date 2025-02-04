@@ -22,6 +22,10 @@ pub enum JsonRpcConnectorError {
     /// URL Parse Errors.
     #[error("Error: Invalid URL:{0}")]
     UrlParseError(#[from] url::ParseError),
+
+    /// std::io::Error
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
 }
 
 impl JsonRpcConnectorError {

@@ -372,12 +372,14 @@ impl TestManager {
 
             let indexer_config = zainodlib::config::IndexerConfig {
                 grpc_listen_address: zaino_grpc_listen_address,
-                tls: false,
+                grpc_tls: false,
                 tls_cert_path: None,
                 tls_key_path: None,
                 validator_listen_address: zebrad_rpc_listen_address,
-                node_user: Some("xxxxxx".to_string()),
-                node_password: Some("xxxxxx".to_string()),
+                validator_cookie_auth: false,
+                validator_cookie_path: None,
+                validator_user: Some("xxxxxx".to_string()),
+                validator_password: Some("xxxxxx".to_string()),
                 map_capacity: None,
                 map_shard_amount: None,
                 db_path,

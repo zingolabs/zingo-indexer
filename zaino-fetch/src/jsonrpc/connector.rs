@@ -3,17 +3,20 @@
 //! TODO: - Add option for http connector.
 //!       - Refactor JsonRpcConnectorError into concrete error types and implement fmt::display [https://github.com/zingolabs/zaino/issues/67].
 
+use base64::{engine::general_purpose, Engine};
 use http::Uri;
-use reqwest::{Client, Url};
+use reqwest::{Client, ClientBuilder, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
-    fmt,
+    fmt, fs,
     net::SocketAddr,
+    path::Path,
     sync::{
         atomic::{AtomicI32, Ordering},
         Arc,
     },
+    time::Duration,
 };
 use tracing::error;
 
@@ -79,27 +82,65 @@ impl fmt::Display for RpcError {
 
 impl std::error::Error for RpcError {}
 
+#[derive(Debug, Clone)]
+enum AuthMethod {
+    Basic { username: String, password: String },
+    Cookie { cookie: String },
+}
+
 /// JsonRPC Client config data.
 #[derive(Debug, Clone)]
 pub struct JsonRpcConnector {
     url: Url,
     id_counter: Arc<AtomicI32>,
-    user: Option<String>,
-    password: Option<String>,
+    client: Client,
+    auth_method: AuthMethod,
 }
 
 impl JsonRpcConnector {
-    /// Returns a new JsonRpcConnector instance, tests uri and returns error if connection is not established.
-    pub async fn new(
+    /// Creates a new JsonRpcConnector with Basic Authentication.
+    pub fn new_with_basic_auth(
         url: Url,
-        user: Option<String>,
-        password: Option<String>,
+        username: String,
+        password: String,
     ) -> Result<Self, JsonRpcConnectorError> {
+        let client = ClientBuilder::new()
+            .connect_timeout(Duration::from_secs(2))
+            .timeout(Duration::from_secs(5))
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(JsonRpcConnectorError::ReqwestError)?;
+
         Ok(Self {
             url,
             id_counter: Arc::new(AtomicI32::new(0)),
-            user,
-            password,
+            client,
+            auth_method: AuthMethod::Basic { username, password },
+        })
+    }
+
+    /// Creates a new JsonRpcConnector with Cookie Authentication.
+    pub fn new_with_cookie_auth(
+        url: Url,
+        cookie_path: &Path,
+    ) -> Result<Self, JsonRpcConnectorError> {
+        let cookie_content =
+            fs::read_to_string(cookie_path).map_err(JsonRpcConnectorError::IoError)?;
+        let cookie = cookie_content.trim().to_string();
+
+        let client = ClientBuilder::new()
+            .connect_timeout(Duration::from_secs(2))
+            .timeout(Duration::from_secs(5))
+            .redirect(reqwest::redirect::Policy::none())
+            .cookie_store(true)
+            .build()
+            .map_err(JsonRpcConnectorError::ReqwestError)?;
+
+        Ok(Self {
+            url,
+            id_counter: Arc::new(AtomicI32::new(0)),
+            client,
+            auth_method: AuthMethod::Cookie { cookie },
         })
     }
 
@@ -115,8 +156,8 @@ impl JsonRpcConnector {
 
     /// Sends a jsonRPC request and returns the response.
     ///
-    /// TODO: This function currently resends the call up to 5 times on a server response of "Work queue depth exceeded".
-    /// This is because the node's queue can become overloaded and stop servicing RPCs.
+    /// NOTE: This function currently resends the call up to 5 times on a server response of "Work queue depth exceeded".
+    ///       This is because the node's queue can become overloaded and stop servicing RPCs.
     async fn send_request<T: Serialize, R: for<'de> Deserialize<'de>>(
         &self,
         method: &str,
@@ -133,20 +174,29 @@ impl JsonRpcConnector {
         let mut attempts = 0;
         loop {
             attempts += 1;
-            let client = Client::builder()
-                .connect_timeout(std::time::Duration::from_secs(2))
-                .timeout(std::time::Duration::from_secs(5))
-                .redirect(reqwest::redirect::Policy::none())
-                .build()?;
-
-            let mut request_builder = client
+            let mut request_builder = self
+                .client
                 .post(self.url.clone())
                 .header("Content-Type", "application/json");
-            if let (Some(user), Some(password)) = (&self.user, &self.password) {
-                request_builder = request_builder.basic_auth(user.clone(), Some(password.clone()));
+
+            match &self.auth_method {
+                AuthMethod::Basic { username, password } => {
+                    request_builder = request_builder.basic_auth(username, Some(password));
+                }
+                AuthMethod::Cookie { cookie } => {
+                    request_builder = request_builder.header(
+                        reqwest::header::AUTHORIZATION,
+                        format!(
+                            "Basic {}",
+                            general_purpose::STANDARD.encode(format!("__cookie__:{cookie}"))
+                        ),
+                    );
+                }
             }
+
             let request_body =
                 serde_json::to_string(&req).map_err(JsonRpcConnectorError::SerdeJsonError)?;
+
             let response = request_builder
                 .body(request_body)
                 .send()
@@ -154,6 +204,7 @@ impl JsonRpcConnector {
                 .map_err(JsonRpcConnectorError::ReqwestError)?;
 
             let status = response.status();
+
             let body_bytes = response
                 .bytes()
                 .await
@@ -169,6 +220,7 @@ impl JsonRpcConnector {
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                 continue;
             }
+
             if !status.is_success() {
                 return Err(JsonRpcConnectorError::new(format!(
                     "Error: Error status from node's rpc server: {}, {}",
@@ -178,6 +230,7 @@ impl JsonRpcConnector {
 
             let response: RpcResponse<R> = serde_json::from_slice(&body_bytes)
                 .map_err(JsonRpcConnectorError::SerdeJsonError)?;
+
             return match response.error {
                 Some(error) => Err(JsonRpcConnectorError::new(format!(
                     "Error: Error from node's rpc server: {} - {}",

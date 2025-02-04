@@ -278,7 +278,7 @@ mod tests {
         .await
         .unwrap();
 
-        let json_service = JsonRpcConnector::new(
+        let json_service = JsonRpcConnector::new_with_basic_auth(
             test_node_and_return_url(
                 test_manager.zebrad_rpc_listen_address,
                 Some("xxxxxx".to_string()),
@@ -286,10 +286,9 @@ mod tests {
             )
             .await
             .unwrap(),
-            Some("xxxxxx".to_string()),
-            Some("xxxxxx".to_string()),
+            "xxxxxx".to_string(),
+            "xxxxxx".to_string(),
         )
-        .await
         .unwrap();
 
         let network = match test_manager.network.to_string().as_str() {

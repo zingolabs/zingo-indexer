@@ -190,7 +190,7 @@ mod wallet_basic {
 
         test_manager.local_net.generate_blocks(1).await.unwrap();
 
-        let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new(
+        let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new_with_basic_auth(
             test_node_and_return_url(
                 test_manager.zebrad_rpc_listen_address,
                 Some("xxxxxx".to_string()),
@@ -198,10 +198,9 @@ mod wallet_basic {
             )
             .await
             .unwrap(),
-            Some("xxxxxx".to_string()),
-            Some("xxxxxx".to_string()),
+            "xxxxxx".to_string(),
+            "xxxxxx".to_string(),
         )
-        .await
         .unwrap();
 
         println!("\n\nFetching Chain Height!\n");
@@ -491,7 +490,7 @@ mod wallet_basic {
 
         // test_manager.local_net.print_stdout();
 
-        let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new(
+        let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new_with_basic_auth(
             test_node_and_return_url(
                 test_manager.zebrad_rpc_listen_address,
                 Some("xxxxxx".to_string()),
@@ -499,10 +498,9 @@ mod wallet_basic {
             )
             .await
             .unwrap(),
-            Some("xxxxxx".to_string()),
-            Some("xxxxxx".to_string()),
+            "xxxxxx".to_string(),
+            "xxxxxx".to_string(),
         )
-        .await
         .unwrap();
 
         println!("\n\nFetching Raw Mempool!\n");
