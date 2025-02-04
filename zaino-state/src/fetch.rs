@@ -16,7 +16,7 @@ use zebra_rpc::methods::{
 
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
-    jsonrpc::connector::{test_node_and_return_uri, JsonRpcConnector, RpcError},
+    jsonrpc::connector::{test_node_and_return_url, JsonRpcConnector, RpcError},
 };
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
@@ -81,8 +81,8 @@ impl ZcashService for FetchService {
         status.store(StatusType::Spawning.into());
 
         let fetcher = JsonRpcConnector::new(
-            test_node_and_return_uri(
-                &config.validator_rpc_address.port(),
+            test_node_and_return_url(
+                config.validator_rpc_address,
                 Some(config.validator_rpc_user.clone()),
                 Some(config.validator_rpc_password.clone()),
             )

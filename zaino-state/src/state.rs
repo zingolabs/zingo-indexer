@@ -35,7 +35,7 @@ use crate::{
     stream::CompactBlockStream,
     utils::{get_build_info, ServiceMetadata},
 };
-use zaino_fetch::jsonrpc::connector::{test_node_and_return_uri, JsonRpcConnector};
+use zaino_fetch::jsonrpc::connector::{test_node_and_return_url, JsonRpcConnector};
 use zaino_proto::proto::compact_formats::{
     ChainMetadata, CompactBlock, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend,
     CompactTx,
@@ -69,8 +69,8 @@ pub struct StateService {
 impl StateService {
     /// Initializes a new StateService instance and starts sync process.
     pub async fn spawn(config: StateServiceConfig) -> Result<Self, StateServiceError> {
-        let rpc_uri = test_node_and_return_uri(
-            &config.validator_rpc_address.port(),
+        let rpc_uri = test_node_and_return_url(
+            config.validator_rpc_address,
             Some(config.validator_rpc_user.clone()),
             Some(config.validator_rpc_password.clone()),
         )

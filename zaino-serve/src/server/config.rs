@@ -1,6 +1,6 @@
 //! Server configuration data.
 
-use std::net::{IpAddr, SocketAddr};
+use std::net::SocketAddr;
 
 use tonic::transport::{Identity, ServerTlsConfig};
 
@@ -19,37 +19,6 @@ pub struct GrpcConfig {
 }
 
 impl GrpcConfig {
-    /// Validates that the configured `bind_address` is either:
-    /// - An RFC1918 (private) IPv4 address, or
-    /// - An IPv6 Unique Local Address (ULA) (using `is_unique_local()`)
-    ///
-    /// Returns `Ok(BindAddress)` if valid.
-    pub fn is_private_listen_addr(&self) -> Result<SocketAddr, ServerError> {
-        let ip = self.grpc_listen_address.ip();
-        match ip {
-            IpAddr::V4(ipv4) => {
-                if ipv4.is_private() {
-                    Ok(self.grpc_listen_address)
-                } else {
-                    Err(ServerError::ServerConfigError(format!(
-                        "{} is not an RFC1918 IPv4 address",
-                        ipv4
-                    )))
-                }
-            }
-            IpAddr::V6(ipv6) => {
-                if ipv6.is_unique_local() {
-                    Ok(self.grpc_listen_address)
-                } else {
-                    Err(ServerError::ServerConfigError(format!(
-                        "{} is not a unique local IPv6 address",
-                        ipv6
-                    )))
-                }
-            }
-        }
-    }
-
     /// If TLS is enabled, reads the certificate and key files and returns a valid
     /// `ServerTlsConfig`. If TLS is not enabled, returns `Ok(None)`.
     pub async fn get_valid_tls(&self) -> Result<Option<ServerTlsConfig>, ServerError> {

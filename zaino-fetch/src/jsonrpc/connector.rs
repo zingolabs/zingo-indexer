@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     fmt,
+    net::SocketAddr,
     sync::{
         atomic::{AtomicI32, Ordering},
         Arc,
@@ -59,13 +60,10 @@ impl RpcError {
         fallback_message: impl Into<String>,
     ) -> Self {
         RpcError {
-            // We can use the actual JSON-RPC code:
             code: error_obj.code() as i64,
 
-            // Or combine the fallback with the original message:
             message: format!("{}: {}", fallback_message.into(), error_obj.message()),
 
-            // If you want to store the data too:
             data: error_obj
                 .data()
                 .map(|raw| serde_json::from_str(raw.get()).unwrap_or_default()),
@@ -93,11 +91,10 @@ pub struct JsonRpcConnector {
 impl JsonRpcConnector {
     /// Returns a new JsonRpcConnector instance, tests uri and returns error if connection is not established.
     pub async fn new(
-        uri: Uri,
+        url: Url,
         user: Option<String>,
         password: Option<String>,
     ) -> Result<Self, JsonRpcConnectorError> {
-        let url = reqwest::Url::parse(&uri.to_string())?;
         Ok(Self {
             url,
             id_counter: Arc::new(AtomicI32::new(0)),
@@ -120,7 +117,6 @@ impl JsonRpcConnector {
     ///
     /// TODO: This function currently resends the call up to 5 times on a server response of "Work queue depth exceeded".
     /// This is because the node's queue can become overloaded and stop servicing RPCs.
-    /// This functionality is weak and should be incorporated in Zaino's queue mechanism [WIP] that handles various errors appropriately.
     async fn send_request<T: Serialize, R: for<'de> Deserialize<'de>>(
         &self,
         method: &str,
@@ -440,29 +436,27 @@ async fn test_node_connection(
     Ok(())
 }
 
-/// Tries to connect to zebrad/zcashd using IPv4 and IPv6 and returns the correct uri type, exits program with error message if connection cannot be established.
-pub async fn test_node_and_return_uri(
-    port: &u16,
+/// Tries to connect to zebrad/zcashd using the provided SocketAddr and returns the correct URL.
+pub async fn test_node_and_return_url(
+    addr: SocketAddr,
     user: Option<String>,
     password: Option<String>,
-) -> Result<Uri, JsonRpcConnectorError> {
-    let ipv4_uri: Url = format!("http://127.0.0.1:{}", port).parse()?;
-    let ipv6_uri: Url = format!("http://[::1]:{}", port).parse()?;
+) -> Result<Url, JsonRpcConnectorError> {
+    let host = match addr {
+        SocketAddr::V4(_) => addr.ip().to_string(),
+        SocketAddr::V6(_) => format!("[{}]", addr.ip()),
+    };
+
+    let url: Url = format!("http://{}:{}", host, addr.port()).parse()?;
+
     let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(500));
     for _ in 0..3 {
-        match test_node_connection(ipv4_uri.clone(), user.clone(), password.clone()).await {
+        match test_node_connection(url.clone(), user.clone(), password.clone()).await {
             Ok(_) => {
-                return Ok(ipv4_uri.as_str().parse()?);
+                return Ok(url);
             }
-            Err(_e_ipv4) => {
-                match test_node_connection(ipv6_uri.clone(), user.clone(), password.clone()).await {
-                    Ok(_) => {
-                        return Ok(ipv6_uri.as_str().parse()?);
-                    }
-                    Err(_e_ipv6) => {
-                        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                    }
-                }
+            Err(_) => {
+                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
             }
         }
         interval.tick().await;

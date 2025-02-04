@@ -1,6 +1,6 @@
 //! Zaino's gRPC Server Implementation.
 
-use std::{net::SocketAddr, time::Duration};
+use std::time::Duration;
 
 use tokio::time::interval;
 use tonic::transport::Server;
@@ -38,8 +38,6 @@ impl TonicServer {
     ) -> Result<Self, ServerError> {
         status.store(StatusType::Spawning as usize);
 
-        let listen_addr: SocketAddr = server_config.is_private_listen_addr()?;
-
         let svc = CompactTxStreamerServer::new(GrpcClient {
             service_subscriber: service_subscriber.clone(),
         });
@@ -63,7 +61,7 @@ impl TonicServer {
         };
         let server_future = server_builder
             .add_service(svc)
-            .serve_with_shutdown(listen_addr, shutdown_signal);
+            .serve_with_shutdown(server_config.grpc_listen_address, shutdown_signal);
 
         let task_status = status.clone();
         let server_handle = tokio::task::spawn(async move {

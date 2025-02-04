@@ -1,9 +1,9 @@
 //! Zingo-Indexer implementation.
 
-use std::{net::SocketAddr, process};
+use std::process;
 use tracing::info;
 
-use zaino_fetch::jsonrpc::connector::test_node_and_return_uri;
+use zaino_fetch::jsonrpc::connector::test_node_and_return_url;
 use zaino_serve::server::{config::GrpcConfig, grpc::TonicServer};
 use zaino_state::{
     config::FetchServiceConfig,
@@ -87,8 +87,8 @@ impl Indexer {
     ) -> Result<tokio::task::JoinHandle<Result<(), IndexerError>>, IndexerError> {
         config.check_config()?;
         info!("Checking connection with node..");
-        let zebrad_uri = test_node_and_return_uri(
-            &config.zebrad_port,
+        let zebrad_uri = test_node_and_return_url(
+            config.validator_listen_address,
             config.node_user.clone(),
             config.node_password.clone(),
         )
@@ -102,10 +102,7 @@ impl Indexer {
 
         let chain_state_service = IndexerService::<FetchService>::spawn(
             FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    config.zebrad_port,
-                ),
+                config.validator_listen_address,
                 config.node_user.clone(),
                 config.node_password.clone(),
                 None,

@@ -330,6 +330,9 @@ impl TestManager {
 
         // Launch LocalNet:
         let zebrad_rpc_listen_port = portpicker::pick_unused_port().expect("No ports free");
+        let validator_listen_address =
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), zebrad_rpc_listen_port);
+
         let validator_config = match validator_kind {
             ValidatorKind::Zcashd => {
                 let cfg = services::validator::ZcashdConfig {
@@ -372,7 +375,7 @@ impl TestManager {
                 tls: false,
                 tls_cert_path: None,
                 tls_key_path: None,
-                zebrad_port: zebrad_rpc_listen_port,
+                validator_listen_address,
                 node_user: Some("xxxxxx".to_string()),
                 node_password: Some("xxxxxx".to_string()),
                 map_capacity: None,

@@ -3,7 +3,7 @@
 # gRPC server config:
 
 # Zainod's gRPC server listen address.
-bind_address = "127.0.0.1:8137"
+gprc_listen_address = "localhost:8137"
 
 # Enables TLS for gRPC connections.
 tls = false
@@ -18,10 +18,10 @@ tls_key_path = None
 
 
 
-# JsonPRC client config:
+# JsonRPC client config:
 
-# Full node / validator listen port.
-zebrad_port = 18232
+# Full node / validator listen address.
+validator_listen_address = "localhost:18232"
 
 # Optional full node / validator Username.
 node_user = "xxxxxx"
@@ -31,7 +31,7 @@ node_password = "xxxxxx"
 
 
 
-# Mempool and Non-Finalised State and Finalised State config:
+# Mempool, Non-Finalised State and Finalised State config:
 
 # Capacity of the Dashmaps used for the Mempool.
 # Also use by the BlockCache::NonFinalisedState when using the FetchService.

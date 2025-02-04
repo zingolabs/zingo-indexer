@@ -22,7 +22,7 @@ pub struct IndexerConfig {
     /// Path to the TLS private key file in PEM format.
     pub tls_key_path: Option<String>,
     /// Full node / validator listen port.
-    pub zebrad_port: u16,
+    pub validator_listen_address: SocketAddr,
     /// Full node / validator Username.
     pub node_user: Option<String>,
     /// full node / validator Password.
@@ -72,77 +72,24 @@ impl IndexerConfig {
         if (self.network != "Regtest") && (self.network != "Testnet") && (self.network != "Mainnet")
         {
             return Err(IndexerError::ConfigError(
-                "Incorrect network name given.".to_string(),
+                "Incorrect network name given, must be one of (Mainnet, Testnet, Regtest)."
+                    .to_string(),
             ));
         }
 
-        if self.loopback_listen_addr().is_err() && !self.tls {
+        if !is_loopback_listen_addr(&self.grpc_listen_address) && !self.tls {
             return Err(IndexerError::ConfigError(
                 "TLS required when connecting to external addresses.".to_string(),
             ));
         }
 
+        if !is_private_listen_addr(&self.validator_listen_address) {
+            return Err(IndexerError::ConfigError(
+                "Zaino may only connect to Zebra with private IP addresses.".to_string(),
+            ));
+        }
+
         Ok(())
-    }
-
-    /// Validates that the configured `bind_address` is either:
-    /// - An RFC1918 (private) IPv4 address, or
-    /// - An IPv6 Unique Local Address (ULA) (using `is_unique_local()`)
-    ///
-    /// Returns `Ok(BindAddress)` if valid.
-    pub(crate) fn private_listen_addr(&self) -> Result<SocketAddr, IndexerError> {
-        let ip = self.grpc_listen_address.ip();
-        match ip {
-            IpAddr::V4(ipv4) => {
-                if ipv4.is_private() {
-                    Ok(self.grpc_listen_address)
-                } else {
-                    Err(IndexerError::ConfigError(format!(
-                        "{} is not an RFC1918 IPv4 address",
-                        ipv4
-                    )))
-                }
-            }
-            IpAddr::V6(ipv6) => {
-                if ipv6.is_unique_local() {
-                    Ok(self.grpc_listen_address)
-                } else {
-                    Err(IndexerError::ConfigError(format!(
-                        "{} is not a unique local IPv6 address",
-                        ipv6
-                    )))
-                }
-            }
-        }
-    }
-
-    /// Validates that the configured `bind_address` is a loopback address.
-    ///
-    /// Returns `Ok(BindAddress)` if valid.
-    pub(crate) fn loopback_listen_addr(&self) -> Result<SocketAddr, IndexerError> {
-        let ip = self.grpc_listen_address.ip();
-        match ip {
-            IpAddr::V4(ipv4) => {
-                if ipv4.is_loopback() {
-                    Ok(self.grpc_listen_address)
-                } else {
-                    Err(IndexerError::ConfigError(format!(
-                        "{} is not an RFC1918 IPv4 address",
-                        ipv4
-                    )))
-                }
-            }
-            IpAddr::V6(ipv6) => {
-                if ipv6.is_loopback() {
-                    Ok(self.grpc_listen_address)
-                } else {
-                    Err(IndexerError::ConfigError(format!(
-                        "{} is not a unique local IPv6 address",
-                        ipv6
-                    )))
-                }
-            }
-        }
     }
 
     /// Returns the network type currently being used by the server.
@@ -168,7 +115,7 @@ impl Default for IndexerConfig {
             tls: false,
             tls_cert_path: None,
             tls_key_path: None,
-            zebrad_port: 18232,
+            validator_listen_address: "127.0.0.1:18232".parse().unwrap(),
             node_user: Some("xxxxxx".to_string()),
             node_password: Some("xxxxxx".to_string()),
             map_capacity: None,
@@ -191,7 +138,7 @@ fn default_db_path() -> PathBuf {
     }
 }
 
-/// Resolves hostnames to SocketAddr.
+/// Resolves a hostname to a SocketAddr.
 fn fetch_socket_addr_from_hostname(address: &str) -> Result<SocketAddr, IndexerError> {
     address.parse::<SocketAddr>().or_else(|_| {
         address
@@ -204,6 +151,54 @@ fn fetch_socket_addr_from_hostname(address: &str) -> Result<SocketAddr, IndexerE
                 IndexerError::ConfigError(format!("Unable to resolve address '{}'", address))
             })
     })
+}
+
+/// Validates that the configured `address` is either:
+/// - An RFC1918 (private) IPv4 address, or
+/// - An IPv6 Unique Local Address (ULA) (using `is_unique_local()`)
+///
+/// Returns `Ok(BindAddress)` if valid.
+pub(crate) fn is_private_listen_addr(addr: &SocketAddr) -> bool {
+    let ip = addr.ip();
+    match ip {
+        IpAddr::V4(ipv4) => {
+            if ipv4.is_private() {
+                true
+            } else {
+                false
+            }
+        }
+        IpAddr::V6(ipv6) => {
+            if ipv6.is_unique_local() {
+                true
+            } else {
+                false
+            }
+        }
+    }
+}
+
+/// Validates that the configured `address` is a loopback address.
+///
+/// Returns `Ok(BindAddress)` if valid.
+pub(crate) fn is_loopback_listen_addr(addr: &SocketAddr) -> bool {
+    let ip = addr.ip();
+    match ip {
+        IpAddr::V4(ipv4) => {
+            if ipv4.is_loopback() {
+                true
+            } else {
+                false
+            }
+        }
+        IpAddr::V6(ipv6) => {
+            if ipv6.is_loopback() {
+                true
+            } else {
+                false
+            }
+        }
+    }
 }
 
 /// Attempts to load config data from a toml file at the specified path else returns a default config.
@@ -254,13 +249,18 @@ pub fn load_config(file_path: &std::path::PathBuf) -> Result<IndexerConfig, Inde
                 default_config.tls_key_path.clone()
             });
 
-        let zebrad_port = parsed_config
-            .get("zebrad_port")
-            .and_then(|v| v.as_integer())
-            .map(|p| p as u16)
+        let validator_listen_address = parsed_config
+            .get("validator_listen_address")
+            .and_then(|v| v.as_str())
+            .map(|addr| {
+                fetch_socket_addr_from_hostname(addr).unwrap_or_else(|_| {
+                    warn!("Invalid `grpc_listen_address`, using default.");
+                    default_config.validator_listen_address
+                })
+            })
             .unwrap_or_else(|| {
-                warn!("Missing `zebrad_port`, using default.");
-                default_config.zebrad_port
+                warn!("Missing `grpc_listen_address`, using default.");
+                default_config.grpc_listen_address
             });
 
         let node_user = parsed_config
@@ -348,7 +348,7 @@ pub fn load_config(file_path: &std::path::PathBuf) -> Result<IndexerConfig, Inde
             tls,
             tls_cert_path,
             tls_key_path,
-            zebrad_port,
+            validator_listen_address,
             node_user,
             node_password,
             map_capacity,
