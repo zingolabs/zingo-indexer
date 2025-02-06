@@ -54,10 +54,10 @@ impl BlockCache {
 
     /// Returns a [`BlockCacheSubscriber`].
     pub fn subscriber(&self) -> BlockCacheSubscriber {
-        let finalised_state_subscriber = match &self.finalised_state {
-            Some(finalised_state) => Some(finalised_state.subscriber()),
-            None => None,
-        };
+        let finalised_state_subscriber = self
+            .finalised_state
+            .as_ref()
+            .map(FinalisedState::subscriber);
         BlockCacheSubscriber {
             fetcher: self.fetcher.clone(),
             non_finalised_state: self.non_finalised_state.subscriber(),
