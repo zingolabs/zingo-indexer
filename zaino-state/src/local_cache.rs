@@ -129,6 +129,8 @@ impl BlockCacheSubscriber {
     }
 
     /// Returns a compact block holding only action nullifiers.
+    ///
+    /// NOTE: Currently this only returns Orchard nullifiers to follow Lightwalletd functionality but Sapling could be added if required by wallets.
     pub async fn get_compact_block_nullifiers(
         &self,
         hash_or_height: String,
@@ -228,7 +230,7 @@ pub(crate) async fn fetch_block_from_node(
 }
 
 /// Takes a vec of big endian hex encoded txids and returns them as a vec of little endian raw bytes.
-fn display_txids_to_server(txids: Vec<String>) -> Result<Vec<Vec<u8>>, BlockCacheError> {
+pub(crate) fn display_txids_to_server(txids: Vec<String>) -> Result<Vec<Vec<u8>>, BlockCacheError> {
     txids
         .iter()
         .map(|txid| {
