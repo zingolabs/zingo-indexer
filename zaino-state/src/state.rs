@@ -1,58 +1,58 @@
 //! Zcash chain fetch and tx submission service backed by Zebras [`ReadStateService`].
 
+use crate::{
+    config::StateServiceConfig,
+    error::StateServiceError,
+    indexer::ZcashIndexer,
+    status::{AtomicStatus, StatusType},
+    stream::CompactBlockStream,
+    utils::{get_build_info, ServiceMetadata},
+};
+
 use chrono::Utc;
 use futures::FutureExt as _;
 use hex::{FromHex as _, ToHex as _};
 use indexmap::IndexMap;
+use std::future::poll_fn;
 use std::io::Cursor;
 use std::str::FromStr as _;
-use std::{future::poll_fn, pin::pin};
 use tokio::time::timeout;
 use tonic::async_trait;
 use tower::Service;
+
+use zaino_fetch::jsonrpc::connector::{test_node_and_return_uri, JsonRpcConnector, RpcError};
 use zaino_fetch::jsonrpc::response::TxidsResponse;
-use zaino_proto::proto::service::BlockRange;
-use zebra_chain::block::{Height, SerializedBlock};
-use zebra_chain::parameters::Network;
-use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
-use zebra_rpc::methods::trees::{GetSubtrees, GetTreestate, SubtreeRpcData};
-use zebra_rpc::methods::{
-    AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlockTransaction,
-    GetRawTransaction, SentTransactionHash, TransactionObject,
+use zaino_proto::proto::compact_formats::{
+    ChainMetadata, CompactBlock, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend,
+    CompactTx,
 };
-use zebra_rpc::server::error::LegacyCode;
+use zaino_proto::proto::service::BlockRange;
 
 use zebra_chain::{
+    block::{Height, SerializedBlock},
     chain_tip::{ChainTip, NetworkChainTipHeightEstimator},
-    parameters::{ConsensusBranchId, NetworkUpgrade},
+    parameters::{ConsensusBranchId, Network, NetworkUpgrade},
     serialization::{ZcashDeserialize, ZcashSerialize},
+    subtree::NoteCommitmentSubtreeIndex,
     transaction::Transaction,
 };
 use zebra_rpc::{
     methods::{
-        hex_data::HexData, types::ValuePoolBalance, ConsensusBranchIdHex, GetBlock,
-        GetBlockChainInfo, GetBlockHash, GetBlockHeader, GetBlockHeaderObject, GetBlockTrees,
-        GetInfo, NetworkUpgradeInfo, NetworkUpgradeStatus, TipConsensusBranch,
+        hex_data::HexData,
+        trees::{GetSubtrees, GetTreestate, SubtreeRpcData},
+        types::ValuePoolBalance,
+        AddressBalance, AddressStrings, ConsensusBranchIdHex, GetAddressTxIdsRequest,
+        GetAddressUtxos, GetBlock, GetBlockChainInfo, GetBlockHash, GetBlockHeader,
+        GetBlockHeaderObject, GetBlockTransaction, GetBlockTrees, GetInfo, GetRawTransaction,
+        NetworkUpgradeInfo, NetworkUpgradeStatus, SentTransactionHash, TipConsensusBranch,
+        TransactionObject,
     },
+    server::error::LegacyCode,
     sync::init_read_state_with_syncer,
 };
 use zebra_state::{
     ChainTipChange, HashOrHeight, LatestChainTip, MinedTx, OutputLocation, ReadRequest,
     ReadResponse, ReadStateService, TransactionLocation,
-};
-
-use crate::indexer::ZcashIndexer;
-use crate::{
-    config::StateServiceConfig,
-    error::StateServiceError,
-    status::{AtomicStatus, StatusType},
-    stream::CompactBlockStream,
-    utils::{get_build_info, ServiceMetadata},
-};
-use zaino_fetch::jsonrpc::connector::{test_node_and_return_uri, JsonRpcConnector, RpcError};
-use zaino_proto::proto::compact_formats::{
-    ChainMetadata, CompactBlock, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend,
-    CompactTx,
 };
 
 macro_rules! expected_read_response {
@@ -768,321 +768,6 @@ impl Drop for StateService {
 ///
 /// TODO: Update this to be `impl ZcashIndexer for StateService` once rpc methods are implemented and tested (or implement separately).
 impl StateService {
-    /// Returns software information from the RPC server, as a [`GetInfo`] JSON struct.
-    ///
-    /// zcashd reference: [`getinfo`](https://zcash.github.io/rpc/getinfo.html)
-    /// method: post
-    /// tags: control
-    ///
-    /// # Notes
-    ///
-    /// [The zcashd reference](https://zcash.github.io/rpc/getinfo.html) might not show some fields
-    /// in Zebra's [`GetInfo`]. Zebra uses the field names and formats from the
-    /// [zcashd code](https://github.com/zcash/zcash/blob/v4.6.0-1/src/rpc/misc.cpp#L86-L87).
-    ///
-    /// Some fields from the zcashd reference are missing from Zebra's [`GetInfo`]. It only contains the fields
-    /// [required for lightwalletd support.](https://github.com/zcash/lightwalletd/blob/v0.4.9/common/common.go#L91-L95)
-    pub async fn get_info(&self) -> Result<GetInfo, StateServiceError> {
-        Ok(GetInfo::from_parts(
-            self.data.zebra_build(),
-            self.data.zebra_subversion(),
-        ))
-    }
-
-    /// Returns blockchain state information, as a [`GetBlockChainInfo`] JSON struct.
-    ///
-    /// zcashd reference: [`getblockchaininfo`](https://zcash.github.io/rpc/getblockchaininfo.html)
-    /// method: post
-    /// tags: blockchain
-    ///
-    /// # Notes
-    ///
-    /// Some fields from the zcashd reference are missing from Zebra's [`GetBlockChainInfo`]. It only contains the fields
-    /// [required for lightwalletd support.](https://github.com/zcash/lightwalletd/blob/v0.4.9/common/common.go#L72-L89)
-    pub async fn get_blockchain_info(&self) -> Result<GetBlockChainInfo, StateServiceError> {
-        let network = self.data.network();
-        let chain = network.bip70_network_name();
-
-        // Fetch Pool Values
-        let pool_values = self
-            .checked_call(zebra_state::ReadRequest::TipPoolValues)
-            .await?;
-        let zebra_state::ReadResponse::TipPoolValues {
-            tip_height,
-            tip_hash,
-            value_balance,
-        } = pool_values
-        else {
-            return Err(StateServiceError::Custom(
-                "Unexpected response type for TipPoolValues".into(),
-            ));
-        };
-
-        // Calculate Estimated height
-        let block_header = self
-            .checked_call(zebra_state::ReadRequest::BlockHeader(tip_hash.into()))
-            .await?;
-        let zebra_state::ReadResponse::BlockHeader { header, .. } = block_header else {
-            return Err(StateServiceError::Custom(
-                "Unexpected response type for BlockHeader".into(),
-            ));
-        };
-        let tip_block_time = header.time;
-        let now = Utc::now();
-        let zebra_estimated_height =
-            NetworkChainTipHeightEstimator::new(tip_block_time, tip_height, &network)
-                .estimate_height_at(now);
-        let estimated_height = if tip_block_time > now || zebra_estimated_height < tip_height {
-            tip_height
-        } else {
-            zebra_estimated_height
-        };
-
-        // Create `upgrades` object
-        //
-        // Get the network upgrades in height order, like `zebra` `zcashd`.
-        let mut upgrades = IndexMap::new();
-        for (activation_height, network_upgrade) in network.full_activation_list() {
-            // Zebra defines network upgrades based on incompatible consensus rule changes,
-            // but zcashd defines them based on ZIPs.
-            //
-            // All the network upgrades with a consensus branch ID are the same in Zebra and zcashd.
-            if let Some(branch_id) = network_upgrade.branch_id() {
-                // zcashd's RPC seems to ignore Disabled network upgrades, so Zaino does too.
-                let status = if tip_height >= activation_height {
-                    NetworkUpgradeStatus::Active
-                } else {
-                    NetworkUpgradeStatus::Pending
-                };
-
-                let upgrade =
-                    NetworkUpgradeInfo::from_parts(network_upgrade, activation_height, status);
-                upgrades.insert(ConsensusBranchIdHex::new(branch_id.into()), upgrade);
-            }
-        }
-
-        // Create `consensus` object
-        let next_block_height =
-            (tip_height + 1).expect("valid chain tips are a lot less than Height::MAX");
-        let consensus = TipConsensusBranch::from_parts(
-            NetworkUpgrade::current(&network, tip_height)
-                .branch_id()
-                .unwrap_or(ConsensusBranchId::RPC_MISSING_ID)
-                .into(),
-            NetworkUpgrade::current(&network, next_block_height)
-                .branch_id()
-                .unwrap_or(ConsensusBranchId::RPC_MISSING_ID)
-                .into(),
-        );
-
-        let response = GetBlockChainInfo::new(
-            chain,
-            tip_height,
-            tip_hash,
-            estimated_height,
-            ValuePoolBalance::from_value_balance(value_balance),
-            upgrades,
-            consensus,
-        );
-
-        Ok(response)
-    }
-
-    /// Returns the requested block by hash or height, as a [`GetBlock`] JSON string.
-    /// If the block is not in Zebra's state, returns
-    /// [error code `-8`.](https://github.com/zcash/zcash/issues/5758) if a height was
-    /// passed or -5 if a hash was passed.
-    ///
-    /// zcashd reference: [`getblock`](https://zcash.github.io/rpc/getblock.html)
-    /// method: post
-    /// tags: blockchain
-    ///
-    /// # Parameters
-    ///
-    /// - `hash_or_height`: (string, required, example="1") The hash or height for the block to be returned.
-    /// - `verbosity`: (number, optional, default=1, example=1) 0 for hex encoded data, 1 for a json object, and 2 for json object with transaction data.
-    ///
-    /// # Notes
-    ///
-    /// Zebra previously partially supported verbosity=1 by returning only the
-    /// fields required by lightwalletd ([`lightwalletd` only reads the `tx`
-    /// field of the result](https://github.com/zcash/lightwalletd/blob/dfac02093d85fb31fb9a8475b884dd6abca966c7/common/common.go#L152)).
-    /// That verbosity level was migrated to "3"; so while lightwalletd will
-    /// still work by using verbosity=1, it will sync faster if it is changed to
-    /// use verbosity=3.
-    ///
-    /// The undocumented `chainwork` field is not returned.
-    pub async fn get_block(
-        &self,
-        hash_or_height: String,
-        verbosity: Option<u8>,
-    ) -> Result<GetBlock, StateServiceError> {
-        // From <https://zcash.github.io/rpc/getblock.html>
-        const DEFAULT_GETBLOCK_VERBOSITY: u8 = 1;
-
-        let verbosity = verbosity.unwrap_or(DEFAULT_GETBLOCK_VERBOSITY);
-        let network = self.data.network().clone();
-        let original_hash_or_height = hash_or_height.clone();
-
-        // If verbosity requires a call to `get_block_header`, resolve it here
-        let get_block_header_future = if matches!(verbosity, 1 | 2) {
-            Some(self.get_block_header(original_hash_or_height.clone(), Some(true)))
-        } else {
-            None
-        };
-
-        let hash_or_height: HashOrHeight = hash_or_height.parse()?;
-
-        if verbosity == 0 {
-            // # Performance
-            //
-            // This RPC is used in `lightwalletd`'s initial sync of 2 million blocks,
-            // so it needs to load block data very efficiently.
-            match self
-                .checked_call(zebra_state::ReadRequest::Block(hash_or_height))
-                .await?
-            {
-                zebra_state::ReadResponse::Block(Some(block)) => Ok(GetBlock::Raw(block.into())),
-                zebra_state::ReadResponse::Block(None) => Err(StateServiceError::RpcError(
-                    zaino_fetch::jsonrpc::connector::RpcError {
-                        code: LegacyCode::InvalidParameter as i64,
-                        message: "Block not found".to_string(),
-                        data: None,
-                    },
-                )),
-                _ => unreachable!("unmatched response to a block request"),
-            }
-        } else if let Some(get_block_header_future) = get_block_header_future {
-            let GetBlockHeader::Object(block_header) = get_block_header_future.await? else {
-                return Err(StateServiceError::Custom(
-                    "Unexpected response type for BlockHeader".into(),
-                ));
-            };
-            let GetBlockHeaderObject {
-                hash,
-                confirmations,
-                height,
-                version,
-                merkle_root,
-                final_sapling_root,
-                sapling_tree_size,
-                time,
-                nonce,
-                solution,
-                bits,
-                difficulty,
-                previous_block_hash,
-                next_block_hash,
-            } = *block_header;
-
-            // # Concurrency
-            //
-            // We look up by block hash so the hash, transaction IDs, and confirmations
-            // are consistent.
-            let hash_or_height = hash.0.into();
-
-            let mut txids_future = pin!(self.checked_call(
-                zebra_state::ReadRequest::TransactionIdsForBlock(hash_or_height)
-            ));
-            let mut orchard_tree_future =
-                pin!(self.checked_call(zebra_state::ReadRequest::OrchardTree(hash_or_height)));
-
-            let mut txids = None;
-            let mut orchard_trees = None;
-            let mut final_orchard_root = None;
-
-            while txids.is_none() || orchard_trees.is_none() {
-                tokio::select! {
-                    response = &mut txids_future, if txids.is_none() => {
-                        let tx_ids_response = response?;
-                        let tx_ids = match tx_ids_response {
-                            zebra_state::ReadResponse::TransactionIdsForBlock(Some(tx_ids)) => tx_ids,
-                            zebra_state::ReadResponse::TransactionIdsForBlock(None) => {
-                                return Err(StateServiceError::RpcError(zaino_fetch::jsonrpc::connector::RpcError {
-                                    code: LegacyCode::InvalidParameter as i64,
-                                    message: "Block not found".to_string(),
-                                    data: None,
-                                }));
-                            }
-                            _ => unreachable!("Unexpected response type for TransactionIdsForBlock"),
-                        };
-
-                        txids = Some(tx_ids.iter().map(|tx_id| tx_id.encode_hex()).collect::<Vec<String>>());
-                    }
-                    response = &mut orchard_tree_future, if orchard_trees.is_none() => {
-                        let orchard_tree_response = response?;
-                        let orchard_tree = match orchard_tree_response {
-                            zebra_state::ReadResponse::OrchardTree(Some(tree)) => tree,
-                            zebra_state::ReadResponse::OrchardTree(None) => {
-                                return Err(StateServiceError::RpcError(zaino_fetch::jsonrpc::connector::RpcError {
-                                    code: LegacyCode::InvalidParameter as i64,
-                                    message: "Missing orchard tree for block.".to_string(),
-                                    data: None,
-                                }));
-                            }
-                            _ => unreachable!("Unexpected response type for OrchardTree"),
-                        };
-
-                        let orchard_tree_size = orchard_tree.count();
-                        let nu5_activation = NetworkUpgrade::Nu5.activation_height(&network);
-
-
-                        // ---
-
-                        final_orchard_root = match nu5_activation {
-                            Some(activation_height) if height >= activation_height => {
-                                Some(orchard_tree.root().into())
-                            }
-                            _ => None,
-                        };
-
-                        orchard_trees = Some(GetBlockTrees::new(sapling_tree_size, orchard_tree_size));
-                    }
-                }
-            }
-
-            let tx = txids
-                .ok_or_else(|| StateServiceError::Custom("No txids found in block.".to_string()))?
-                .into_iter()
-                .map(|tx| {
-                    tx.parse::<zebra_chain::transaction::Hash>()
-                        .map(GetBlockTransaction::Hash)
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-
-            let trees = orchard_trees
-                .ok_or_else(|| StateServiceError::Custom("No orchard trees found.".to_string()))?;
-
-            Ok(GetBlock::Object {
-                hash,
-                confirmations,
-                height: Some(height),
-                version: Some(version),
-                merkle_root: Some(merkle_root),
-                time: Some(time),
-                nonce: Some(nonce),
-                solution: Some(solution),
-                bits: Some(bits),
-                difficulty: Some(difficulty),
-                tx,
-                trees,
-                size: None,
-                final_sapling_root: Some(final_sapling_root),
-                final_orchard_root,
-                previous_block_hash: Some(previous_block_hash),
-                next_block_hash,
-            })
-        } else {
-            Err(StateServiceError::RpcError(
-                zaino_fetch::jsonrpc::connector::RpcError {
-                    code: jsonrpc_core::ErrorCode::InvalidParams.code(),
-                    message: "Invalid verbosity value".to_string(),
-                    data: None,
-                },
-            ))
-        }
-    }
-
     /// Returns the requested block header by hash or height, as a [`GetBlockHeader`] JSON string.
     /// If the block is not in Zebra's state,
     /// returns [error code `-8`.](https://github.com/zcash/zcash/issues/5758)
@@ -2006,7 +1691,7 @@ mod tests {
 
         let state_start = tokio::time::Instant::now();
         let state_service_get_block = state_service
-            .get_block("1".to_string(), Some(0))
+            .z_get_block("1".to_string(), Some(0))
             .await
             .unwrap();
         let state_service_duration = state_start.elapsed();
@@ -2049,7 +1734,7 @@ mod tests {
 
         let state_start = tokio::time::Instant::now();
         let state_service_get_block = state_service
-            .get_block("1".to_string(), Some(1))
+            .z_get_block("1".to_string(), Some(1))
             .await
             .unwrap();
         let state_service_duration = state_start.elapsed();
