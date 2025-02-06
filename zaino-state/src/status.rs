@@ -89,3 +89,23 @@ impl From<StatusType> for u16 {
         status as u16
     }
 }
+
+impl StatusType {
+    /// Returns the corresponding status symbol for the StatusType
+    pub fn get_status_symbol(&self) -> String {
+        let (symbol, color_code) = match self {
+            // Yellow Statuses
+            StatusType::Syncing => ("\u{1F7E1}", "\x1b[33m"),
+            // Cyan Statuses
+            StatusType::Spawning | StatusType::Busy => ("\u{1F7E1}", "\x1b[36m"),
+            // Green Status
+            StatusType::Ready => ("\u{1F7E2}", "\x1b[32m"),
+            // Grey Statuses
+            StatusType::Closing | StatusType::Offline => ("\u{26AB}", "\x1b[90m"),
+            // Red Error Statuses
+            StatusType::RecoverableError | StatusType::CriticalError => ("\u{1F534}", "\x1b[31m"),
+        };
+
+        format!("{}{}{}", color_code, symbol, "\x1b[0m")
+    }
+}

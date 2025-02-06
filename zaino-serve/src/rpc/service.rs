@@ -1,6 +1,7 @@
 //! Lightwallet service RPC implementations.
 
 use futures::StreamExt;
+use tracing::info;
 
 use crate::rpc::GrpcClient;
 use zaino_proto::proto::{
@@ -97,7 +98,7 @@ macro_rules! implement_client_methods {
                 'life: 'async_trait,
                 Self: 'async_trait,
             {
-                println!("[TEST] Received call of {}.", stringify!($method_name));
+                info!("[TEST] Received call of {}.", stringify!($method_name));
                 Box::pin(async {
                     Ok(
                         // here we pass in pinbox, to optionally add
@@ -203,7 +204,7 @@ impl CompactTxStreamer for GrpcClient {
         'life0: 'async_trait,
         Self: 'async_trait,
     {
-        println!("[TEST] Received call of get_taddress_balance_stream.");
+        info!("[TEST] Received call of get_taddress_balance_stream.");
         Box::pin(async {
             let (channel_tx, channel_rx) =
                 tokio::sync::mpsc::channel::<Result<Address, tonic::Status>>(32);

@@ -5,6 +5,7 @@ use hex::FromHex;
 use std::time;
 use tokio::{sync::mpsc, time::timeout};
 use tonic::async_trait;
+use tracing::{info, warn};
 
 use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
 use zebra_rpc::methods::{
@@ -75,7 +76,7 @@ impl ZcashService for FetchService {
         config: FetchServiceConfig,
         status: AtomicStatus,
     ) -> Result<Self, FetchServiceError> {
-        println!("Launching Chain Fetch Service..");
+        info!("Launching Chain Fetch Service..");
         let status = status.clone();
         status.store(StatusType::Spawning.into());
 
@@ -100,6 +101,7 @@ impl ZcashService for FetchService {
         );
 
         let block_cache = BlockCache::spawn(&fetcher, config.clone().into()).await?;
+
         let mempool = Mempool::spawn(&fetcher, None).await?;
 
         status.store(StatusType::Ready.into());
@@ -649,7 +651,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                                     {
                                         Ok(_) => break,
                                         Err(e) => {
-                                            eprintln!("Error: Channel closed unexpectedly: {}", e);
+                                            warn!("GetBlockRange channel closed unexpectedly: {}", e);
                                             break;
                                         }
                                     }
@@ -749,7 +751,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                             )
                             .await
                         {
-                            eprintln!("Error: Channel closed unexpectedly: {}", e);
+                            warn!("GetBlockRangeNullifiers channel closed unexpectedly: {}", e);
                             break;
                         }
                     }
@@ -759,7 +761,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             if timeout.is_err() {
                 channel_tx
                     .send(Err(tonic::Status::deadline_exceeded(
-                        "Error: get_block_range gRPC request timed out.",
+                        "Error: get_block_range_nullifiers gRPC request timed out.",
                     )))
                     .await
                     .ok();
@@ -1193,7 +1195,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                         match mempool.get_mempool_stream().await {
                             Ok(stream) => stream,
                             Err(e) => {
-                                eprintln!("Error getting mempool stream: {:?}", e);
+                                warn!("Error fetching stream from mempool: {:?}", e);
                                 channel_tx
                                     .send(Err(tonic::Status::internal(
                                         "Error getting mempool stream",
@@ -1415,8 +1417,8 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                                         {
                                             Ok(_) => break,
                                             Err(e) => {
-                                                eprintln!(
-                                                    "Error: Channel closed unexpectedly: {}",
+                                                warn!(
+                                                    "GetSubtreeRoots channel closed unexpectedly: {}",
                                                     e
                                                 );
                                                 break;
@@ -1436,8 +1438,8 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                                         {
                                             Ok(_) => break,
                                             Err(e) => {
-                                                eprintln!(
-                                                    "Error: Channel closed unexpectedly: {}",
+                                                warn!(
+                                                    "GetSubtreeRoots channel closed unexpectedly: {}",
                                                     e
                                                 );
                                                 break;

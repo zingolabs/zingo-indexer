@@ -7,7 +7,10 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
+    time::Duration,
 };
+use tokio::time::Instant;
+use tracing::info;
 
 use zaino_fetch::jsonrpc::connector::test_node_and_return_uri;
 use zaino_serve::server::{
@@ -72,7 +75,7 @@ impl Indexer {
         let online = Arc::new(AtomicBool::new(true));
         set_ctrlc(online.clone());
         startup_message();
-        println!("Launching Zaino..");
+        info!("Starting Zaino..");
         let indexer: Indexer = Indexer::new(config, online.clone()).await?;
         indexer.serve().await?.await?
     }
@@ -87,14 +90,14 @@ impl Indexer {
             std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
             config.listen_port,
         );
-        println!("Checking connection with node..");
+        info!("Checking connection with node..");
         let zebrad_uri = test_node_and_return_uri(
             &config.zebrad_port,
             config.node_user.clone(),
             config.node_password.clone(),
         )
         .await?;
-        println!(
+        info!(
             " - Connected to node using JsonRPC at address {}.",
             zebrad_uri
         );
@@ -132,7 +135,7 @@ impl Indexer {
             )
             .await?,
         );
-        println!("Server Ready.");
+        info!("Server Ready.");
         Ok(Indexer {
             config,
             server,
@@ -158,10 +161,18 @@ impl Indexer {
             };
 
             self.status.indexer_status.store(StatusType::Ready.into());
-            println!("Zaino listening on port {:?}.", self.config.listen_port);
+            info!("Zaino listening on port {:?}.", self.config.listen_port);
+
+            let mut last_log_time = Instant::now();
+            let log_interval = Duration::from_secs(10);
             loop {
                 self.status.load();
-                // indexer.log_status();
+
+                if last_log_time.elapsed() >= log_interval {
+                    self.log_status_report();
+                    last_log_time = Instant::now();
+                }
+
                 if self.check_for_shutdown() {
                     self.status.indexer_status.store(StatusType::Closing.into());
                     self.shutdown_components(server_handle).await;
@@ -219,6 +230,89 @@ impl Indexer {
         self.status.clone()
     }
 
+    /// Logs the Indexer status report.
+    pub fn log_status_report(&self) {
+        info!("{}", &self.get_full_status_report())
+    }
+
+    /// Returns a full status line with a worker visualization.
+    fn get_full_status_report(&self) -> String {
+        let status = self.status.load();
+        let indexer = StatusType::from(status.indexer_status.clone()).get_status_symbol();
+        let service = StatusType::from(status.service_status.clone()).get_status_symbol();
+        let server =
+            StatusType::from(status.server_status.server_status.clone()).get_status_symbol();
+        let tcp_ingestor =
+            StatusType::from(status.server_status.tcp_ingestor_status.clone()).get_status_symbol();
+
+        let worker_statuses = &status.server_status.workerpool_status.statuses;
+        let total_workers = status
+            .server_status
+            .workerpool_status
+            .workers
+            .load(Ordering::SeqCst);
+        let busy_workers = worker_statuses
+            .iter()
+            .filter(|s| s.load() == StatusType::Busy as usize)
+            .count();
+        let max_workers = self.config.max_worker_pool_size;
+
+        let worker_visual = generate_worker_pool_status_visual(worker_statuses);
+
+        let request_queue_size = status
+            .server_status
+            .request_queue_status
+            .load(Ordering::SeqCst);
+
+        let max_requests = self.config.max_queue_size;
+
+        format!(
+            "Statuses | Indexer:{} Service:{} Server:{} TcpIngestor:{} Workers:[{}] {}/{}/{} RequestQueue:{}/{} |",
+            indexer, service, server, tcp_ingestor, worker_visual, busy_workers, total_workers, max_workers, request_queue_size, max_requests,
+        )
+    }
+
+    /// Returns a concise status line with a worker visualization.
+    fn _get_short_status_report(&self) -> String {
+        let status = self.status.load();
+        let service = StatusType::from(status.service_status.clone()).get_status_symbol();
+        let tcp_ingestor =
+            StatusType::from(status.server_status.tcp_ingestor_status.clone()).get_status_symbol();
+
+        let worker_statuses = &status.server_status.workerpool_status.statuses;
+        let total_workers = status
+            .server_status
+            .workerpool_status
+            .workers
+            .load(Ordering::SeqCst);
+        let busy_workers = worker_statuses
+            .iter()
+            .filter(|s| s.load() == StatusType::Busy as usize)
+            .count();
+        let max_workers = self.config.max_worker_pool_size;
+
+        let worker_visual = generate_worker_pool_status_visual(worker_statuses);
+
+        let request_queue_size = status
+            .server_status
+            .request_queue_status
+            .load(Ordering::SeqCst);
+
+        let max_requests = self.config.max_queue_size;
+
+        format!(
+            "| {}-{}-{} {}/{}/{}-{}/{} |",
+            service,
+            tcp_ingestor,
+            worker_visual,
+            busy_workers,
+            total_workers,
+            max_workers,
+            request_queue_size,
+            max_requests,
+        )
+    }
+
     /// Check the online status on the indexer.
     fn check_online(&self) -> bool {
         self.online.load(Ordering::SeqCst)
@@ -233,6 +327,7 @@ fn set_ctrlc(online: Arc<AtomicBool>) {
     .expect("Error setting Ctrl-C handler");
 }
 
+/// Prints Zaino's startup message.
 fn startup_message() {
     let welcome_message = r#"
        ░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒░░░▒▒░░░░░
@@ -264,4 +359,41 @@ fn startup_message() {
 ****** Please note Zaino is currently in development and should not be used to run mainnet nodes. ******
     "#;
     println!("{}", welcome_message);
+}
+
+/// Generates a 10-symbol visualization of worker statuses
+fn generate_worker_pool_status_visual(worker_statuses: &[AtomicStatus]) -> String {
+    let green = worker_statuses
+        .iter()
+        .filter(|s| s.load() == StatusType::Ready as usize)
+        .count();
+    let yellow = worker_statuses
+        .iter()
+        .filter(|s| s.load() == StatusType::Busy as usize)
+        .count();
+    let red = worker_statuses
+        .iter()
+        .filter(|s| {
+            let status = s.load();
+            status == StatusType::RecoverableError as usize
+                || status == StatusType::CriticalError as usize
+        })
+        .count();
+
+    let total_shown = green + yellow + red;
+
+    let green_count = (green as f64 / total_shown as f64 * 10.0).round() as usize;
+    let yellow_count = (yellow as f64 / total_shown as f64 * 10.0).round() as usize;
+    let red_count = 10 - green_count - yellow_count;
+
+    let green_symbol = "\x1b[32m\u{25CF}\x1b[0m";
+    let yellow_symbol = "\x1b[33m\u{25CF}\x1b[0m";
+    let red_symbol = "\x1b[31m\u{25CF}\x1b[0m";
+
+    format!(
+        "{}{}{}",
+        green_symbol.repeat(green_count),
+        yellow_symbol.repeat(yellow_count),
+        red_symbol.repeat(red_count)
+    )
 }

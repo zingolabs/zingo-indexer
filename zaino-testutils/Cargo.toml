@@ -29,6 +29,11 @@ zingolib = { workspace = true }
 # Test Utilities
 zingo-infra-testutils = { workspace = true }
 
+# Tracing
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["fmt", "env-filter", "time"] }
+tracing-futures = { workspace = true }
+
 # Miscellaneous
 tokio = { workspace = true }
 tonic = { workspace = true }

@@ -7,6 +7,7 @@ use crate::{
     error::{MempoolError, StatusError},
     status::{AtomicStatus, StatusType},
 };
+use tracing::{info, warn};
 use zaino_fetch::jsonrpc::connector::JsonRpcConnector;
 use zebra_chain::block::Hash;
 use zebra_rpc::methods::GetRawTransaction;
@@ -51,13 +52,13 @@ impl Mempool {
                     break;
                 }
                 Err(_) => {
-                    println!(" - Waiting for Validator mempool to come online..");
+                    info!(" - Waiting for Validator mempool to come online..");
                     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
                 }
             }
         }
 
-        println!("Launching Mempool..");
+        info!("Launching Mempool..");
         let mut mempool = Mempool {
             fetcher: fetcher.clone(),
             state: match capacity_and_shard_amount {
@@ -82,7 +83,7 @@ impl Mempool {
                 Err(e) => {
                     mempool.status.store(StatusType::Spawning.into());
                     mempool.state.notify(mempool.status.clone().into());
-                    eprintln!("{e}");
+                    warn!("{e}");
                     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     continue;
                 }
@@ -112,7 +113,7 @@ impl Mempool {
                     }
                     Err(e) => {
                         state.notify(status.clone().into());
-                        eprintln!("{e}");
+                        warn!("{e}");
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                         continue;
                     }
@@ -127,7 +128,7 @@ impl Mempool {
                     Err(e) => {
                         status.store(StatusType::RecoverableError.into());
                         state.notify(status.clone().into());
-                        eprintln!("{e}");
+                        warn!("{e}");
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                         continue;
                     }
@@ -150,7 +151,7 @@ impl Mempool {
                     Err(e) => {
                         status.store(StatusType::RecoverableError.into());
                         state.notify(status.clone().into());
-                        eprintln!("{e}");
+                        warn!("{e}");
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                         continue;
                     }
@@ -351,7 +352,7 @@ impl MempoolSubscriber {
             .await;
 
             if let Err(mempool_error) = mempool_result {
-                eprintln!("Error in mempool stream: {:?}", mempool_error);
+                warn!("Error in mempool stream: {:?}", mempool_error);
                 match mempool_error {
                     MempoolError::StatusError(error_status) => {
                         let _ = channel_tx.send(Err(error_status)).await;
