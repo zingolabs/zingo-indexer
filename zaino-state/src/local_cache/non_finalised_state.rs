@@ -54,8 +54,18 @@ impl NonFinalisedState {
             config,
         };
 
+        non_finalised_state.wait_on_server().await?;
+
         let chain_height = fetcher.get_blockchain_info().await?.blocks.0;
-        for height in chain_height.saturating_sub(99)..=chain_height {
+        // We do not fetch pre sapling activation.
+        for height in chain_height.saturating_sub(99).max(
+            non_finalised_state
+                .config
+                .network
+                .sapling_activation_height()
+                .0,
+        )..=chain_height
+        {
             loop {
                 match fetch_block_from_node(
                     &non_finalised_state.fetcher,
@@ -77,30 +87,6 @@ impl NonFinalisedState {
                         eprintln!("{e}");
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     }
-                }
-            }
-        }
-
-        // If no_db is active wait for server to sync with p2p network.
-        if non_finalised_state.config.no_db
-            && !non_finalised_state.config.network.is_regtest()
-            && !non_finalised_state.config.no_sync
-        {
-            non_finalised_state.status.store(StatusType::Syncing.into());
-            loop {
-                let blockchain_info = fetcher.get_blockchain_info().await?;
-                if (blockchain_info.blocks.0 as i64 - blockchain_info.estimated_height.0 as i64)
-                    .abs()
-                    <= 10
-                {
-                    break;
-                } else {
-                    println!(" - Validator syncing with network. Validator chain height: {}, Estimated Network chain height: {}",
-                        &blockchain_info.blocks.0,
-                        &blockchain_info.estimated_height.0
-                    );
-                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                    continue;
                 }
             }
         }
@@ -238,29 +224,9 @@ impl NonFinalisedState {
                 Ok(height) => reorg_height = height,
                 // Underflow error meaning reorg_height = start of chain.
                 // This means the whole non-finalised state is old.
-                // We fetch the first block in the chain here as the later refill logic always starts from [reorg_height + 1].
                 Err(_) => {
                     self.heights_to_hashes.clear();
                     self.hashes_to_blocks.clear();
-                    loop {
-                        match fetch_block_from_node(
-                            &self.fetcher,
-                            HashOrHeight::Height(reorg_height),
-                        )
-                        .await
-                        {
-                            Ok((hash, block)) => {
-                                self.heights_to_hashes.insert(reorg_height, hash, None);
-                                self.hashes_to_blocks.insert(hash, block, None);
-                                break;
-                            }
-                            Err(e) => {
-                                self.update_status_and_notify(StatusType::RecoverableError);
-                                eprintln!("{e}");
-                                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                            }
-                        }
-                    }
                     break;
                 }
             };
@@ -286,8 +252,13 @@ impl NonFinalisedState {
             };
         }
 
-        // Refill from reorg_height[+1].
-        for block_height in (reorg_height.0 + 1)..self.fetcher.get_blockchain_info().await?.blocks.0
+        // Refill from max(reorg_height[+1], sapling_activation_height).
+        //
+        // reorg_height + 1 is used here as reorg_height represents the last "valid" block known.
+        let validator_height = self.fetcher.get_blockchain_info().await?.blocks.0;
+        for block_height in ((reorg_height.0 + 1)
+            .max(self.config.network.sapling_activation_height().0))
+            ..=validator_height
         {
             // Either pop the reorged block or pop the oldest block in non-finalised state.
             // If we pop the oldest (valid) block we send it to the finalised state to be saved to disk.
@@ -309,22 +280,29 @@ impl NonFinalisedState {
                         )
                     })?
                     .key();
-                if let Some(hash) = self.heights_to_hashes.get(&pop_height) {
-                    if let Some(block) = self.hashes_to_blocks.get(&hash) {
-                        if self
-                            .block_sender
-                            .send((pop_height, *hash, block.as_ref().clone()))
-                            .await
-                            .is_err()
-                        {
-                            self.status.store(StatusType::CriticalError.into());
-                            return Err(NonFinalisedStateError::Critical(
-                                "Critical error in database. Closing NonFinalisedState".to_string(),
-                            ));
+                // Only pop block if it is outside of the non-finalised state block range.
+                if pop_height.0 < (validator_height.saturating_sub(100)) {
+                    if let Some(hash) = self.heights_to_hashes.get(&pop_height) {
+                        // Send to FinalisedState if db is active.
+                        if !self.config.no_db {
+                            if let Some(block) = self.hashes_to_blocks.get(&hash) {
+                                if self
+                                    .block_sender
+                                    .send((pop_height, *hash, block.as_ref().clone()))
+                                    .await
+                                    .is_err()
+                                {
+                                    self.status.store(StatusType::CriticalError.into());
+                                    return Err(NonFinalisedStateError::Critical(
+                                        "Critical error in database. Closing NonFinalisedState"
+                                            .to_string(),
+                                    ));
+                                }
+                            }
                         }
+                        self.hashes_to_blocks.remove(&hash, None);
+                        self.heights_to_hashes.remove(&pop_height, None);
                     }
-                    self.hashes_to_blocks.remove(&hash, None);
-                    self.heights_to_hashes.remove(&pop_height, None);
                 }
             }
             loop {
@@ -338,6 +316,10 @@ impl NonFinalisedState {
                         self.heights_to_hashes
                             .insert(Height(block_height), hash, None);
                         self.hashes_to_blocks.insert(hash, block, None);
+                        println!(
+                            "Block at height {} successfully inserted in non-finalised state.",
+                            block_height
+                        );
                         break;
                     }
                     Err(e) => {
@@ -350,6 +332,33 @@ impl NonFinalisedState {
         }
 
         Ok(())
+    }
+
+    /// Waits for server to sync with p2p network.
+    pub async fn wait_on_server(&self) -> Result<(), NonFinalisedStateError> {
+        // If no_db is active wait for server to sync with p2p network.
+        if self.config.no_db && !self.config.network.is_regtest() && !self.config.no_sync {
+            self.status.store(StatusType::Syncing.into());
+            loop {
+                let blockchain_info = self.fetcher.get_blockchain_info().await?;
+                if (blockchain_info.blocks.0 as i64 - blockchain_info.estimated_height.0 as i64)
+                    .abs()
+                    <= 10
+                {
+                    break;
+                } else {
+                    println!(" - Validator syncing with network. Validator chain height: {}, Estimated Network chain height: {}",
+                        &blockchain_info.blocks.0,
+                        &blockchain_info.estimated_height.0
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    continue;
+                }
+            }
+            Ok(())
+        } else {
+            Ok(())
+        }
     }
 
     /// Returns a [`NonFinalisedStateSubscriber`].
