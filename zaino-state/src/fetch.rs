@@ -32,7 +32,7 @@ use crate::{
     config::FetchServiceConfig,
     error::FetchServiceError,
     indexer::{IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService},
-    local_cache::{display_txids_to_server, BlockCache, BlockCacheSubscriber},
+    local_cache::{BlockCache, BlockCacheSubscriber},
     mempool::{Mempool, MempoolSubscriber},
     status::{AtomicStatus, StatusType},
     stream::{
