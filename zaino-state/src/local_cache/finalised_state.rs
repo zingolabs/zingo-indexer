@@ -363,9 +363,11 @@ impl FinalisedState {
         Ok(())
     }
 
-    /// Syncs database with the server,
-    /// waits for server to sync with P2P network,
-    /// Checks for reorg before syncing.
+    /// Syncs database with the server, and waits for server to sync with P2P network.
+    ///
+    /// Checks for reorg before syncing:
+    /// - Searches from ZainoDB tip backwards looking for the last valid block in the database and sets `reorg_height` to the last VALID block.
+    /// - Re-populated the database from the NEXT block in the chain (`reorg_height + 1`).
     async fn sync_db_from_reorg(&self) -> Result<(), FinalisedStateError> {
         let mut reorg_height = self.get_db_height().unwrap_or(Height(0));
 
