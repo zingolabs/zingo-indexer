@@ -32,7 +32,7 @@ use crate::{
     config::FetchServiceConfig,
     error::FetchServiceError,
     indexer::{IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService},
-    local_cache::{BlockCache, BlockCacheSubscriber},
+    local_cache::{display_txids_to_server, BlockCache, BlockCacheSubscriber},
     mempool::{Mempool, MempoolSubscriber},
     status::{AtomicStatus, StatusType},
     stream::{
@@ -47,7 +47,7 @@ use crate::{
 /// This service is a central service, [`FetchServiceSubscriber`] should be created to fetch data.
 /// This is done to enable large numbers of concurrent subscribers without significant slowdowns.
 ///
-/// NOTE: We currently dop not implement clone for chain fetch services as this service is responsible for maintaining and closing its child processes.
+/// NOTE: We currently do not implement clone for chain fetch services as this service is responsible for maintaining and closing its child processes.
 ///       ServiceSubscribers are used to create separate chain fetch processes while allowing central state processes to be managed in a single place.
 ///       If we want the ability to clone Service all JoinHandle's should be converted to Arc<JoinHandle>.
 #[derive(Debug)]
@@ -482,20 +482,21 @@ impl LightWalletIndexer for FetchServiceSubscriber {
 
     /// Return the height of the tip of the best chain
     async fn get_latest_block(&self) -> Result<BlockId, Self::Error> {
-        let blockchain_info = self.get_blockchain_info().await?;
+        let latest_height = self.block_cache.get_chain_height().await?;
+        let mut latest_hash = self
+            .block_cache
+            .get_compact_block(latest_height.0.to_string())
+            .await?
+            .hash;
+        latest_hash.reverse();
 
         Ok(BlockId {
-            height: blockchain_info.blocks().0 as u64,
-            hash: blockchain_info
-                .best_block_hash()
-                .bytes_in_display_order()
-                .to_vec(),
+            height: latest_height.0 as u64,
+            hash: latest_hash,
         })
     }
 
     /// Return the compact block corresponding to the given block identifier
-    ///
-    /// NOTE: This implementation is slow due to the absence on an internal CompactBlock cache.
     async fn get_block(&self, request: BlockId) -> Result<CompactBlock, Self::Error> {
         let height: u32 = match request.height.try_into() {
             Ok(height) => height,
@@ -510,7 +511,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         match self.block_cache.get_compact_block(height.to_string()).await {
             Ok(block) => Ok(block),
             Err(e) => {
-                let chain_height = self.get_blockchain_info().await?.blocks().0;
+                let chain_height = self.block_cache.get_chain_height().await?.0;
                 if height >= chain_height {
                     Err(FetchServiceError::TonicStatusError(tonic::Status::out_of_range(
                             format!(
@@ -533,7 +534,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
 
     /// Same as GetBlock except actions contain only nullifiers
     ///
-    /// NOTE: This implementation is slow due to the absence on an internal CompactBlock cache.
+    /// NOTE: Currently this only returns Orchard nullifiers to follow Lightwalletd functionality but Sapling could be added if required by wallets.
     async fn get_block_nullifiers(&self, request: BlockId) -> Result<CompactBlock, Self::Error> {
         let height: u32 = match request.height.try_into() {
             Ok(height) => height,
@@ -552,7 +553,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         {
             Ok(block) => Ok(block),
             Err(e) => {
-                let chain_height = self.get_blockchain_info().await?.blocks().0;
+                let chain_height = self.block_cache.get_chain_height().await?.0;
                 if height >= chain_height {
                     Err(FetchServiceError::TonicStatusError(tonic::Status::out_of_range(
                             format!(
@@ -574,8 +575,6 @@ impl LightWalletIndexer for FetchServiceSubscriber {
     }
 
     /// Return a list of consecutive compact blocks
-    ///
-    /// NOTE: This implementation is slow due to the absence on an internal CompactBlock cache.
     async fn get_block_range(
         &self,
         request: BlockRange,
@@ -620,7 +619,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         } else {
             false
         };
-        let chain_height = self.get_blockchain_info().await?.blocks().0;
+        let chain_height = self.block_cache.get_chain_height().await?.0;
         let fetch_service_clone = self.clone();
         let service_timeout = self.config.service_timeout;
         let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
@@ -688,7 +687,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
 
     /// Same as GetBlockRange except actions contain only nullifiers
     ///
-    /// NOTE: This implementation is slow due to the absence on an internal CompactBlock cache.
+    /// NOTE: Currently this only returns Orchard nullifiers to follow Lightwalletd functionality but Sapling could be added if required by wallets.
     async fn get_block_range_nullifiers(
         &self,
         request: BlockRange,
@@ -717,7 +716,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         } else {
             false
         };
-        let chain_height = self.get_blockchain_info().await?.blocks().0;
+        let chain_height = self.block_cache.get_chain_height().await?.0;
         let fetch_service_clone = self.clone();
         let service_timeout = self.config.service_timeout;
         let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
@@ -772,8 +771,6 @@ impl LightWalletIndexer for FetchServiceSubscriber {
     }
 
     /// Return the requested full (not compact) transaction (as from zcashd)
-    ///
-    /// NOTE: This implementation is slow due to fetching mempool height, the internal mempool or non-finalised state should be queried.
     async fn get_transaction(&self, request: TxFilter) -> Result<RawTransaction, Self::Error> {
         let hash = request.hash;
         if hash.len() == 32 {
@@ -791,7 +788,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             let height: u64 = match height {
                 Some(h) => h as u64,
                 // Zebra returns None for mempool transactions, convert to `Mempool Height`.
-                None => self.get_blockchain_info().await?.blocks().0 as u64,
+                None => self.block_cache.get_chain_height().await?.0 as u64,
             };
 
             Ok(RawTransaction {
@@ -821,7 +818,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         &self,
         request: TransparentAddressBlockFilter,
     ) -> Result<RawTransactionStream, Self::Error> {
-        let chain_height = self.get_blockchain_info().await?.blocks().0;
+        let chain_height = self.block_cache.get_chain_height().await?.0;
         let (start, end) =
             match request.range {
                 Some(range) => match (range.start, range.end) {
@@ -1189,7 +1186,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         let mut mempool = self.mempool.clone();
         let service_timeout = self.config.service_timeout;
         let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
-        let mempool_height = self.fetcher.get_blockchain_info().await?.blocks.0;
+        let mempool_height = self.block_cache.get_chain_height().await?.0;
         tokio::spawn(async move {
             let timeout = timeout(
                 time::Duration::from_secs((service_timeout*6) as u64),
@@ -1822,6 +1819,8 @@ mod tests {
         .await
         .unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
         clients.recipient.do_sync(true).await.unwrap();
         let recipient_balance = clients.recipient.do_balance().await;
 
@@ -1901,6 +1900,8 @@ mod tests {
         .unwrap();
 
         test_manager.local_net.generate_blocks(1).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
         clients.faucet.do_sync(true).await.unwrap();
 
         zingolib::testutils::lightclient::from_inputs::quick_send(
@@ -1963,6 +1964,7 @@ mod tests {
         .unwrap();
 
         test_manager.local_net.generate_blocks(1).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
         dbg!(fetch_service_subscriber
             .z_get_treestate("2".to_string())
@@ -1999,6 +2001,7 @@ mod tests {
         .unwrap();
 
         test_manager.local_net.generate_blocks(1).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
         dbg!(fetch_service_subscriber
             .z_get_subtrees_by_index("orchard".to_string(), NoteCommitmentSubtreeIndex(0), None)
@@ -2035,6 +2038,7 @@ mod tests {
         .unwrap();
 
         test_manager.local_net.generate_blocks(1).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
         dbg!(fetch_service_subscriber
             .get_raw_transaction(tx.first().to_string(), Some(1))
@@ -2067,6 +2071,7 @@ mod tests {
         .await
         .unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
         let fetch_service_txids = fetch_service_subscriber
             .get_address_tx_ids(GetAddressTxIdsRequest::from_parts(
@@ -2107,6 +2112,8 @@ mod tests {
         .await
         .unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
         clients.faucet.do_sync(true).await.unwrap();
 
         let fetch_service_utxos = fetch_service_subscriber
@@ -2130,11 +2137,39 @@ mod tests {
     async fn fetch_service_get_latest_block(validator: &str) {
         let (mut test_manager, _fetch_service, fetch_service_subscriber) =
             create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
+            .parse::<http::Uri>()
+            .expect("Failed to convert URL to URI");
+
+        let json_service = JsonRpcConnector::new(
+            zebra_uri,
+            Some("xxxxxx".to_string()),
+            Some("xxxxxx".to_string()),
+        )
+        .await
+        .unwrap();
 
         let fetch_service_get_latest_block =
             dbg!(fetch_service_subscriber.get_latest_block().await.unwrap());
 
-        assert_eq!(fetch_service_get_latest_block.height, 1);
+        let json_service_blockchain_info = json_service.get_blockchain_info().await.unwrap();
+
+        let json_service_get_latest_block = dbg!(BlockId {
+            height: json_service_blockchain_info.blocks.0 as u64,
+            hash: json_service_blockchain_info
+                .best_block_hash
+                .bytes_in_display_order()
+                .to_vec(),
+        });
+
+        assert_eq!(fetch_service_get_latest_block.height, 2);
+        assert_eq!(
+            fetch_service_get_latest_block,
+            json_service_get_latest_block
+        );
 
         test_manager.close().await;
     }
@@ -2196,6 +2231,7 @@ mod tests {
         let (mut test_manager, _fetch_service, fetch_service_subscriber) =
             create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
         test_manager.local_net.generate_blocks(10).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
         let block_range = BlockRange {
             start: Some(BlockId {
@@ -2233,6 +2269,7 @@ mod tests {
         let (mut test_manager, _fetch_service, fetch_service_subscriber) =
             create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
         test_manager.local_net.generate_blocks(10).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
         let block_range = BlockRange {
             start: Some(BlockId {
@@ -2288,6 +2325,7 @@ mod tests {
         .await
         .unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
         let tx_filter = TxFilter {
             block: None,
@@ -2338,6 +2376,8 @@ mod tests {
             hash: tx.first().as_ref().to_vec(),
         };
 
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
         let fetch_service_get_transaction = dbg!(fetch_service_subscriber
             .get_transaction(tx_filter.clone())
             .await
@@ -2371,6 +2411,7 @@ mod tests {
         .await
         .unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
         let block_filter = TransparentAddressBlockFilter {
             address: recipient_address,
@@ -2426,6 +2467,8 @@ mod tests {
         .await
         .unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
         clients.recipient.do_sync(true).await.unwrap();
         let balance = clients.recipient.do_balance().await;
 
@@ -2461,6 +2504,8 @@ mod tests {
             .expect("Clients are not initialized");
 
         test_manager.local_net.generate_blocks(1).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
         clients.faucet.do_sync(true).await.unwrap();
 
         let tx_1 = zingolib::testutils::lightclient::from_inputs::quick_send(
@@ -2551,6 +2596,8 @@ mod tests {
             .expect("Clients are not initialized");
 
         test_manager.local_net.generate_blocks(1).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
         clients.faucet.do_sync(true).await.unwrap();
 
         let fetch_service_handle = tokio::spawn(async move {
@@ -2587,6 +2634,7 @@ mod tests {
 
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         test_manager.local_net.generate_blocks(1).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
         let fetch_mempool_tx = fetch_service_handle.await.unwrap();
 
@@ -2693,6 +2741,7 @@ mod tests {
         .await
         .unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
         let utxos_arg = GetAddressUtxosArg {
             addresses: vec![recipient_address],
@@ -2734,6 +2783,7 @@ mod tests {
         .await
         .unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
         let utxos_arg = GetAddressUtxosArg {
             addresses: vec![recipient_address],
