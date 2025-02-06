@@ -15,6 +15,7 @@ use crate::server::{
     request::ZingoIndexerRequest,
     worker::{WorkerPool, WorkerPoolStatus},
 };
+use tracing::{info, warn};
 use zaino_state::{
     fetch::FetchServiceSubscriber,
     indexer::IndexerSubscriber,
@@ -28,9 +29,12 @@ pub struct ServerStatus {
     pub server_status: AtomicStatus,
     /// Status of the chain fetch service.
     pub service_status: AtomicStatus,
-    tcp_ingestor_status: AtomicStatus,
-    workerpool_status: WorkerPoolStatus,
-    request_queue_status: Arc<AtomicUsize>,
+    /// Status of the TcpIngestor.
+    pub tcp_ingestor_status: AtomicStatus,
+    /// Status of the Workers in the WorkerPool
+    pub workerpool_status: WorkerPoolStatus,
+    /// Number of requests in the RequestsQueue.
+    pub request_queue_status: Arc<AtomicUsize>,
 }
 
 impl ServerStatus {
@@ -81,12 +85,12 @@ impl Server {
         status: ServerStatus,
         online: Arc<AtomicBool>,
     ) -> Result<Self, ServerError> {
-        println!("Launching Server..");
+        info!("Launching Server..");
         status.server_status.store(StatusType::Spawning.into());
         let request_queue: Queue<ZingoIndexerRequest> =
             Queue::new(max_queue_size as usize, status.request_queue_status.clone());
         status.request_queue_status.store(0, Ordering::SeqCst);
-        println!("Launching TcpIngestor..");
+        info!("Launching TcpIngestor..");
         let tcp_ingestor = Some(
             TcpIngestor::spawn(
                 tcp_ingestor_listen_addr,
@@ -96,7 +100,7 @@ impl Server {
             )
             .await?,
         );
-        println!("Launching WorkerPool..");
+        info!("Launching WorkerPool..");
         let worker_pool = WorkerPool::spawn(
             service_subscriber.clone(),
             status.service_status.clone(),
@@ -143,7 +147,7 @@ impl Server {
                             worker_handles.push(handle);
                         }
                         Err(_e) => {
-                            eprintln!("WorkerPool at capacity");
+                            warn!("WorkerPool at capacity");
                         }
                     }
                 } else if (self.request_queue.queue_length() <= 1)
@@ -154,7 +158,7 @@ impl Server {
                     match self.worker_pool.pop_worker(worker_handle).await {
                         Ok(_) => {}
                         Err(e) => {
-                            eprintln!("Failed to pop worker from pool: {}", e);
+                            warn!("Failed to pop worker from pool: {}", e);
                             // TODO: Handle this error.
                         }
                     }

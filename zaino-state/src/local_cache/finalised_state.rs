@@ -4,6 +4,7 @@ use lmdb::{Cursor, Database, Environment, Transaction};
 use prost::Message;
 use serde::{Deserialize, Serialize};
 use std::{fs, sync::Arc};
+use tracing::{error, info, warn};
 
 use zebra_chain::{
     block::{Hash, Height},
@@ -129,7 +130,7 @@ impl FinalisedState {
         block_receiver: tokio::sync::mpsc::Receiver<(Height, Hash, CompactBlock)>,
         config: BlockCacheConfig,
     ) -> Result<Self, FinalisedStateError> {
-        println!("Launching Finalised State..");
+        info!("Launching Finalised State..");
         let db_size = config.db_size.unwrap_or(8);
         let db_path_dir = match config.network.kind() {
             NetworkKind::Mainnet => "live",
@@ -208,7 +209,7 @@ impl FinalisedState {
                 loop {
                     match finalised_state.insert_block((height, hash, compact_block.clone())) {
                         Ok(_) => {
-                            println!(
+                            info!(
                                 "Block at height {} successfully inserted in finalised state.",
                                 height.0
                             );
@@ -226,7 +227,7 @@ impl FinalisedState {
                                         };
                                         continue;
                                     } else {
-                                        println!(
+                                        info!(
                                             "Block at height {} already exists, skipping.",
                                             height.0
                                         );
@@ -242,20 +243,20 @@ impl FinalisedState {
                             }
                         }
                         Err(FinalisedStateError::LmdbError(db_err)) => {
-                            eprintln!("LMDB error inserting block {}: {:?}", height.0, db_err);
+                            error!("LMDB error inserting block {}: {:?}", height.0, db_err);
                             finalised_state
                                 .status
                                 .store(StatusType::CriticalError.into());
                             return;
                         }
                         Err(e) => {
-                            eprintln!(
+                            warn!(
                                 "Unknown error inserting block {}: {:?}. Retrying...",
                                 height.0, e
                             );
 
                             if retry_attempts == 0 {
-                                eprintln!(
+                                error!(
                                     "Failed to insert block {} after multiple retries.",
                                     height.0
                                 );
@@ -274,7 +275,7 @@ impl FinalisedState {
                             .await
                             {
                                 Ok((new_hash, new_compact_block)) => {
-                                    eprintln!(
+                                    warn!(
                                         "Re-fetched block at height {}, retrying insert.",
                                         height.0
                                     );
@@ -282,7 +283,7 @@ impl FinalisedState {
                                     compact_block = new_compact_block;
                                 }
                                 Err(fetch_err) => {
-                                    eprintln!(
+                                    error!(
                                         "Failed to fetch block {} from validator: {:?}",
                                         height.0, fetch_err
                                     );
@@ -329,7 +330,7 @@ impl FinalisedState {
                 let response = match finalised_state.get_block(hash_or_height) {
                     Ok(block) => Ok(block),
                     Err(_) => {
-                        eprintln!("Failed to fetch block from DB, re-fetching from validator.");
+                        warn!("Failed to fetch block from DB, re-fetching from validator.");
                         match fetch_block_from_node(&finalised_state.fetcher, hash_or_height).await
                         {
                             Ok((hash, block)) => {
@@ -340,7 +341,7 @@ impl FinalisedState {
                                 )) {
                                     Ok(_) => Ok(block),
                                     Err(_) => {
-                                        eprintln!("Failed to insert missing block into DB, serving from validator.");
+                                        warn!("Failed to insert missing block into DB, serving from validator.");
                                         Ok(block)
                                     }
                                 }
@@ -354,7 +355,7 @@ impl FinalisedState {
                 };
 
                 if response_channel.send(response).is_err() {
-                    eprintln!("Failed to send response for request: {:?}", hash_or_height);
+                    warn!("Failed to send response for request: {:?}", hash_or_height);
                 }
             }
         });
@@ -445,7 +446,7 @@ impl FinalisedState {
                 {
                     Ok((hash, block)) => {
                         self.insert_block((Height(block_height), hash, block))?;
-                        println!(
+                        info!(
                             "Block at height {} successfully inserted in finalised state.",
                             block_height
                         );
@@ -453,7 +454,7 @@ impl FinalisedState {
                     }
                     Err(e) => {
                         self.status.store(StatusType::RecoverableError.into());
-                        eprintln!("{e}");
+                        warn!("{e}");
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     }
                 }
@@ -479,7 +480,7 @@ impl FinalisedState {
                         {
                             Ok((hash, block)) => {
                                 self.insert_block((Height(block_height), hash, block))?;
-                                println!(
+                                info!(
                                     "Block at height {} successfully inserted in finalised state.",
                                     block_height
                                 );
@@ -487,7 +488,7 @@ impl FinalisedState {
                             }
                             Err(e) => {
                                 self.status.store(StatusType::RecoverableError.into());
-                                eprintln!("{e}");
+                                warn!("{e}");
                                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                             }
                         }
@@ -500,7 +501,7 @@ impl FinalisedState {
                 {
                     break;
                 } else {
-                    println!(" - Validator syncing with network. ZainoDB chain height: {}, Validator chain height: {}, Estimated Network chain height: {}",
+                    info!(" - Validator syncing with network. ZainoDB chain height: {}, Validator chain height: {}, Estimated Network chain height: {}",
                             &sync_height,
                             &blockchain_info.blocks.0,
                             &blockchain_info.estimated_height.0
@@ -646,7 +647,7 @@ impl FinalisedState {
         }
 
         if let Err(e) = self.database.sync(true) {
-            eprintln!("Error syncing LMDB before shutdown: {:?}", e);
+            error!("Error syncing LMDB before shutdown: {:?}", e);
         }
     }
 }
@@ -662,7 +663,7 @@ impl Drop for FinalisedState {
         }
 
         if let Err(e) = self.database.sync(true) {
-            eprintln!("Error syncing LMDB before shutdown: {:?}", e);
+            error!("Error syncing LMDB before shutdown: {:?}", e);
         }
     }
 }

@@ -7,6 +7,7 @@ pub mod non_finalised_state;
 
 use finalised_state::{FinalisedState, FinalisedStateSubscriber};
 use non_finalised_state::{NonFinalisedState, NonFinalisedStateSubscriber};
+use tracing::info;
 use zaino_fetch::{
     chain::block::FullBlock,
     jsonrpc::{connector::JsonRpcConnector, response::GetBlockResponse},
@@ -33,7 +34,7 @@ impl BlockCache {
         fetcher: &JsonRpcConnector,
         config: BlockCacheConfig,
     ) -> Result<Self, BlockCacheError> {
-        println!("Launching Local Block Cache..");
+        info!("Launching Local Block Cache..");
         let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(100);
 
         let finalised_state = if !config.no_db {
@@ -249,6 +250,7 @@ pub(crate) fn display_txids_to_server(txids: Vec<String>) -> Result<Vec<Vec<u8>>
 mod tests {
     use super::*;
     use core::panic;
+    use tracing::info;
     use zaino_testutils::TestManager;
     use zingo_infra_services::validator::Validator;
 
@@ -381,7 +383,7 @@ mod tests {
             // NOTE: Generating blocks with zcashd blocks the tokio main thread???, stopping background processes from running,
             //       for this reason we generate blocks 1 at a time and sleep to let other tasks run.
             for height in 1..=100 {
-                println!("Generating block at height: {}", height);
+                info!("Generating block at height: {}", height);
                 test_manager.local_net.generate_blocks(1).await.unwrap();
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             }

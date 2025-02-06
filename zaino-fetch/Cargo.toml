@@ -19,6 +19,9 @@ zebra-chain = { workspace = true }
 zebra-rpc = { workspace = true }
 zebra-state = { workspace = true }
 
+# Tracing
+tracing = { workspace = true }
+
 # Miscellaneous Workspace
 tokio = { workspace = true, features = ["full"] }
 tonic = { workspace = true }

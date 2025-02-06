@@ -7,6 +7,7 @@ use once_cell::sync::Lazy;
 use services::validator::Validator;
 use std::{path::PathBuf, str::FromStr};
 use tempfile::TempDir;
+use tracing_subscriber::EnvFilter;
 
 /// Path for zcashd binary.
 pub static ZCASHD_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
@@ -304,6 +305,14 @@ impl TestManager {
         zaino_no_db: bool,
         enable_clients: bool,
     ) -> Result<Self, std::io::Error> {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(
+                EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+            )
+            .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339())
+            .with_target(true)
+            .try_init();
+
         let validator_kind = ValidatorKind::from_str(validator).unwrap();
         let network = network.unwrap_or(services::network::Network::Regtest);
         if enable_clients && !enable_zaino {

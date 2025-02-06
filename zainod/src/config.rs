@@ -2,6 +2,8 @@
 
 use std::path::PathBuf;
 
+use tracing::warn;
+
 use crate::error::IndexerError;
 
 /// Config information required for Zaino.
@@ -125,7 +127,7 @@ pub fn load_config(file_path: &std::path::PathBuf) -> IndexerConfig {
     if let Ok(contents) = std::fs::read_to_string(file_path) {
         toml::from_str::<IndexerConfig>(&contents).unwrap_or_default()
     } else {
-        eprintln!("Could not find config file at given path, using default config.");
+        warn!("Could not find config file at given path, using default config.");
         IndexerConfig::default()
     }
 }
