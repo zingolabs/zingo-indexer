@@ -762,11 +762,8 @@ impl Drop for StateService {
     }
 }
 
-/// This impl will hold the Zcash RPC method implementations for StateService.
-///
-/// Doc comments are taken from Zebra for consistency.
-///
-/// TODO: Update this to be `impl ZcashIndexer for StateService` once rpc methods are implemented and tested (or implement separately).
+/// As get_block_header is not a part of the public interface,
+/// it has not been moved to the ZcashIndexer trait.
 impl StateService {
     /// Returns the requested block header by hash or height, as a [`GetBlockHeader`] JSON string.
     /// If the block is not in Zebra's state,
