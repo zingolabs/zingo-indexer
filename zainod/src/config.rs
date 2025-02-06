@@ -122,7 +122,7 @@ impl IndexerConfig {
         }
 
         // Ensure TLS is used when connecting to external addresses.
-        if !is_loopback_listen_addr(&self.grpc_listen_address) && !self.grpc_tls {
+        if !is_private_listen_addr(&self.grpc_listen_address) && !self.grpc_tls {
             return Err(IndexerError::ConfigError(
                 "TLS required when connecting to external addresses.".to_string(),
             ));
