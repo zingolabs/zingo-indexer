@@ -2137,16 +2137,17 @@ mod tests {
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
-            .parse::<http::Uri>()
-            .expect("Failed to convert URL to URI");
-
-        let json_service = JsonRpcConnector::new(
-            zebra_uri,
-            Some("xxxxxx".to_string()),
-            Some("xxxxxx".to_string()),
+        let json_service = JsonRpcConnector::new_with_basic_auth(
+            test_node_and_return_url(
+                test_manager.zebrad_rpc_listen_address,
+                Some("xxxxxx".to_string()),
+                Some("xxxxxx".to_string()),
+            )
+            .await
+            .unwrap(),
+            "xxxxxx".to_string(),
+            "xxxxxx".to_string(),
         )
-        .await
         .unwrap();
 
         let fetch_service_get_latest_block =
