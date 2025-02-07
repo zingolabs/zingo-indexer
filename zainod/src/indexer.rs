@@ -187,12 +187,16 @@ impl Indexer {
         Ok(serve_task)
     }
 
-    /// Checks indexers status and servers internal status for error signal.
+    /// Checks indexers status and servers internal statuses for either offline of critical error signals.
     fn check_for_critical_errors(&self) -> bool {
         let statuses = &self.statuses();
-        if statuses.indexer_status.load() >= 5
-            || statuses.service_status.load() >= 5
-            || statuses.grpc_server_status.load() >= 5
+        if [
+            statuses.indexer_status.load(),
+            statuses.service_status.load(),
+            statuses.grpc_server_status.load(),
+        ]
+        .iter()
+        .any(|&status| status == 5 || status >= 7)
         {
             true
         } else {
