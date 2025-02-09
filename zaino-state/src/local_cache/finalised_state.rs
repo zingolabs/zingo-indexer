@@ -142,6 +142,7 @@ impl FinalisedState {
             NetworkKind::Regtest => "local",
         };
         let db_path = config.db_path.join(db_path_dir);
+        dbg!(&db_path);
         if !db_path.exists() {
             fs::create_dir_all(&db_path)?;
         }

@@ -458,8 +458,7 @@ impl JsonRpcConnector {
 /// Tests connection with zebrad / zebrad.
 async fn test_node_connection(
     url: Url,
-    user: Option<String>,
-    password: Option<String>,
+    auth_method: AuthMethod,
 ) -> Result<(), JsonRpcConnectorError> {
     let client = Client::builder()
         .connect_timeout(std::time::Duration::from_secs(2))
@@ -467,14 +466,26 @@ async fn test_node_connection(
         .redirect(reqwest::redirect::Policy::none())
         .build()?;
 
-    let user = user.unwrap_or_else(|| "xxxxxx".to_string());
-    let password = password.unwrap_or_else(|| "xxxxxx".to_string());
     let request_body = r#"{"jsonrpc":"2.0","method":"getinfo","params":[],"id":1}"#;
     let mut request_builder = client
         .post(url.clone())
         .header("Content-Type", "application/json")
         .body(request_body);
-    request_builder = request_builder.basic_auth(user, Some(password)); // Used basic_auth method
+
+    match &auth_method {
+        AuthMethod::Basic { username, password } => {
+            request_builder = request_builder.basic_auth(username, Some(password));
+        }
+        AuthMethod::Cookie { cookie } => {
+            request_builder = request_builder.header(
+                reqwest::header::AUTHORIZATION,
+                format!(
+                    "Basic {}",
+                    general_purpose::STANDARD.encode(format!("__cookie__:{cookie}"))
+                ),
+            );
+        }
+    }
 
     let response = request_builder
         .send()
@@ -492,9 +503,26 @@ async fn test_node_connection(
 /// Tries to connect to zebrad/zcashd using the provided SocketAddr and returns the correct URL.
 pub async fn test_node_and_return_url(
     addr: SocketAddr,
+    rpc_cookie_auth: bool,
+    cookie_path: Option<String>,
     user: Option<String>,
     password: Option<String>,
 ) -> Result<Url, JsonRpcConnectorError> {
+    let auth_method = match rpc_cookie_auth {
+        true => {
+            let cookie_content =
+                fs::read_to_string(cookie_path.expect("validator rpc cookie path missing"))
+                    .map_err(JsonRpcConnectorError::IoError)?;
+            let cookie = cookie_content.trim().to_string();
+
+            AuthMethod::Cookie { cookie }
+        }
+        false => AuthMethod::Basic {
+            username: user.unwrap_or_else(|| "xxxxxx".to_string()),
+            password: password.unwrap_or_else(|| "xxxxxx".to_string()),
+        },
+    };
+
     let host = match addr {
         SocketAddr::V4(_) => addr.ip().to_string(),
         SocketAddr::V6(_) => format!("[{}]", addr.ip()),
@@ -504,7 +532,7 @@ pub async fn test_node_and_return_url(
 
     let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(500));
     for _ in 0..3 {
-        match test_node_connection(url.clone(), user.clone(), password.clone()).await {
+        match test_node_connection(url.clone(), auth_method.clone()).await {
             Ok(_) => {
                 return Ok(url);
             }

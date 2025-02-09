@@ -9,6 +9,10 @@ pub struct StateServiceConfig {
     pub validator_config: zebra_state::Config,
     /// Validator JsonRPC address.
     pub validator_rpc_address: std::net::SocketAddr,
+    /// Enable validator rpc cookie authentification.
+    pub validator_cookie_auth: bool,
+    /// Path to the validator cookie file.
+    pub validator_cookie_path: Option<String>,
     /// Validator JsonRPC user.
     pub validator_rpc_user: String,
     /// Validator JsonRPC password.
@@ -26,6 +30,8 @@ impl StateServiceConfig {
     pub fn new(
         validator_config: zebra_state::Config,
         validator_rpc_address: std::net::SocketAddr,
+        validator_cookie_auth: bool,
+        validator_cookie_path: Option<String>,
         validator_rpc_user: Option<String>,
         validator_rpc_password: Option<String>,
         service_timeout: Option<u32>,
@@ -35,6 +41,8 @@ impl StateServiceConfig {
         StateServiceConfig {
             validator_config,
             validator_rpc_address,
+            validator_cookie_auth,
+            validator_cookie_path,
             validator_rpc_user: validator_rpc_user.unwrap_or("xxxxxx".to_string()),
             validator_rpc_password: validator_rpc_password.unwrap_or("xxxxxx".to_string()),
             service_timeout: service_timeout.unwrap_or(30),
@@ -49,6 +57,10 @@ impl StateServiceConfig {
 pub struct FetchServiceConfig {
     /// Validator JsonRPC address.
     pub validator_rpc_address: std::net::SocketAddr,
+    /// Enable validator rpc cookie authentification.
+    pub validator_cookie_auth: bool,
+    /// Path to the validator cookie file.
+    pub validator_cookie_path: Option<String>,
     /// Validator JsonRPC user.
     pub validator_rpc_user: String,
     /// Validator JsonRPC password.
@@ -83,6 +95,8 @@ impl FetchServiceConfig {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         validator_rpc_address: std::net::SocketAddr,
+        validator_cookie_auth: bool,
+        validator_cookie_path: Option<String>,
         validator_rpc_user: Option<String>,
         validator_rpc_password: Option<String>,
         service_timeout: Option<u32>,
@@ -97,6 +111,8 @@ impl FetchServiceConfig {
     ) -> Self {
         FetchServiceConfig {
             validator_rpc_address,
+            validator_cookie_auth,
+            validator_cookie_path,
             validator_rpc_user: validator_rpc_user.unwrap_or("xxxxxx".to_string()),
             validator_rpc_password: validator_rpc_password.unwrap_or("xxxxxx".to_string()),
             // NOTE: This timeout is currently long to ease development but should be reduced before production.
