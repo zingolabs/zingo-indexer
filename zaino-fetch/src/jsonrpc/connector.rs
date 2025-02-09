@@ -63,10 +63,13 @@ impl RpcError {
         fallback_message: impl Into<String>,
     ) -> Self {
         RpcError {
+            // We can use the actual JSON-RPC code:
             code: error_obj.code() as i64,
 
+            // Or combine the fallback with the original message:
             message: format!("{}: {}", fallback_message.into(), error_obj.message()),
 
+            // If you want to store the data too:
             data: error_obj
                 .data()
                 .map(|raw| serde_json::from_str(raw.get()).unwrap_or_default()),
