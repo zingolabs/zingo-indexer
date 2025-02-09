@@ -14,6 +14,7 @@ test_fixtures = []
 
 [dependencies]
 zaino-fetch = { path = "../zaino-fetch" }
+zaino-state = { path = "../zaino-state" }
 zainod = { path = "../zainod" }
 
 # Librustzcash

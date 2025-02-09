@@ -37,7 +37,7 @@ async fn main() {
         .config
         .unwrap_or_else(|| PathBuf::from("./zainod/zindexer.toml"));
 
-    match Indexer::start(load_config(&config_path)).await {
+    match Indexer::start(load_config(&config_path).unwrap()).await {
         Ok(_) => info!("Zaino Indexer started successfully."),
         Err(e) => error!(error = ?e, "Failed to start Zaino Indexer"),
     }

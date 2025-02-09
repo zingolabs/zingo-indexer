@@ -1,22 +1,11 @@
 //! Zingo-Indexer implementation.
 
-use std::{
-    net::SocketAddr,
-    process,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use std::process;
 use tokio::time::Instant;
 use tracing::info;
 
-use zaino_fetch::jsonrpc::connector::test_node_and_return_uri;
-use zaino_serve::server::{
-    director::{Server, ServerStatus},
-    error::ServerError,
-};
+use zaino_fetch::jsonrpc::connector::test_node_and_return_url;
+use zaino_serve::server::{config::GrpcConfig, grpc::TonicServer};
 use zaino_state::{
     config::FetchServiceConfig,
     fetch::FetchService,
@@ -29,42 +18,63 @@ use crate::{config::IndexerConfig, error::IndexerError};
 /// Holds the status of the server and all its components.
 #[derive(Debug, Clone)]
 pub struct IndexerStatus {
-    indexer_status: AtomicStatus,
-    service_status: AtomicStatus,
-    server_status: ServerStatus,
+    /// Status of the indexer.
+    pub indexer_status: AtomicStatus,
+    /// Status of the chain state service.
+    pub service_status: AtomicStatus,
+    /// Status of the gRPC server.
+    pub grpc_server_status: AtomicStatus,
 }
 
 impl IndexerStatus {
     /// Creates a new IndexerStatus.
-    pub fn new(max_workers: u16) -> Self {
-        let server_status = ServerStatus::new(max_workers);
+    pub fn new() -> Self {
         IndexerStatus {
             indexer_status: AtomicStatus::new(StatusType::Offline.into()),
-            service_status: server_status.service_status.clone(),
-            server_status,
+            service_status: AtomicStatus::new(StatusType::Offline.into()),
+            grpc_server_status: AtomicStatus::new(StatusType::Offline.into()),
         }
     }
 
     /// Returns the IndexerStatus.
     pub fn load(&self) -> IndexerStatus {
         self.indexer_status.load();
-        self.server_status.load();
+        self.service_status.load();
+        self.grpc_server_status.load();
         self.clone()
+    }
+
+    /// Logs the indexers status.
+    pub fn log(&self) {
+        let statuses = self.load();
+        let indexer_status = StatusType::from(statuses.indexer_status);
+        let service_status = StatusType::from(statuses.service_status);
+        let grpc_server_status = StatusType::from(statuses.grpc_server_status);
+
+        let indexer_status_symbol = indexer_status.get_status_symbol();
+        let service_status_symbol = service_status.get_status_symbol();
+        let grpc_server_status_symbol = grpc_server_status.get_status_symbol();
+
+        info!(
+            "Zaino status check - Indexer:{}{} Service:{}{} gRPC Server:{}{}",
+            indexer_status_symbol,
+            indexer_status,
+            service_status_symbol,
+            service_status,
+            grpc_server_status_symbol,
+            grpc_server_status
+        );
     }
 }
 
 /// Zingo-Indexer.
 pub struct Indexer {
-    /// Indexer configuration data.
-    config: IndexerConfig,
     /// GRPC server.
-    server: Option<Server>,
-    /// Internal block cache.
-    _service: IndexerService<FetchService>,
+    server: Option<TonicServer>,
+    /// Chain fetch service state process handler..
+    service: Option<IndexerService<FetchService>>,
     /// Indexers status.
     status: IndexerStatus,
-    /// Online status of the indexer.
-    online: Arc<AtomicBool>,
 }
 
 impl Indexer {
@@ -72,44 +82,43 @@ impl Indexer {
     ///
     /// Currently only takes an IndexerConfig.
     pub async fn start(config: IndexerConfig) -> Result<(), IndexerError> {
-        let online = Arc::new(AtomicBool::new(true));
-        set_ctrlc(online.clone());
+        let indexer_status = IndexerStatus::new();
+        set_ctrlc(indexer_status.clone());
         startup_message();
         info!("Starting Zaino..");
-        let indexer: Indexer = Indexer::new(config, online.clone()).await?;
-        indexer.serve().await?.await?
+        Indexer::spawn(config, indexer_status).await?.await??;
+        Ok(())
     }
 
-    /// Creates a new Indexer.
-    ///
-    /// Currently only takes an IndexerConfig.
-    pub async fn new(config: IndexerConfig, online: Arc<AtomicBool>) -> Result<Self, IndexerError> {
+    /// Spawns a new Indexer server.
+    pub async fn spawn(
+        config: IndexerConfig,
+        status: IndexerStatus,
+    ) -> Result<tokio::task::JoinHandle<Result<(), IndexerError>>, IndexerError> {
         config.check_config()?;
-        let status = IndexerStatus::new(config.max_worker_pool_size);
-        let tcp_ingestor_listen_addr = SocketAddr::new(
-            std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-            config.listen_port,
-        );
         info!("Checking connection with node..");
-        let zebrad_uri = test_node_and_return_uri(
-            &config.zebrad_port,
-            config.node_user.clone(),
-            config.node_password.clone(),
+        let zebrad_uri = test_node_and_return_url(
+            config.validator_listen_address,
+            config.validator_cookie_auth,
+            config.validator_cookie_path.clone(),
+            config.validator_user.clone(),
+            config.validator_password.clone(),
         )
         .await?;
         info!(
             " - Connected to node using JsonRPC at address {}.",
             zebrad_uri
         );
+
         status.indexer_status.store(StatusType::Spawning.into());
-        let service = IndexerService::<FetchService>::spawn(
+
+        let chain_state_service = IndexerService::<FetchService>::spawn(
             FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    config.zebrad_port,
-                ),
-                config.node_user.clone(),
-                config.node_password.clone(),
+                config.validator_listen_address,
+                config.validator_cookie_auth,
+                config.validator_cookie_path.clone(),
+                config.validator_user.clone(),
+                config.validator_password.clone(),
                 None,
                 None,
                 config.map_capacity,
@@ -123,65 +132,54 @@ impl Indexer {
             status.service_status.clone(),
         )
         .await?;
-        let server = Some(
-            Server::spawn(
-                service.inner_ref().get_subscriber(),
-                tcp_ingestor_listen_addr,
-                config.max_queue_size,
-                config.max_worker_pool_size,
-                config.idle_worker_pool_size,
-                status.server_status.clone(),
-                online.clone(),
-            )
-            .await?,
-        );
-        info!("Server Ready.");
-        Ok(Indexer {
-            config,
-            server,
-            _service: service,
+
+        let grpc_server = TonicServer::spawn(
+            chain_state_service.inner_ref().get_subscriber(),
+            GrpcConfig {
+                grpc_listen_address: config.grpc_listen_address,
+                tls: config.grpc_tls,
+                tls_cert_path: config.tls_cert_path.clone(),
+                tls_key_path: config.tls_key_path.clone(),
+            },
+            status.grpc_server_status.clone(),
+        )
+        .await
+        .unwrap();
+
+        let mut indexer = Indexer {
+            server: Some(grpc_server),
+            service: Some(chain_state_service),
             status,
-            online,
-        })
-    }
+        };
 
-    /// Starts Indexer Service and returns its JoinHandle
-    pub async fn serve(
-        mut self,
-    ) -> Result<tokio::task::JoinHandle<Result<(), IndexerError>>, IndexerError> {
-        Ok(tokio::task::spawn(async move {
-            // NOTE: This interval may need to be reduced or removed / moved once scale testing begins.
-            let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(50));
-            let server_handle = if let Some(server) = self.server.take() {
-                Some(server.serve().await)
-            } else {
-                return Err(IndexerError::MiscIndexerError(
-                    "Server Missing! Fatal Error!.".to_string(),
-                ));
-            };
+        indexer
+            .status
+            .indexer_status
+            .store(StatusType::Ready.into());
 
-            self.status.indexer_status.store(StatusType::Ready.into());
-            info!("Zaino listening on port {:?}.", self.config.listen_port);
+        // NOTE: This interval may need to be reduced or removed / moved once scale testing begins.
+        let mut server_interval = tokio::time::interval(tokio::time::Duration::from_millis(50));
+        let mut last_log_time = Instant::now();
+        let log_interval = tokio::time::Duration::from_secs(10);
 
-            let mut last_log_time = Instant::now();
-            let log_interval = Duration::from_secs(10);
+        let serve_task = tokio::task::spawn(async move {
             loop {
-                self.status.load();
+                indexer.status();
 
                 if last_log_time.elapsed() >= log_interval {
-                    self.log_status_report();
+                    indexer.status.log();
                     last_log_time = Instant::now();
                 }
 
-                if self.check_for_shutdown() {
-                    self.status.indexer_status.store(StatusType::Closing.into());
-                    self.shutdown_components(server_handle).await;
-                    self.status.indexer_status.store(StatusType::Offline.into());
+                if indexer.check_for_shutdown() {
+                    indexer.shutdown().await;
                     return Ok(());
                 }
-                interval.tick().await;
+                server_interval.tick().await;
             }
-        }))
+        });
+
+        Ok(serve_task)
     }
 
     /// Checks indexers online status and servers internal status for closure signal.
@@ -189,29 +187,30 @@ impl Indexer {
         if self.status() >= 4 {
             return true;
         }
-        if !self.check_online() {
-            return true;
-        }
         false
     }
 
     /// Sets the servers to close gracefully.
-    pub fn shutdown(&mut self) {
-        self.status.indexer_status.store(StatusType::Closing.into())
-    }
+    async fn shutdown(&mut self) {
+        self.status
+            .grpc_server_status
+            .store(StatusType::Closing.into());
+        self.status.service_status.store(StatusType::Closing.into());
+        self.status.indexer_status.store(StatusType::Closing.into());
 
-    /// Sets the server's components to close gracefully.
-    async fn shutdown_components(
-        &mut self,
-        server_handle: Option<tokio::task::JoinHandle<Result<(), ServerError>>>,
-    ) {
-        if let Some(handle) = server_handle {
+        if let Some(mut server) = self.server.take() {
+            server.shutdown().await;
             self.status
-                .server_status
-                .server_status
-                .store(StatusType::Closing.into());
-            handle.await.ok();
+                .grpc_server_status
+                .store(StatusType::Offline.into());
         }
+
+        if let Some(service) = self.service.take() {
+            service.inner().close();
+            self.status.service_status.store(StatusType::Offline.into());
+        }
+
+        self.status.indexer_status.store(StatusType::Offline.into());
     }
 
     /// Returns the indexers current status usize.
@@ -226,102 +225,15 @@ impl Indexer {
 
     /// Returns the status of the indexer and its parts.
     pub fn statuses(&mut self) -> IndexerStatus {
-        self.status.load();
-        self.status.clone()
-    }
-
-    /// Logs the Indexer status report.
-    pub fn log_status_report(&self) {
-        info!("{}", &self.get_full_status_report())
-    }
-
-    /// Returns a full status line with a worker visualization.
-    fn get_full_status_report(&self) -> String {
-        let status = self.status.load();
-        let indexer = StatusType::from(status.indexer_status.clone()).get_status_symbol();
-        let service = StatusType::from(status.service_status.clone()).get_status_symbol();
-        let server =
-            StatusType::from(status.server_status.server_status.clone()).get_status_symbol();
-        let tcp_ingestor =
-            StatusType::from(status.server_status.tcp_ingestor_status.clone()).get_status_symbol();
-
-        let worker_statuses = &status.server_status.workerpool_status.statuses;
-        let total_workers = status
-            .server_status
-            .workerpool_status
-            .workers
-            .load(Ordering::SeqCst);
-        let busy_workers = worker_statuses
-            .iter()
-            .filter(|s| s.load() == StatusType::Busy as usize)
-            .count();
-        let max_workers = self.config.max_worker_pool_size;
-
-        let worker_visual = generate_worker_pool_status_visual(worker_statuses);
-
-        let request_queue_size = status
-            .server_status
-            .request_queue_status
-            .load(Ordering::SeqCst);
-
-        let max_requests = self.config.max_queue_size;
-
-        format!(
-            "Statuses | Indexer:{} Service:{} Server:{} TcpIngestor:{} Workers:[{}] {}/{}/{} RequestQueue:{}/{} |",
-            indexer, service, server, tcp_ingestor, worker_visual, busy_workers, total_workers, max_workers, request_queue_size, max_requests,
-        )
-    }
-
-    /// Returns a concise status line with a worker visualization.
-    fn _get_short_status_report(&self) -> String {
-        let status = self.status.load();
-        let service = StatusType::from(status.service_status.clone()).get_status_symbol();
-        let tcp_ingestor =
-            StatusType::from(status.server_status.tcp_ingestor_status.clone()).get_status_symbol();
-
-        let worker_statuses = &status.server_status.workerpool_status.statuses;
-        let total_workers = status
-            .server_status
-            .workerpool_status
-            .workers
-            .load(Ordering::SeqCst);
-        let busy_workers = worker_statuses
-            .iter()
-            .filter(|s| s.load() == StatusType::Busy as usize)
-            .count();
-        let max_workers = self.config.max_worker_pool_size;
-
-        let worker_visual = generate_worker_pool_status_visual(worker_statuses);
-
-        let request_queue_size = status
-            .server_status
-            .request_queue_status
-            .load(Ordering::SeqCst);
-
-        let max_requests = self.config.max_queue_size;
-
-        format!(
-            "| {}-{}-{} {}/{}/{}-{}/{} |",
-            service,
-            tcp_ingestor,
-            worker_visual,
-            busy_workers,
-            total_workers,
-            max_workers,
-            request_queue_size,
-            max_requests,
-        )
-    }
-
-    /// Check the online status on the indexer.
-    fn check_online(&self) -> bool {
-        self.online.load(Ordering::SeqCst)
+        self.status.load()
     }
 }
 
-fn set_ctrlc(online: Arc<AtomicBool>) {
+fn set_ctrlc(status: IndexerStatus) {
     ctrlc::set_handler(move || {
-        online.store(false, Ordering::SeqCst);
+        status.grpc_server_status.store(StatusType::Closing.into());
+        status.service_status.store(StatusType::Closing.into());
+        status.indexer_status.store(StatusType::Closing.into());
         process::exit(0);
     })
     .expect("Error setting Ctrl-C handler");
@@ -359,41 +271,4 @@ fn startup_message() {
 ****** Please note Zaino is currently in development and should not be used to run mainnet nodes. ******
     "#;
     println!("{}", welcome_message);
-}
-
-/// Generates a 10-symbol visualization of worker statuses
-fn generate_worker_pool_status_visual(worker_statuses: &[AtomicStatus]) -> String {
-    let green = worker_statuses
-        .iter()
-        .filter(|s| s.load() == StatusType::Ready as usize)
-        .count();
-    let yellow = worker_statuses
-        .iter()
-        .filter(|s| s.load() == StatusType::Busy as usize)
-        .count();
-    let red = worker_statuses
-        .iter()
-        .filter(|s| {
-            let status = s.load();
-            status == StatusType::RecoverableError as usize
-                || status == StatusType::CriticalError as usize
-        })
-        .count();
-
-    let total_shown = green + yellow + red;
-
-    let green_count = (green as f64 / total_shown as f64 * 10.0).round() as usize;
-    let yellow_count = (yellow as f64 / total_shown as f64 * 10.0).round() as usize;
-    let red_count = 10 - green_count - yellow_count;
-
-    let green_symbol = "\x1b[32m\u{25CF}\x1b[0m";
-    let yellow_symbol = "\x1b[33m\u{25CF}\x1b[0m";
-    let red_symbol = "\x1b[31m\u{25CF}\x1b[0m";
-
-    format!(
-        "{}{}{}",
-        green_symbol.repeat(green_count),
-        yellow_symbol.repeat(yellow_count),
-        red_symbol.repeat(red_count)
-    )
 }

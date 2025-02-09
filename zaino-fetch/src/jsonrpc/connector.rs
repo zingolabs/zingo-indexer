@@ -3,16 +3,20 @@
 //! TODO: - Add option for http connector.
 //!       - Refactor JsonRpcConnectorError into concrete error types and implement fmt::display [https://github.com/zingolabs/zaino/issues/67].
 
+use base64::{engine::general_purpose, Engine};
 use http::Uri;
-use reqwest::{Client, Url};
+use reqwest::{Client, ClientBuilder, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
-    fmt,
+    fmt, fs,
+    net::SocketAddr,
+    path::Path,
     sync::{
         atomic::{AtomicI32, Ordering},
         Arc,
     },
+    time::Duration,
 };
 use tracing::error;
 
@@ -53,18 +57,6 @@ pub struct RpcError {
 }
 
 impl RpcError {
-    /// Creates a new `RpcError` from a `LegacyCode`.
-    pub fn new_from_legacycode(
-        code: zebra_rpc::server::error::LegacyCode,
-        message: impl Into<String>,
-    ) -> Self {
-        RpcError {
-            code: code as i64,
-            message: message.into(),
-            data: None,
-        }
-    }
-
     /// Creates a new `RpcError` from jsonrpsee-types `ErrorObject`.
     pub fn new_from_errorobject(
         error_obj: jsonrpsee_types::ErrorObject<'_>,
@@ -93,28 +85,65 @@ impl fmt::Display for RpcError {
 
 impl std::error::Error for RpcError {}
 
+#[derive(Debug, Clone)]
+enum AuthMethod {
+    Basic { username: String, password: String },
+    Cookie { cookie: String },
+}
+
 /// JsonRPC Client config data.
 #[derive(Debug, Clone)]
 pub struct JsonRpcConnector {
     url: Url,
     id_counter: Arc<AtomicI32>,
-    user: Option<String>,
-    password: Option<String>,
+    client: Client,
+    auth_method: AuthMethod,
 }
 
 impl JsonRpcConnector {
-    /// Returns a new JsonRpcConnector instance, tests uri and returns error if connection is not established.
-    pub async fn new(
-        uri: Uri,
-        user: Option<String>,
-        password: Option<String>,
+    /// Creates a new JsonRpcConnector with Basic Authentication.
+    pub fn new_with_basic_auth(
+        url: Url,
+        username: String,
+        password: String,
     ) -> Result<Self, JsonRpcConnectorError> {
-        let url = reqwest::Url::parse(&uri.to_string())?;
+        let client = ClientBuilder::new()
+            .connect_timeout(Duration::from_secs(2))
+            .timeout(Duration::from_secs(5))
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(JsonRpcConnectorError::ReqwestError)?;
+
         Ok(Self {
             url,
             id_counter: Arc::new(AtomicI32::new(0)),
-            user,
-            password,
+            client,
+            auth_method: AuthMethod::Basic { username, password },
+        })
+    }
+
+    /// Creates a new JsonRpcConnector with Cookie Authentication.
+    pub fn new_with_cookie_auth(
+        url: Url,
+        cookie_path: &Path,
+    ) -> Result<Self, JsonRpcConnectorError> {
+        let cookie_content =
+            fs::read_to_string(cookie_path).map_err(JsonRpcConnectorError::IoError)?;
+        let cookie = cookie_content.trim().to_string();
+
+        let client = ClientBuilder::new()
+            .connect_timeout(Duration::from_secs(2))
+            .timeout(Duration::from_secs(5))
+            .redirect(reqwest::redirect::Policy::none())
+            .cookie_store(true)
+            .build()
+            .map_err(JsonRpcConnectorError::ReqwestError)?;
+
+        Ok(Self {
+            url,
+            id_counter: Arc::new(AtomicI32::new(0)),
+            client,
+            auth_method: AuthMethod::Cookie { cookie },
         })
     }
 
@@ -130,9 +159,8 @@ impl JsonRpcConnector {
 
     /// Sends a jsonRPC request and returns the response.
     ///
-    /// TODO: This function currently resends the call up to 5 times on a server response of "Work queue depth exceeded".
-    /// This is because the node's queue can become overloaded and stop servicing RPCs.
-    /// This functionality is weak and should be incorporated in Zaino's queue mechanism [WIP] that handles various errors appropriately.
+    /// NOTE: This function currently resends the call up to 5 times on a server response of "Work queue depth exceeded".
+    ///       This is because the node's queue can become overloaded and stop servicing RPCs.
     async fn send_request<T: Serialize, R: for<'de> Deserialize<'de>>(
         &self,
         method: &str,
@@ -149,20 +177,29 @@ impl JsonRpcConnector {
         let mut attempts = 0;
         loop {
             attempts += 1;
-            let client = Client::builder()
-                .connect_timeout(std::time::Duration::from_secs(2))
-                .timeout(std::time::Duration::from_secs(5))
-                .redirect(reqwest::redirect::Policy::none())
-                .build()?;
-
-            let mut request_builder = client
+            let mut request_builder = self
+                .client
                 .post(self.url.clone())
                 .header("Content-Type", "application/json");
-            if let (Some(user), Some(password)) = (&self.user, &self.password) {
-                request_builder = request_builder.basic_auth(user.clone(), Some(password.clone()));
+
+            match &self.auth_method {
+                AuthMethod::Basic { username, password } => {
+                    request_builder = request_builder.basic_auth(username, Some(password));
+                }
+                AuthMethod::Cookie { cookie } => {
+                    request_builder = request_builder.header(
+                        reqwest::header::AUTHORIZATION,
+                        format!(
+                            "Basic {}",
+                            general_purpose::STANDARD.encode(format!("__cookie__:{cookie}"))
+                        ),
+                    );
+                }
             }
+
             let request_body =
                 serde_json::to_string(&req).map_err(JsonRpcConnectorError::SerdeJsonError)?;
+
             let response = request_builder
                 .body(request_body)
                 .send()
@@ -170,6 +207,7 @@ impl JsonRpcConnector {
                 .map_err(JsonRpcConnectorError::ReqwestError)?;
 
             let status = response.status();
+
             let body_bytes = response
                 .bytes()
                 .await
@@ -185,6 +223,7 @@ impl JsonRpcConnector {
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                 continue;
             }
+
             if !status.is_success() {
                 return Err(JsonRpcConnectorError::new(format!(
                     "Error: Error status from node's rpc server: {}, {}",
@@ -194,6 +233,7 @@ impl JsonRpcConnector {
 
             let response: RpcResponse<R> = serde_json::from_slice(&body_bytes)
                 .map_err(JsonRpcConnectorError::SerdeJsonError)?;
+
             return match response.error {
                 Some(error) => Err(JsonRpcConnectorError::new(format!(
                     "Error: Error from node's rpc server: {} - {}",
@@ -421,8 +461,7 @@ impl JsonRpcConnector {
 /// Tests connection with zebrad / zebrad.
 async fn test_node_connection(
     url: Url,
-    user: Option<String>,
-    password: Option<String>,
+    auth_method: AuthMethod,
 ) -> Result<(), JsonRpcConnectorError> {
     let client = Client::builder()
         .connect_timeout(std::time::Duration::from_secs(2))
@@ -430,14 +469,26 @@ async fn test_node_connection(
         .redirect(reqwest::redirect::Policy::none())
         .build()?;
 
-    let user = user.unwrap_or_else(|| "xxxxxx".to_string());
-    let password = password.unwrap_or_else(|| "xxxxxx".to_string());
     let request_body = r#"{"jsonrpc":"2.0","method":"getinfo","params":[],"id":1}"#;
     let mut request_builder = client
         .post(url.clone())
         .header("Content-Type", "application/json")
         .body(request_body);
-    request_builder = request_builder.basic_auth(user, Some(password)); // Used basic_auth method
+
+    match &auth_method {
+        AuthMethod::Basic { username, password } => {
+            request_builder = request_builder.basic_auth(username, Some(password));
+        }
+        AuthMethod::Cookie { cookie } => {
+            request_builder = request_builder.header(
+                reqwest::header::AUTHORIZATION,
+                format!(
+                    "Basic {}",
+                    general_purpose::STANDARD.encode(format!("__cookie__:{cookie}"))
+                ),
+            );
+        }
+    }
 
     let response = request_builder
         .send()
@@ -452,29 +503,44 @@ async fn test_node_connection(
     Ok(())
 }
 
-/// Tries to connect to zebrad/zcashd using IPv4 and IPv6 and returns the correct uri type, exits program with error message if connection cannot be established.
-pub async fn test_node_and_return_uri(
-    port: &u16,
+/// Tries to connect to zebrad/zcashd using the provided SocketAddr and returns the correct URL.
+pub async fn test_node_and_return_url(
+    addr: SocketAddr,
+    rpc_cookie_auth: bool,
+    cookie_path: Option<String>,
     user: Option<String>,
     password: Option<String>,
-) -> Result<Uri, JsonRpcConnectorError> {
-    let ipv4_uri: Url = format!("http://127.0.0.1:{}", port).parse()?;
-    let ipv6_uri: Url = format!("http://[::1]:{}", port).parse()?;
+) -> Result<Url, JsonRpcConnectorError> {
+    let auth_method = match rpc_cookie_auth {
+        true => {
+            let cookie_content =
+                fs::read_to_string(cookie_path.expect("validator rpc cookie path missing"))
+                    .map_err(JsonRpcConnectorError::IoError)?;
+            let cookie = cookie_content.trim().to_string();
+
+            AuthMethod::Cookie { cookie }
+        }
+        false => AuthMethod::Basic {
+            username: user.unwrap_or_else(|| "xxxxxx".to_string()),
+            password: password.unwrap_or_else(|| "xxxxxx".to_string()),
+        },
+    };
+
+    let host = match addr {
+        SocketAddr::V4(_) => addr.ip().to_string(),
+        SocketAddr::V6(_) => format!("[{}]", addr.ip()),
+    };
+
+    let url: Url = format!("http://{}:{}", host, addr.port()).parse()?;
+
     let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(500));
     for _ in 0..3 {
-        match test_node_connection(ipv4_uri.clone(), user.clone(), password.clone()).await {
+        match test_node_connection(url.clone(), auth_method.clone()).await {
             Ok(_) => {
-                return Ok(ipv4_uri.as_str().parse()?);
+                return Ok(url);
             }
-            Err(_e_ipv4) => {
-                match test_node_connection(ipv6_uri.clone(), user.clone(), password.clone()).await {
-                    Ok(_) => {
-                        return Ok(ipv6_uri.as_str().parse()?);
-                    }
-                    Err(_e_ipv6) => {
-                        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                    }
-                }
+            Err(_) => {
+                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
             }
         }
         interval.tick().await;

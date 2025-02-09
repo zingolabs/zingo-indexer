@@ -1,8 +1,11 @@
 //! Holds a thread safe status implementation.
 
-use std::sync::{
-    atomic::{AtomicUsize, Ordering},
-    Arc,
+use std::{
+    fmt,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
 };
 
 /// Holds a thread safe representation of a StatusType.
@@ -87,6 +90,22 @@ impl From<AtomicStatus> for StatusType {
 impl From<StatusType> for u16 {
     fn from(status: StatusType) -> Self {
         status as u16
+    }
+}
+
+impl fmt::Display for StatusType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let status_str = match self {
+            StatusType::Spawning => "Spawning",
+            StatusType::Syncing => "Syncing",
+            StatusType::Ready => "Ready",
+            StatusType::Busy => "Busy",
+            StatusType::Closing => "Closing",
+            StatusType::Offline => "Offline",
+            StatusType::RecoverableError => "RecoverableError",
+            StatusType::CriticalError => "CriticalError",
+        };
+        write!(f, "{}", status_str)
     }
 }
 
