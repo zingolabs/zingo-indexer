@@ -283,6 +283,8 @@ mod tests {
         let json_service = JsonRpcConnector::new_with_basic_auth(
             test_node_and_return_url(
                 test_manager.zebrad_rpc_listen_address,
+                false,
+                None,
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )

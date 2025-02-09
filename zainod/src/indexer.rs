@@ -99,6 +99,8 @@ impl Indexer {
         info!("Checking connection with node..");
         let zebrad_uri = test_node_and_return_url(
             config.validator_listen_address,
+            config.validator_cookie_auth,
+            config.validator_cookie_path.clone(),
             config.validator_user.clone(),
             config.validator_password.clone(),
         )
@@ -113,6 +115,8 @@ impl Indexer {
         let chain_state_service = IndexerService::<FetchService>::spawn(
             FetchServiceConfig::new(
                 config.validator_listen_address,
+                config.validator_cookie_auth,
+                config.validator_cookie_path.clone(),
                 config.validator_user.clone(),
                 config.validator_password.clone(),
                 None,

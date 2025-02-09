@@ -197,15 +197,19 @@ fn default_db_path() -> PathBuf {
 /// Resolves a hostname to a SocketAddr.
 fn fetch_socket_addr_from_hostname(address: &str) -> Result<SocketAddr, IndexerError> {
     address.parse::<SocketAddr>().or_else(|_| {
-        address
+        let addrs: Vec<_> = address
             .to_socket_addrs()
             .map_err(|e| {
                 IndexerError::ConfigError(format!("Invalid address '{}': {}", address, e))
             })?
-            .find(|addr| addr.is_ipv4() || addr.is_ipv6())
-            .ok_or_else(|| {
+            .collect();
+        if let Some(ipv4_addr) = addrs.iter().find(|addr| addr.is_ipv4()) {
+            Ok(*ipv4_addr)
+        } else {
+            addrs.into_iter().next().ok_or_else(|| {
                 IndexerError::ConfigError(format!("Unable to resolve address '{}'", address))
             })
+        }
     })
 }
 
@@ -369,9 +373,11 @@ pub fn load_config(file_path: &std::path::PathBuf) -> Result<IndexerConfig, Inde
 
         let db_path = parsed_config
             .get("db_path")
-            .and_then(|v| v.as_str().map(PathBuf::from))
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.trim().eq_ignore_ascii_case("None"))
+            .map(PathBuf::from)
             .unwrap_or_else(|| {
-                warn!("Missing `db_path`, using default.");
+                warn!("Missing `db_path` or set to 'None', using default.");
                 default_config.db_path.clone()
             });
 

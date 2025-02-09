@@ -193,6 +193,8 @@ mod wallet_basic {
         let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new_with_basic_auth(
             test_node_and_return_url(
                 test_manager.zebrad_rpc_listen_address,
+                false,
+                None,
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )
@@ -493,6 +495,8 @@ mod wallet_basic {
         let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new_with_basic_auth(
             test_node_and_return_url(
                 test_manager.zebrad_rpc_listen_address,
+                false,
+                None,
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )

@@ -2,7 +2,7 @@
 
 use futures::StreamExt;
 use hex::FromHex;
-use std::time;
+use std::{path::Path, time};
 use tokio::{sync::mpsc, time::timeout};
 use tonic::async_trait;
 use tracing::{info, warn};
@@ -80,16 +80,36 @@ impl ZcashService for FetchService {
         let status = status.clone();
         status.store(StatusType::Spawning.into());
 
-        let fetcher = JsonRpcConnector::new_with_basic_auth(
-            test_node_and_return_url(
-                config.validator_rpc_address,
-                Some(config.validator_rpc_user.clone()),
-                Some(config.validator_rpc_password.clone()),
-            )
-            .await?,
-            config.validator_rpc_user.clone(),
-            config.validator_rpc_password.clone(),
-        )?;
+        let fetcher = match config.validator_cookie_auth {
+            true => JsonRpcConnector::new_with_cookie_auth(
+                test_node_and_return_url(
+                    config.validator_rpc_address,
+                    config.validator_cookie_auth,
+                    config.validator_cookie_path.clone(),
+                    None,
+                    None,
+                )
+                .await?,
+                Path::new(
+                    &config
+                        .validator_cookie_path
+                        .clone()
+                        .expect("validator cookie authentication path missing"),
+                ),
+            )?,
+            false => JsonRpcConnector::new_with_basic_auth(
+                test_node_and_return_url(
+                    config.validator_rpc_address,
+                    false,
+                    None,
+                    Some(config.validator_rpc_user.clone()),
+                    Some(config.validator_rpc_password.clone()),
+                )
+                .await?,
+                config.validator_rpc_user.clone(),
+                config.validator_rpc_password.clone(),
+            )?,
+        };
 
         let zebra_build_data = fetcher.get_info().await?;
         let data = ServiceMetadata::new(
@@ -1749,6 +1769,8 @@ mod tests {
         let fetch_service = FetchService::spawn(
             FetchServiceConfig::new(
                 test_manager.zebrad_rpc_listen_address,
+                false,
+                None,
                 None,
                 None,
                 None,
@@ -1885,6 +1907,8 @@ mod tests {
         let json_service = JsonRpcConnector::new_with_basic_auth(
             test_node_and_return_url(
                 test_manager.zebrad_rpc_listen_address,
+                false,
+                None,
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )
@@ -2139,6 +2163,8 @@ mod tests {
         let json_service = JsonRpcConnector::new_with_basic_auth(
             test_node_and_return_url(
                 test_manager.zebrad_rpc_listen_address,
+                false,
+                None,
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )

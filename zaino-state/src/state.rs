@@ -4,6 +4,7 @@ use chrono::Utc;
 use hex::ToHex;
 use indexmap::IndexMap;
 use std::io::Cursor;
+use std::path::Path;
 use std::{future::poll_fn, pin::pin};
 use tokio::time::timeout;
 use tower::Service;
@@ -69,12 +70,36 @@ pub struct StateService {
 impl StateService {
     /// Initializes a new StateService instance and starts sync process.
     pub async fn spawn(config: StateServiceConfig) -> Result<Self, StateServiceError> {
-        let rpc_uri = test_node_and_return_url(
-            config.validator_rpc_address,
-            Some(config.validator_rpc_user.clone()),
-            Some(config.validator_rpc_password.clone()),
-        )
-        .await?;
+        let rpc_client = match config.validator_cookie_auth {
+            true => JsonRpcConnector::new_with_cookie_auth(
+                test_node_and_return_url(
+                    config.validator_rpc_address,
+                    config.validator_cookie_auth,
+                    config.validator_cookie_path.clone(),
+                    None,
+                    None,
+                )
+                .await?,
+                Path::new(
+                    &config
+                        .validator_cookie_path
+                        .clone()
+                        .expect("validator cookie authentication path missing"),
+                ),
+            )?,
+            false => JsonRpcConnector::new_with_basic_auth(
+                test_node_and_return_url(
+                    config.validator_rpc_address,
+                    false,
+                    None,
+                    Some(config.validator_rpc_user.clone()),
+                    Some(config.validator_rpc_password.clone()),
+                )
+                .await?,
+                config.validator_rpc_user.clone(),
+                config.validator_rpc_password.clone(),
+            )?,
+        };
 
         let (read_state_service, latest_chain_tip, chain_tip_change, sync_task_handle) =
             init_read_state_with_syncer(
@@ -83,12 +108,6 @@ impl StateService {
                 config.validator_rpc_address,
             )
             .await??;
-
-        let rpc_client = JsonRpcConnector::new_with_basic_auth(
-            rpc_uri,
-            config.validator_rpc_user.clone(),
-            config.validator_rpc_password.clone(),
-        )?;
 
         let zebra_build_data = rpc_client.get_info().await?;
 
@@ -1081,6 +1100,8 @@ mod tests {
                 debug_validity_check_interval: None,
             },
             test_manager.zebrad_rpc_listen_address,
+            false,
+            None,
             None,
             None,
             None,
@@ -1121,6 +1142,8 @@ mod tests {
                 debug_validity_check_interval: None,
             },
             test_manager.zebrad_rpc_listen_address,
+            false,
+            None,
             None,
             None,
             None,
@@ -1161,6 +1184,8 @@ mod tests {
                 debug_validity_check_interval: None,
             },
             test_manager.zebrad_rpc_listen_address,
+            false,
+            None,
             None,
             None,
             None,
@@ -1172,6 +1197,8 @@ mod tests {
         let json_service = JsonRpcConnector::new_with_basic_auth(
             test_node_and_return_url(
                 test_manager.zebrad_rpc_listen_address,
+                false,
+                None,
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )
@@ -1220,6 +1247,8 @@ mod tests {
                 debug_validity_check_interval: None,
             },
             test_manager.zebrad_rpc_listen_address,
+            false,
+            None,
             None,
             None,
             None,
@@ -1231,6 +1260,8 @@ mod tests {
         let json_service = JsonRpcConnector::new_with_basic_auth(
             test_node_and_return_url(
                 test_manager.zebrad_rpc_listen_address,
+                false,
+                None,
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )
@@ -1293,6 +1324,8 @@ mod tests {
                 debug_validity_check_interval: None,
             },
             test_manager.zebrad_rpc_listen_address,
+            false,
+            None,
             None,
             None,
             None,
@@ -1304,6 +1337,8 @@ mod tests {
         let json_service = JsonRpcConnector::new_with_basic_auth(
             test_node_and_return_url(
                 test_manager.zebrad_rpc_listen_address,
+                false,
+                None,
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )
@@ -1383,6 +1418,8 @@ mod tests {
                 debug_validity_check_interval: None,
             },
             test_manager.zebrad_rpc_listen_address,
+            false,
+            None,
             None,
             None,
             None,
@@ -1394,6 +1431,8 @@ mod tests {
         let json_service = JsonRpcConnector::new_with_basic_auth(
             test_node_and_return_url(
                 test_manager.zebrad_rpc_listen_address,
+                false,
+                None,
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )
@@ -1451,6 +1490,8 @@ mod tests {
                 debug_validity_check_interval: None,
             },
             test_manager.zebrad_rpc_listen_address,
+            false,
+            None,
             None,
             None,
             None,
@@ -1462,6 +1503,8 @@ mod tests {
         let json_service = JsonRpcConnector::new_with_basic_auth(
             test_node_and_return_url(
                 test_manager.zebrad_rpc_listen_address,
+                false,
+                None,
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
             )
@@ -1550,6 +1593,8 @@ mod tests {
                 debug_validity_check_interval: None,
             },
             test_manager.zebrad_rpc_listen_address,
+            false,
+            None,
             None,
             None,
             None,
@@ -1612,6 +1657,8 @@ mod tests {
                 debug_validity_check_interval: None,
             },
             test_manager.zebrad_rpc_listen_address,
+            false,
+            None,
             None,
             None,
             None,
@@ -1679,6 +1726,8 @@ mod tests {
                 debug_validity_check_interval: None,
             },
             test_manager.zebrad_rpc_listen_address,
+            false,
+            None,
             None,
             None,
             None,
