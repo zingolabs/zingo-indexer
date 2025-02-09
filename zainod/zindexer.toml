@@ -1,31 +1,55 @@
 # Configuration for Zaino
 
-# Zainod's gRPC server listen port.
-listen_port = 8137
+# gRPC server config:
 
-# Full node / validator listen port.
-zebrad_port = 18232
+# Zainod's gRPC server listen address.
+#
+# Must use TLS when connecting to non localhost addresses.
+gprc_listen_address = "localhost:8137"
+
+# Enables TLS for the gRPC server.
+gprc_tls = false
+
+# Path to the TLS certificate file in PEM format.
+# Required if `tls` is true.
+tls_cert_path = "None"
+
+# Path to the TLS private key file in PEM format.
+# Required if `tls` is true.
+tls_key_path = "None"
+
+
+
+# JsonRPC client config:
+
+# Full node / validator listen address.
+# 
+# Must be a "pravate" address as defined in [IETF RFC 1918] for ipv4 addreses and [IETF RFC 4193] for ipv6 addreses.
+#
+# Must use validator rpc cookie authentication when connecting to non localhost addresses.
+validator_listen_address = "localhost:18232"
+
+# Enable validator rpc cookie authentication.
+validator_cookie_auth = false
+
+# Path to the validator cookie file.
+validator_cookie_path = "None"
 
 # Optional full node / validator Username.
-node_user = "xxxxxx"
+validator_user = "xxxxxx"
 
 # Optional full node / validator Password.
-node_password = "xxxxxx"
+validator_password = "xxxxxx"
 
-# Maximum requests allowed in Zainod's request queue.
-max_queue_size = 1024
 
-# Maximum workers allowed in Zainod's worker pool.
-max_worker_pool_size = 64
 
-# Minimum number of workers maintained in the worker pool when idle.
-idle_worker_pool_size = 4
+# Mempool, Non-Finalised State and Finalised State config:
 
 # Capacity of the Dashmaps used for the Mempool.
 # Also use by the BlockCache::NonFinalisedState when using the FetchService.
 #
 # None by default.
-# map_capacity = None
+map_capacity = "None"
 
 # Number of shard used in the DashMap used for the Mempool.
 # Also use by the BlockCache::NonFinalisedState when using the FetchService.
@@ -34,24 +58,32 @@ idle_worker_pool_size = 4
 # If a shard_amount which is not a power of two is provided, the function will panic.
 #
 # None by default.
-# map_shard_amount = None
+map_shard_amount = "None"
 
 # Block Cache database file path.
 #
 # This is Zaino's Compact Block Cache db if using the FetchService or Zebra's RocksDB if using the StateService.
 #
 # None by default, this defaults to `$HOME/.cache/zaino/`
-# db_path = None
+db_path = "None"
 
 # Block Cache database maximum size in gb.
 #
 # Only used by the FetchService.
 #
 # None by default
-# db_size = None
+db_size = "None"
+
+
+
+# Network:
 
 # Network chain type (Mainnet, Testnet, Regtest).
 network = "Testnet"
+
+
+
+# Options:
 
 # Disables internal sync and stops zaino waiting on server to sync with p2p network.
 # Useful for testing.

@@ -1,8 +1,5 @@
-//! Zaino's gRPC server implementation.
+//! Zaino's RPC Server implementation.
 
-pub mod director;
+pub mod config;
 pub mod error;
-pub(crate) mod ingestor;
-pub(crate) mod queue;
-pub mod request;
-pub(crate) mod worker;
+pub mod grpc;

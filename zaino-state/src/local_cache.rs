@@ -1,6 +1,10 @@
 //! Holds Zaino's local compact block cache implementation.
 
-use crate::{config::BlockCacheConfig, error::BlockCacheError, status::StatusType};
+use crate::{
+    config::BlockCacheConfig,
+    error::BlockCacheError,
+    status::{AtomicStatus, StatusType},
+};
 
 pub mod finalised_state;
 pub mod non_finalised_state;
@@ -33,18 +37,19 @@ impl BlockCache {
     pub async fn spawn(
         fetcher: &JsonRpcConnector,
         config: BlockCacheConfig,
+        status: AtomicStatus,
     ) -> Result<Self, BlockCacheError> {
         info!("Launching Local Block Cache..");
         let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(100);
 
         let finalised_state = if !config.no_db {
-            Some(FinalisedState::spawn(fetcher, channel_rx, config.clone()).await?)
+            Some(FinalisedState::spawn(fetcher, channel_rx, config.clone(), status.clone()).await?)
         } else {
             None
         };
 
         let non_finalised_state =
-            NonFinalisedState::spawn(fetcher, channel_tx, config.clone()).await?;
+            NonFinalisedState::spawn(fetcher, channel_tx, config.clone(), status.clone()).await?;
 
         Ok(BlockCache {
             fetcher: fetcher.clone(),
@@ -251,6 +256,7 @@ mod tests {
     use super::*;
     use core::panic;
     use tracing::info;
+    use zaino_fetch::jsonrpc::connector::test_node_and_return_url;
     use zaino_testutils::TestManager;
     use zingo_infra_services::validator::Validator;
 
@@ -279,16 +285,19 @@ mod tests {
         .await
         .unwrap();
 
-        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
-            .parse::<http::Uri>()
-            .expect("Failed to convert URL to URI");
-
-        let json_service = JsonRpcConnector::new(
-            zebra_uri,
-            Some("xxxxxx".to_string()),
-            Some("xxxxxx".to_string()),
+        let json_service = JsonRpcConnector::new_with_basic_auth(
+            test_node_and_return_url(
+                test_manager.zebrad_rpc_listen_address,
+                false,
+                None,
+                Some("xxxxxx".to_string()),
+                Some("xxxxxx".to_string()),
+            )
+            .await
+            .unwrap(),
+            "xxxxxx".to_string(),
+            "xxxxxx".to_string(),
         )
-        .await
         .unwrap();
 
         let network = match test_manager.network.to_string().as_str() {
@@ -308,9 +317,13 @@ mod tests {
             no_db: zaino_no_db,
         };
 
-        let block_cache = BlockCache::spawn(&json_service, block_cache_config)
-            .await
-            .unwrap();
+        let block_cache = BlockCache::spawn(
+            &json_service,
+            block_cache_config,
+            AtomicStatus::new(StatusType::Spawning.into()),
+        )
+        .await
+        .unwrap();
 
         let block_cache_subscriber = block_cache.subscriber();
 
